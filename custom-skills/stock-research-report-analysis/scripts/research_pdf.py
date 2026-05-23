@@ -882,7 +882,7 @@ def _git_commit_and_push(root: Path) -> None:
         print("# 无变更，跳过提交")
         return
 
-    today = datetime.date.today().isoformat()
+    today = date.today().isoformat()
     cmds = [
         (["git", "-C", str(root), "add", "-A"], "git add"),
         (["git", "-C", str(root), "commit", "-m", f"chore: 归档研报 {today}"], "git commit"),
