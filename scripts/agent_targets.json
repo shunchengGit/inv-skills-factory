@@ -1,0 +1,19 @@
+{
+  "agents": [
+    {
+      "name": "openclaw",
+      "skills_dir": "~/.openclaw/skills",
+      "enabled": true
+    },
+    {
+      "name": "workbuddy",
+      "skills_dir": "~/.workbuddy/skills",
+      "enabled": true
+    },
+    {
+      "name": "hermes",
+      "skills_dir": "~/.hermes/skills",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "tencent-leading-indicators",
+  "version": "2.0.0",
+  "description": "腾讯控股前置指标分析——游戏/广告/金融科技/政策指标追踪，配置驱动框架",
+  "commands": [
+    "/tencent_indicators - 完整分析：获取数据→搜索补充→逐指标评分→综合判断",
+    "/tencent_indicators_data - 仅获取数据快照"
+  ],
+  "scripts": {
+    "tencent_indicators.py": "主数据快照脚本",
+    "indicators_config.py": "指标元数据与评分指引配置",
+    "game_ranking_fetch.py": "App Store游戏畅销榜获取",
+    "southbound_flow_fetch.py": "港股通南向资金流向获取"
+  },
+  "references": {
+    "indicator-framework.md": "前置指标传导机制框架",
+    "ai-progress-tracker.md": "腾讯AI进展跟踪"
+  },
+  "dependencies": ["_shared"],
+  "derivedFrom": null
+}

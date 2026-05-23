@@ -1,0 +1,12 @@
+# Python virtual environment
+.venv/
+
+# macOS
+.DS_Store
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Generated cache
+research-index.json
