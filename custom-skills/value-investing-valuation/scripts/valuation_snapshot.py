@@ -509,6 +509,14 @@ def _build_yahoo_snapshot(
         "last_earnings_date": last_earnings_date,
     }
 
+    # Determine market label from normalized symbol
+    if normalized.endswith(".HK"):
+        market = "HK"
+    elif normalized.startswith("^"):
+        market = "US-Index"
+    else:
+        market = "US"
+
     # --- assemble metrics ---
     current_price_value = safe_round(current_price, 4)
     analyst_upside_pct = None

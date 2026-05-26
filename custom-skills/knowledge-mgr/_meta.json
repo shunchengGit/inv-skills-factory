@@ -1,0 +1,18 @@
+{
+  "name": "knowledge-mgr",
+  "version": "0.1.0",
+  "description": "个人知识管理技能：URL采集→LLM总结分类→git仓库存储+索引+lint",
+  "commands": [
+    "/km_init - 拉取知识库并输出 Index 结构化数据",
+    "/km_import - 从 URL 抓取知识",
+    "/km_lint - 检查 Index 死链、孤立文件、URL 可达性"
+  ],
+  "scripts": {
+    "km_init": "scripts/km_init.py",
+    "km_import": "scripts/km_import.py",
+    "km_lint": "scripts/km_lint.py"
+  },
+  "references": {},
+  "dependencies": ["cs-crawl"],
+  "derivedFrom": null
+}
