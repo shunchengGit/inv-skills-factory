@@ -55,29 +55,6 @@ TICKER_PATTERNS = [
 DEFAULT_ROOT = Path.home() / "股票研报"
 REPORT_REMOTE = "git@github.com:shunchengGit/stock-report.git"
 INDEX_FILE = Path(__file__).resolve().parent.parent / "research-index.json"
-TICKER_MAP_FILE = Path(__file__).resolve().parent.parent / "references" / "ticker-folder-map.json"
-
-# 行业/策略研报分类关键词
-INDUSTRY_KEYWORDS: dict[str, list[str]] = {
-    "行业研究-AI": ["AI", "人工智能", "大模型", "LLM", "GPT", "AIGC"],
-    "行业研究-半导体": ["半导体", "芯片", "晶圆", "封装", "半导体设备"],
-    "行业研究-互联网": ["互联网", "平台经济", "电商"],
-    "行业研究-新能源": ["新能源", "光伏", "风电", "储能", "碳中和"],
-    "行业研究-汽车": ["汽车", "智驾", "自动驾驶", "新能源车", "智能驾驶"],
-    "行业研究-计算机": ["计算机", "软件", "信创", "云计算"],
-    "行业研究-光模块": ["光模块", "光通信", "CPO"],
-    "行业研究-工业自动化": ["工业自动化", "机器人", "工控"],
-    "行业研究-传媒": ["传媒", "游戏", "影视", "短视频"],
-    "策略研究": ["策略", "宏观", "A股", "港股", "美股", "市场展望", "投资策略"],
-}
-
-# 中文公司简称正则（从文件名中提取）
-CN_NAME_PATTERNS = [
-    # 匹配 "券商_公司简称（代码）" 或 "券商-公司简称-代码" 格式
-    re.compile(r"[-_]([^\-_/\\（(（]{2,10}?)(?:[（(（]\d|[—-]\d)"),
-    # 匹配 "代码-公司简称" 格式如 "0700.HK-JPMorgan-Tencent"
-    re.compile(r"\d{4,6}\.(?:HK|SS|SZ|TW|KS)-[A-Za-z\s]+-([A-Za-z\s]+?)(?:-|$)"),
-]
 
 
 def default_root() -> Path:
@@ -240,17 +217,6 @@ class PdfEntry:
         }
 
 
-def load_ticker_map() -> dict[str, str]:
-    """加载代码→文件夹名映射表。"""
-    if not TICKER_MAP_FILE.exists():
-        return {}
-    try:
-        data = json.loads(TICKER_MAP_FILE.read_text(encoding="utf-8"))
-        return {k: v for k, v in data.items() if not k.startswith("_")}
-    except Exception:
-        return {}
-
-
 def md5_file(path: Path) -> str:
     """计算文件的 MD5 哈希。"""
     h = hashlib.md5()
@@ -291,60 +257,6 @@ def list_source_dir(source: Path) -> list[Path]:
 
     print(f"无法访问来源目录: {source}", file=sys.stderr)
     return []
-
-
-def extract_cn_name(filename: str) -> str | None:
-    """从文件名中提取中文公司简称。"""
-    for pat in CN_NAME_PATTERNS:
-        m = pat.search(filename)
-        if m:
-            return m.group(1).strip()
-    return None
-
-
-def identify_target_folder(
-    filename: str,
-    ticker_map: dict[str, str],
-    existing_folders: list[str],
-) -> tuple[str, str]:
-    """识别研报应归档的目标子文件夹。
-
-    返回 (目标文件夹名, 识别方式)。
-    识别方式: "ticker_map" / "cn_name" / "industry" / "unclassified"
-    """
-    # 1. 优先从代码查映射表
-    ticker = extract_ticker_from_filename(filename)
-    if ticker and ticker in ticker_map:
-        return ticker_map[ticker], "ticker_map"
-
-    # 2. 从中文简称匹配已有子文件夹
-    cn_name = extract_cn_name(filename)
-    if cn_name:
-        # 精确匹配
-        for folder in existing_folders:
-            if cn_name == folder:
-                return folder, "cn_name"
-        # 模糊匹配：简称包含在文件夹名中，或文件夹名包含简称
-        for folder in existing_folders:
-            if cn_name in folder or folder in cn_name:
-                return folder, "cn_name"
-
-    # 3. 代码前缀匹配（如 600276 → 搜索含 恒瑞 的子文件夹）
-    if ticker:
-        # 去掉后缀，只保留纯数字/字母代码
-        pure_code = ticker.split(".")[0]
-        for folder in existing_folders:
-            if pure_code in folder:
-                return folder, "cn_name"
-
-    # 4. 行业/策略研报关键词匹配
-    for folder, keywords in INDUSTRY_KEYWORDS.items():
-        for kw in keywords:
-            if kw in filename:
-                return folder, "industry"
-
-    # 5. 无法识别 → _未分类
-    return "_未分类", "unclassified"
 
 
 def collect_entries(root: Path, code: str | None, contains: str | None, *, all_pdfs: bool = False) -> list[PdfEntry]:
@@ -631,33 +543,22 @@ def cmd_index(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_organize(args: argparse.Namespace) -> int:
-    """从来源目录扫描研报 PDF，归档到研报库对应子文件夹。"""
+def cmd_scan(args: argparse.Namespace) -> int:
+    """扫描来源目录，输出待归档文件清单 JSON。LLM 读 Index.md 后判断归档目标。"""
     source = Path(args.source).expanduser()
     root = Path(args.root).expanduser()
     contains = getattr(args, "contains", None)
-    execute = getattr(args, "execute", False)
-
-    if execute and not _check_repo_ready(root):
-        return 1
 
     if not source.exists():
         print(f"来源目录不存在: {source}", file=sys.stderr)
         return 1
-    if not root.is_dir():
-        print(f"研报库根目录不存在: {root}", file=sys.stderr)
-        return 1
-
-    # 加载映射表和已有子文件夹
-    ticker_map = load_ticker_map()
-    existing_folders = [p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")]
 
     # 扫描来源目录
     pdfs = list_source_dir(source)
     if contains:
         pdfs = [p for p in pdfs if contains in p.name]
 
-    # 过滤空文件（0 字节）
+    # 过滤空文件
     non_empty = []
     for p in pdfs:
         try:
@@ -673,131 +574,142 @@ def cmd_organize(args: argparse.Namespace) -> int:
         print("来源目录中未找到 PDF 文件", file=sys.stderr)
         return 0
 
-    # 识别并归档
-    results: list[dict] = []
-    for pdf_path in pdfs:
-        target_folder, method = identify_target_folder(pdf_path.name, ticker_map, existing_folders)
-        target_dir = root / target_folder
-        target_path = target_dir / pdf_path.name
-        action = "移动"
-        need_create = False
-
-        # 检查目标文件夹是否需要新建
-        if not target_dir.exists():
-            need_create = True
-
-        # 检查同名文件冲突
-        if target_path.exists():
-            src_md5 = md5_file(pdf_path)
-            dst_md5 = md5_file(target_path)
-            if src_md5 == dst_md5:
-                action = "跳过(重复)"
-            else:
-                # 同名不同内容，加后缀
-                stem = pdf_path.stem
-                suffix = pdf_path.suffix
-                counter = 2
-                while target_path.exists():
-                    target_path = target_dir / f"{stem}_{counter}{suffix}"
-                    counter += 1
-                action = f"移动(重命名→{target_path.name})"
-
-        results.append({
-            "source": pdf_path,
-            "target_dir": target_dir,
-            "target_path": target_path,
-            "folder": target_folder,
-            "method": method,
-            "action": action,
-            "need_create": need_create,
+    # 输出 JSON：文件名、提取的代码、日期、券商猜测
+    items = []
+    for p in pdfs:
+        name = p.name
+        ticker = extract_ticker_from_filename(name)
+        fd = filename_date(name)
+        broker = guess_broker(name)
+        items.append({
+            "source_path": str(p),
+            "filename": name,
+            "ticker": ticker,
+            "date": fd,
+            "broker": broker,
         })
 
-    # 输出预览表格
-    mode_label = "执行" if execute else "预览"
-    print(f"\n研报归档{mode_label}（共 {len(pdfs)} 份）\n")
+    # 同时输出研报库已有子文件夹（供 LLM 参考）
+    if root.is_dir():
+        existing_folders = sorted([p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith(".")])
+    else:
+        existing_folders = []
 
-    # 表格输出
-    col_file = 42
-    col_folder = 18
-    col_action = 16
-    col_method = 12
+    output = {
+        "files": items,
+        "existing_folders": existing_folders,
+    }
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0
 
-    header = f"{'文件名':<{col_file}} {'目标文件夹':<{col_folder}} {'操作':<{col_action}} {'识别方式':<{col_method}}"
-    sep = "─" * (col_file + col_folder + col_action + col_method + 3)
-    print(sep)
-    print(header)
-    print(sep)
+
+def cmd_archive(args: argparse.Namespace) -> int:
+    """接收归档方案 JSON（stdin），执行移动、重建索引、git push。"""
+    root = Path(args.root).expanduser()
+    if not _check_repo_ready(root):
+        return 1
+
+    plan_text = args.plan or ""
+    if not plan_text:
+        # 从 stdin 读取
+        plan_text = sys.stdin.read()
+    if not plan_text.strip():
+        print("未提供归档方案 JSON，请通过 --plan 或 stdin 传入", file=sys.stderr)
+        return 1
+
+    try:
+        plan = json.loads(plan_text)
+    except json.JSONDecodeError as exc:
+        print(f"归档方案 JSON 解析失败: {exc}", file=sys.stderr)
+        return 1
+
+    actions = plan.get("actions", [])
+    if not actions:
+        print("归档方案中无操作", file=sys.stderr)
+        return 0
 
     moved = 0
     skipped = 0
     deleted = 0
     created_dirs: set[str] = set()
 
-    for r in results:
-        fname = r["source"].name
+    print(f"\n研报归档（共 {len(actions)} 份）\n")
+
+    col_file = 42
+    col_folder = 18
+    col_action = 10
+    header = f"{'文件名':<{col_file}} {'目标文件夹':<{col_folder}} {'操作':<{col_action}}"
+    sep = "─" * (col_file + col_folder + col_action + 3)
+    print(sep)
+    print(header)
+    print(sep)
+
+    for a in actions:
+        src_path = Path(a["source_path"])
+        target_folder = a["target_folder"]
+        target_dir = root / target_folder
+        target_path = target_dir / src_path.name
+
+        fname = src_path.name
         if len(fname) > col_file - 2:
             fname = fname[:col_file - 5] + "..."
-        folder = r["folder"]
-        if r["need_create"]:
-            folder += "(新建)"
-            created_dirs.add(r["folder"])
+        folder = target_folder
         if len(folder) > col_folder - 2:
             folder = folder[:col_folder - 5] + "..."
-        action = r["action"]
-        method = r["method"]
+        action_label = "移动"
 
-        print(f"{fname:<{col_file}} {folder:<{col_folder}} {action:<{col_action}} {method:<{col_method}}")
+        # 创建目标文件夹
+        if not target_dir.exists():
+            target_dir.mkdir(parents=True, exist_ok=True)
+            created_dirs.add(target_folder)
 
-        if execute and action != "跳过(重复)":
-            # 创建目标文件夹
-            if r["need_create"]:
-                r["target_dir"].mkdir(parents=True, exist_ok=True)
-            # 移动文件
-            try:
-                shutil.move(str(r["source"]), str(r["target_path"]))
-                moved += 1
-            except Exception as exc:
-                print(f"  ⚠ 移动失败: {exc}", file=sys.stderr)
-        elif action == "跳过(重复)":
-            skipped += 1
-            if execute:
-                # 已归档的重复文件，直接删除源文件
+        # 同名文件冲突处理
+        if target_path.exists():
+            src_md5 = md5_file(src_path)
+            dst_md5 = md5_file(target_path)
+            if src_md5 == dst_md5:
+                action_label = "跳过(重复)"
+                # 删除源文件（已归档）
                 try:
-                    r["source"].unlink()
+                    src_path.unlink()
                     deleted += 1
                 except Exception as exc:
                     print(f"  ⚠ 删除源文件失败: {exc}", file=sys.stderr)
+            else:
+                stem = src_path.stem
+                suffix = src_path.suffix
+                counter = 2
+                while target_path.exists():
+                    target_path = target_dir / f"{stem}_{counter}{suffix}"
+                    counter += 1
+
+        if action_label == "移动":
+            try:
+                shutil.move(str(src_path), str(target_path))
+                moved += 1
+            except Exception as exc:
+                print(f"  ⚠ 移动失败: {exc}", file=sys.stderr)
+                action_label = "失败"
+
+        print(f"{fname:<{col_file}} {folder:<{col_folder}} {action_label:<{col_action}}")
 
     print(sep)
 
-    # 汇总
-    to_move = sum(1 for r in results if r["action"] != "跳过(重复)")
-    if execute and deleted > 0:
-        print(f"\n汇总: 共 {len(results)} 份 | 移动 {moved} | 重复跳过 {skipped} | 删除源文件 {deleted} | 新建文件夹 {len(created_dirs)}")
-    else:
-        print(f"\n汇总: 共 {len(results)} 份 | 待移动 {to_move} | 重复跳过 {skipped} | 需新建文件夹 {len(created_dirs)}")
+    to_move = moved + deleted
+    print(f"\n汇总: 共 {len(actions)} 份 | 移动 {moved} | 重复删除 {deleted} | 新建文件夹 {len(created_dirs)}")
     if created_dirs:
         print(f"新建文件夹: {', '.join(sorted(created_dirs))}")
 
-    if not execute and to_move > 0:
-        print(f"\n💡 加 --execute 参数以实际执行移动")
-        return 0
-
-    if not execute:
-        return 0
-
-    # ── execute 模式：归档后处理 ──
-
-    # 5. 输出研报库全部文件清单（供 Agent 判断过期）
+    # 输出研报库文件清单（供 Agent 判断过期）
     file_list = _collect_file_list(root)
     print(f"\n── 研报库文件清单（共 {len(file_list)} 份）──")
     print(json.dumps(file_list, ensure_ascii=False))
 
-    # 6. 重建索引
+    # 重建索引
     print("\n# 重建索引...", file=sys.stderr)
     cmd_index(args)
 
-    # 7. git 操作
+    # git 操作
     _git_commit_and_push(root)
 
     return 0
@@ -940,12 +852,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_recency_args(pe)
     pe.set_defaults(func=cmd_extract)
 
-    org = sub.add_parser("organize", help="从指定目录扫描研报 PDF，归档到研报库对应子文件夹")
-    org.add_argument("--source", default=str(Path.home() / "Downloads"), help="来源目录，默认 ~/Downloads")
-    org.add_argument("--root", default=str(default_root()), help=f"研报库根目录，默认 {DEFAULT_ROOT}")
-    org.add_argument("--execute", action="store_true", help="实际执行移动（默认 dry-run 预览）")
-    org.add_argument("--contains", help="只处理文件名包含此子串的文件")
-    org.set_defaults(func=cmd_organize)
+    p_scan = sub.add_parser("scan", help="扫描来源目录，输出待归档文件清单 JSON")
+    p_scan.add_argument("--source", default=str(Path.home() / "Downloads"), help="来源目录，默认 ~/Downloads")
+    p_scan.add_argument("--root", default=str(default_root()), help=f"研报库根目录，默认 {DEFAULT_ROOT}")
+    p_scan.add_argument("--contains", help="只处理文件名包含此子串的文件")
+    p_scan.set_defaults(func=cmd_scan)
+
+    p_archive = sub.add_parser("archive", help="接收归档方案 JSON，执行移动、建索引、push")
+    p_archive.add_argument("--root", default=str(default_root()), help=f"研报库根目录，默认 {DEFAULT_ROOT}")
+    p_archive.add_argument("--plan", help="归档方案 JSON 字符串（也可从 stdin 传入）")
+    p_archive.set_defaults(func=cmd_archive)
 
     return p
 
@@ -953,7 +869,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
-    if args.cmd not in ("organize", "init") and not getattr(args, "code", None) and not getattr(args, "contains", None) and not getattr(args, "folder", None):
+    if args.cmd not in ("scan", "archive", "init") and not getattr(args, "code", None) and not getattr(args, "contains", None) and not getattr(args, "folder", None):
         print("请指定 --code 和/或 --contains", file=sys.stderr)
         return 2
     return int(args.func(args))

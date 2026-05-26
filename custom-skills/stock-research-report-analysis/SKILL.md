@@ -3,11 +3,12 @@ name: stock-research-report-analysis
 description: >-
   本地券商研报 PDF：LLM 读 Index.md 查找 → extract --folder 提取 → 结构化综合观点。
   非投资建议；价位判断请配合 cs-stock 与 value-investing-valuation。
-version: 1.9.0
+version: 2.0.0
 commands:
   - /research_pdf extract - 抽取正文到 stdout（edges / first-n / all / folder）
   - /research_pdf list - 列出匹配 PDF（调试用）
-  - /research_pdf organize - 归档 Downloads PDF → 重建索引 → git commit push
+  - /research_pdf scan - 扫描来源目录，输出待归档清单 JSON
+  - /research_pdf archive - 接收归档方案 JSON，执行移动、建索引、push
 ---
 
 # 股票研报 PDF 分析（stock-research-report-analysis）
@@ -165,7 +166,9 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 
 ## 研报管理（organize）
 
-将 Downloads 等目录中散落的研报 PDF **自动识别标的 → 归档到研报库子文件夹 → 清理过期 → git 提交推送**。
+将 Downloads 等目录中散落的研报 PDF **归档到研报库子文件夹 → 清理过期 → git 提交推送**。
+
+标的识别由 LLM 完成：读 `Index.md` 目录表，理解代码→文件夹名映射，判断归档目标。
 
 ### 研报库结构
 
@@ -174,39 +177,45 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 ├── 腾讯控股/          # 个股研报
 ├── 行业研究-互联网/   # 行业研报
 ├── 策略研究/          # 策略/宏观研报
-├── Index.md           # 人工维护的索引
+├── Index.md           # 索引
 └── .git/
 ```
 
-### 标的识别与分类
-
-从文件名提取标的代码，映射到研报库子文件夹：
-
-| 文件名模式 | 目标子文件夹 |
-|---|---|
-| `2026-05-13-0700.HK-JPMorgan-...` | 查 Index.md 目录表 → 公司简称 |
-| `20260429-华泰证券-汇川技术-300124-...` | 直接匹配子文件夹名 |
-| 无代码但有中文简称 | 直接匹配 |
-| 行业/策略研报 | 按关键词 → `行业研究-*` / `策略研究` |
-
-**`.undefined.pdf` 文件**：先去除 `.undefined.pdf` 后缀再提取代码，逻辑与 `.pdf` 相同。
-
-**匹配顺序**：带后缀的代码模式（如 `600660.SS`、`0700.HK`）优先于括号模式，避免误匹配。
-
-### organize 子命令
+### scan 子命令（输出待归档清单）
 
 ```bash
-$PY "$SK" organize --source ~/Downloads          # dry-run 预览
-$PY "$SK" organize --source ~/Downloads --execute # 实际执行
+$PY "$SK" scan --source ~/Downloads
 ```
 
-**执行流程**（`--execute`）：
-1. 扫描 `--source` 目录下所有 `.pdf` 和 `.undefined.pdf`
-2. 从文件名提取标的 → 归档到对应子文件夹
-3. 同名文件：MD5 相同则删除源文件，不同则加后缀 `_2`
-4. 输出研报库全部文件清单（JSON），供 Agent 判断过期
-5. Agent 删除过期文件（个股 6 个月，行业/策略 12 个月）
-6. 重建索引 + `git add -A && git commit && git push`
+输出 JSON：每份 PDF 的文件名、提取的代码、日期、券商猜测，以及研报库已有子文件夹列表。LLM 据此 + Index.md 判断每个文件应归档到哪个子文件夹。
+
+### archive 子命令（执行归档方案）
+
+LLM 判断完毕后，构造归档方案 JSON 并调用：
+
+```bash
+$PY "$SK" archive --plan '<JSON>'
+# 或从 stdin 传入：
+echo '<JSON>' | $PY "$SK" archive
+```
+
+归档方案 JSON 格式：
+
+```json
+{
+  "actions": [
+    {"source_path": "/Users/chengshun/Downloads/2026-05-20-2057.HK-JPMorgan-中通快递.pdf", "target_folder": "中通快递"},
+    {"source_path": "/Users/chengshun/Downloads/行业-半导体深度.pdf", "target_folder": "行业研究-半导体"}
+  ]
+}
+```
+
+**执行流程**：
+1. 读取归档方案，逐个移动文件到目标子文件夹
+2. 同名文件：MD5 相同则删除源文件，不同则加后缀 `_2`
+3. 输出研报库全部文件清单（JSON），供 Agent 判断过期
+4. Agent 删除过期文件（个股 6 个月，行业/策略 12 个月）
+5. 重建索引 + `git add -A && git commit && git push`
 
 ### macOS Downloads 访问
 
