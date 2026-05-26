@@ -195,7 +195,7 @@ uv run {baseDir}/scripts/valuation_manual_compute.py \
   4. 检查"核心假设"第一节——若写的是"未来2-3年利润增速大致维持在 X% 附近"，而 X% 来自 `earningsGrowth`，必须修正
   5. 最终报告中必须标注："脚本原始增速假设为 X%，已修正为 Y%，原因..."
 - **美股/港股 cs-stock snapshot 大量 data_gaps 时手动补全**：当 `valuation_snapshot.py` 对美股/港股返回 `data_gaps` 列表超过5项（尤其是 `high_52w`、`low_52w`、`analyst_target_price`、`freeCashflow`、`enterpriseValue` 等关键字段缺失），不要直接输出结论。降级补全流程见 `references/us-hk-data-workaround.md`，含 cs-stock financials 子命令、cs-crawl 抓取、手动计算脚本三条补全链路。
-- **全端点 blackout（极端情况）**：当 yfinance 所有端点（info/financials/balance_sheet/cash_flow）均因 SSL/RateLimit/Consent 循环失败，且 browser 也无法直抓时，要尽可能利用 `cs-stock snapshot` 剩余基础字段，然后降级到 **本地研报 PDF 提取 + 手动估值**。具体步骤见 `references/us-hk-data-workaround.md` 「D. 全端点 blackout」章节。关键原则：利润口径必须统一为 Non-GAAP，与 Yahoo GAAP PE 做差异标注；手动计算后必须与 snapshot 中的 `trailing_pe` 做口径校验。
+- **全端点 blackout（极端情况）**：当 yfinance 所有端点（info/financials/balance_sheet/cash_flow）均因 SSL/RateLimit/Consent 循环失败，且 pwright_scrape 也无法抓取时，要尽可能利用 `cs-stock snapshot` 剩余基础字段，然后降级到 **本地研报 PDF 提取 + 手动估值**。具体步骤见 `references/us-hk-data-workaround.md` 「D. 全端点 blackout」章节。关键原则：利润口径必须统一为 Non-GAAP，与 Yahoo GAAP PE 做差异标注；手动计算后必须与 snapshot 中的 `trailing_pe` 做口径校验。
 - **cs-stock snapshot 对美股/港股可能返回空**：`cs_stock_info.py snapshot` 对部分美股/港股可能返回"所有数据源均不可用"，但 `financial` 子命令仍可工作。降级方案：用 cs-stock `financials` 子命令获取财务三表数据，再按本技能框架手动计算。
 
 ## 输出模板

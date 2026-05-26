@@ -115,22 +115,12 @@ uv run {valuationDir}/../cs-stock/scripts/cs_stock_info.py financials 0700.HK --
 /cs_crawl_scrape https://finance.yahoo.com/quote/PDD/analysis
 ```
 
-若页面需要 JS 渲染，Firecrawl scrape 会失败，此时用浏览器抓取：
+若页面需要 JS 渲染，Firecrawl scrape 会失败，此时用 pwright_scrape：
 
 ```bash
-# 2. Firecrawl 失败时，直接用浏览器访问
-browser_navigate("https://finance.yahoo.com/quote/PDD/analysis")
-
-# 3. 在页面内用 JS 提取数据
-browser_console({
-  "expression": """
-    const lines = document.body.innerText.split('\\n');
-    const relevant = lines.filter(l =>
-      /Estimate|Revenue|No\. of Analysts|Avg\.|Low|High|Earnings/.test(l)
-    ).slice(0, 30);
-    JSON.stringify(relevant);
-  """
-})
+# 2. Firecrawl 失败时，用 pwright_scrape 抓取
+uv run custom-skills/cs-crawl/scripts/pwright_scrape.py text "https://finance.yahoo.com/quote/PDD/analysis"
+```
 ```
 
 **典型输出字段**（从 innerText 提取）：
@@ -139,11 +129,11 @@ browser_console({
 - `Low Estimate` / `High Estimate`：预期区间
 - `Year Ago EPS`：去年同期 EPS
 
-**提取后解析模板**（将 innerText 行映射到结构化数据）：
+**提取后解析模板**（从 pwright_scrape 返回的 markdown/纯文本提取）：
 
 ```python
-# 将 browser_console 返回的字符串解析
-raw_lines = [...]  # browser_console 结果
+# 将 pwright_scrape 返回的文本解析
+raw_lines = text.split('\n')  # pwright_scrape text 输出
 estimates = {}
 for i, line in enumerate(raw_lines):
     if 'Revenue Estimate' in line:

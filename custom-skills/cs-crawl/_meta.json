@@ -1,6 +1,6 @@
 {
   "name": "cs-crawl",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "搜索(SearXNG)+抓取(Firecrawl)+浏览器的工具箱，提供接口和可用性实测",
   "commands": [
     "/cs_crawl_search - Web search via SearXNG",
@@ -8,7 +8,9 @@
     "/cs_crawl_crawl - Async multi-page crawl",
     "/cs_crawl_extract - Batch URL extraction → markdown"
   ],
-  "scripts": {},
+  "scripts": {
+    "pwright_scrape": "scripts/pwright_scrape.py"
+  },
   "references": {
     "adapter-internals.md": "Firecrawl adapter internal architecture and scrape pipeline"
   },

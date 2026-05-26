@@ -133,7 +133,7 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 - **价值投资估值**：本技能只提供事实数据；五档估值结论请走 `value-investing-valuation`。
 - **本地券商研报 PDF**：近半年卖方共识/分歧与叙事梳理请走 **`stock-research-report-analysis`**（`~/Desktop/股票研报` 等）；本技能提供**行情与财务事实**，与研报交叉时以**披露与行情时点**为准。
 - **Yahoo 子命令大全**（期权、评级、search 等）：可用 Python `yfinance` 直接调用，详见 `references/yfinance-advanced-usage.md`。
-- **Yahoo Finance 浏览器降级方案**：当所有 yfinance API 端点均失败时，用无头浏览器抓取 Yahoo Finance 网页获取价格/PE/52周范围等数据，详见 `references/yahoo-browser-fallback.md`。
+- **Yahoo Finance pwright 降级方案**：当所有 yfinance API 端点均失败时，用 pwright_scrape 抓取 Yahoo Finance 网页获取价格/PE/52周范围等数据，详见 `references/yahoo-browser-fallback.md`。
 - **QQ Finance 实时行情降级方案**：当 AkShare 东财源因代理失败、新浪返回空时，用 QQ Finance API（`qt.gtimg.cn`）获取 A 股/港股盘中实时价格，详见 `references/qq-finance-realtime-api.md`。
 - **技能与数据组织约定**：投资技能目录结构、持仓文件位置、迁移记录见 `references/skill-organization.md`。
 - **持仓快照更新**：逐个调用 `uv run scripts/cs_stock_info.py snapshot <code>` 拉取，手动汇总更新 PORTFOLIO.md。
@@ -276,10 +276,10 @@ for line in r.text.strip().split(';'):
 
 ## Yahoo Finance 浏览器降级方案（补充：JS 提取技巧）
 
-当 yfinance API 全端点限流时，用无头浏览器 + `browser_console` JS 提取比解析 snapshot 更高效：
+当 yfinance API 全端点限流时，用 pwright_scrape 抓取后直接提取结构化数据更高效：
 
 ```javascript
-// 在 browser_navigate 到 Yahoo Finance 页面后执行
+// 在 pwright_scrape 抓取 Yahoo Finance 页面后，从 markdown 中提取
 const result = {};
 document.querySelectorAll('li').forEach(li => {
   const spans = li.querySelectorAll('span');
