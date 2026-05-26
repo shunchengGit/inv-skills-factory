@@ -104,25 +104,8 @@ def infer_company_type(metrics: dict[str, Any], override: str) -> str:
             "distressed": "困境反转",
         }
         return mapping[override]
-
-    revenue_growth = metrics.get("revenue_growth_pct")
-    gross_margin = metrics.get("gross_margin_pct")
-    pb = metrics.get("pb")
-    ps = metrics.get("ps_ttm")
-    dividend_yield = metrics.get("dividend_yield_pct")
-    hinted = metrics.get("company_type_hint")
-    if hinted and hinted != "待人工确认":
-        return hinted
-
-    if pb is not None and pb < 2 and dividend_yield is not None and dividend_yield > 3:
-        return "金融/地产"
-    if gross_margin is not None and gross_margin >= 30 and (revenue_growth is None or revenue_growth < 20):
-        return "消费/医疗"
-    if ps is not None and ps >= 4:
-        return "互联网/软件"
-    if revenue_growth is not None and revenue_growth >= 15:
-        return "半导体/科技制造"
-    return "消费/医疗"
+    # auto 模式：由 LLM 根据 sector/industry 判断
+    return "待确认"
 
 
 def build_metric_views(metrics: dict[str, Any], company_type: str) -> list[MetricView]:
@@ -139,7 +122,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> list[Metri
     fcf = metrics.get("free_cash_flow")
     analyst_upside = metrics.get("analyst_upside_pct")
     earnings_yield = metrics.get("earnings_yield_pct")
-    event_score = metrics.get("event_score")
+    event_score = None  # removed: LLM interprets raw announcements
 
     peg = None
     if trailing_pe and earnings_growth and earnings_growth > 0:
@@ -303,23 +286,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> list[Metri
             )
         )
 
-    if event_score is not None:
-        event_rating = metric_rating_by_ranges(
-            event_score,
-            [
-                (0.18, None, "合理偏低"),
-                (-0.18, 0.18, "合理"),
-                (None, -0.18, "合理偏高"),
-            ],
-        )
-        views.append(
-            MetricView(
-                name="事件层",
-                value=event_score,
-                rating=event_rating,
-                comment="结合公告/调研/财报窗口对估值结论做校正。",
-            )
-        )
+    # event_score 已移除，LLM 根据原始公告/调研数据判断
 
     return views
 
@@ -420,10 +387,7 @@ def build_risks(metrics: dict[str, Any]) -> list[str]:
         risks.append("自由现金流为负，若持续时间拉长，估值中枢可能下移。")
     if metrics.get("debt_to_equity") is not None and metrics["debt_to_equity"] >= 1:
         risks.append("杠杆不低，若景气走弱或利率环境变化，会压制估值。")
-    if metrics.get("event_bias") == "偏谨慎":
-        risks.append(f"事件层偏谨慎：{metrics.get('event_summary')}")
-    elif metrics.get("event_bias") == "偏正面":
-        risks.append("当前存在正向事件支撑，但事件驱动通常时效有限。")
+    # event_bias removed — LLM interprets raw announcements
     risks.append("当前历史分位仍是价格代理值，不是严格 PE/PB 分位，需降低确定性表达。")
     return risks[:4]
 

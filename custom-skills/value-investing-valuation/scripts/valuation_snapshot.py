@@ -23,7 +23,7 @@ import os
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any
 
 import time
@@ -31,28 +31,6 @@ import time
 import pandas as pd
 
 
-POSITIVE_KEYWORDS = {
-    "业绩预增": ("业绩预增", 0.32),
-    "扭亏": ("业绩改善", 0.25),
-    "回购": ("回购", 0.22),
-    "增持": ("增持", 0.18),
-    "中标": ("中标", 0.18),
-    "订单": ("订单催化", 0.12),
-    "战略合作": ("合作催化", 0.10),
-}
-
-NEGATIVE_KEYWORDS = {
-    "业绩预亏": ("业绩预亏", -0.35),
-    "预减": ("业绩预减", -0.22),
-    "减持": ("减持", -0.24),
-    "解禁": ("解禁", -0.18),
-    "风险提示": ("风险提示", -0.28),
-    "问询": ("问询函", -0.10),
-    "监管": ("监管事项", -0.18),
-    "处罚": ("处罚", -0.30),
-    "诉讼": ("诉讼", -0.18),
-    "终止": ("终止事项", -0.15),
-}
 
 
 # 跨进程调用间隔（秒），避免连续 uv run 触发 Yahoo 限流
@@ -146,17 +124,6 @@ def to_a_share_plain_code(symbol: str) -> str:
     return s
 
 
-def detect_market(normalized_symbol: str, info: dict[str, Any]) -> str:
-    exchange = str(first_not_none(info.get("exchange"), info.get("market"), "")).upper()
-    if normalized_symbol.endswith((".SS", ".SZ", ".SH")):
-        return "A-share"
-    if normalized_symbol.endswith(".HK") or exchange in {"HKG", "HKG"}:
-        return "HK"
-    if exchange in {"NMS", "NYQ", "NAS", "ASE", "PCX", "BTS", "OQB", "OEM"}:
-        return "US"
-    return exchange or "Unknown"
-
-
 def pct(value: float | None) -> float | None:
     if value is None:
         return None
@@ -223,61 +190,6 @@ def compute_52w_position(hist: pd.DataFrame) -> tuple[float | None, float | None
 
 def clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
     return max(low, min(high, value))
-
-
-def score_to_bias(score: float) -> str:
-    if score >= 0.18:
-        return "偏正面"
-    if score <= -0.18:
-        return "偏谨慎"
-    return "中性"
-
-
-def _time_decay(days: int) -> float:
-    if days <= 7:
-        return 1.0
-    if days <= 20:
-        return 0.8
-    if days <= 45:
-        return 0.55
-    return 0.35
-
-
-def _classify_title(title: str) -> tuple[str, float] | None:
-    for keyword, payload in POSITIVE_KEYWORDS.items():
-        if keyword in title:
-            return payload
-    for keyword, payload in NEGATIVE_KEYWORDS.items():
-        if keyword in title:
-            return payload
-    return None
-
-
-def infer_company_type_hint(sector: str | None, industry: str | None, metrics: dict[str, Any], market: str) -> str:
-    text = " ".join([str(x or "") for x in [sector, industry]]).lower()
-    dividend_yield = metrics.get("dividend_yield_pct")
-    pb = metrics.get("pb")
-    gross_margin = metrics.get("gross_margin_pct")
-    revenue_growth = metrics.get("revenue_growth_pct")
-
-    if any(k in text for k in ["bank", "insurance", "broker", "real estate", "地产", "银行", "保险", "证券"]):
-        return "金融/地产"
-    if any(k in text for k in ["software", "internet", "media", "saas", "平台", "互联网", "游戏"]):
-        return "互联网/软件"
-    if any(k in text for k in ["semiconductor", "electronics", "hardware", "tech", "technology", "通信", "电子", "半导体", "消费电子"]):
-        return "半导体/科技制造"
-    if any(k in text for k in ["auto parts", "automobile", "materials", "energy", "steel", "coal", "shipping", "chemical", "machinery", "有色", "化工", "航运", "煤炭", "钢铁", "汽车零部件", "机械"]):
-        return "周期行业"
-    if any(k in text for k in ["consumer", "beverage", "food", "medical", "pharma", "retail", "消费", "医药", "医疗", "食品", "饮料"]):
-        return "消费/医疗"
-
-    if market == "A-share" and revenue_growth is not None and revenue_growth >= 15:
-        return "半导体/科技制造"
-    if pb is not None and pb < 2 and dividend_yield is not None and dividend_yield > 3:
-        return "金融/地产"
-    if gross_margin is not None and gross_margin >= 30 and (revenue_growth is None or revenue_growth < 20):
-        return "消费/医疗"
-    return "待人工确认"
 
 
 @dataclass
@@ -422,54 +334,18 @@ def _build_a_share_snapshot(
     if relation_count > 0 and isinstance(relations[0], dict):
         latest_relation_title = relations[0].get("title") or relations[0].get("公告标题")
 
-    # --- event scoring (kept in skill) ---
-    score = 0.0
-    matched_titles: list[str] = []
-    positive_labels: list[str] = []
-    negative_labels: list[str] = []
-    now = pd.Timestamp.now().normalize()
+    # --- raw announcements & relations (for LLM to interpret) ---
+    raw_titles = []
     for item in announcements[:30]:
         if not isinstance(item, dict):
             continue
         title = str(item.get("title") or item.get("公告标题", ""))
-        if not title:
-            continue
-        event = _classify_title(title)
-        if not event:
-            continue
-        label, raw_score = event
-        # Parse event date
         event_time_str = item.get("time") or item.get("date") or item.get("公告时间", "")
-        try:
-            event_time = pd.Timestamp(event_time_str).normalize()
-            days = max(0, (now - event_time).days)
-        except Exception:
-            days = 60  # fallback: treat as old
-        contribution = raw_score * _time_decay(days)
-        score += contribution
-        matched_titles.append(title)
-        if contribution > 0:
-            positive_labels.append(label)
-        elif contribution < 0:
-            negative_labels.append(label)
-
-    if relation_count > 0:
-        score += min(0.12, relation_count * 0.04)
-
-    score = round(clamp(score), 4)
-    event_highlights: list[str] = []
-    if positive_labels:
-        event_highlights.append("正向事件：" + " / ".join(dict.fromkeys(positive_labels)))
-    if negative_labels:
-        event_highlights.append("谨慎事件：" + " / ".join(dict.fromkeys(negative_labels)))
-    if relation_count > 0:
-        event_highlights.append(f"近30日有 {relation_count} 条调研记录")
+        if title:
+            raw_titles.append({"title": title, "date": event_time_str})
 
     event_metrics = {
-        "event_score": score,
-        "event_bias": score_to_bias(score),
-        "event_summary": "；".join(event_highlights) if event_highlights else "近1-2个月未见高权重公告，事件层中性",
-        "recent_event_titles": matched_titles[:5],
+        "recent_announcements": raw_titles[:10],
         "relation_count_30d": relation_count,
         "latest_relation_title": latest_relation_title,
     }
@@ -509,12 +385,7 @@ def _build_a_share_snapshot(
 
     metrics.update(event_metrics)
 
-    metrics["company_type_hint"] = infer_company_type_hint(
-        ak_xq_industry,
-        ak_xq_industry,
-        metrics,
-        "A-share",
-    )
+    # company_type_hint 由 LLM 根据 sector/industry 判断
 
     gaps = [k for k, v in metrics.items() if v is None]
     notes.extend(
@@ -631,44 +502,9 @@ def _build_yahoo_snapshot(
     last_earnings_date = None
     last_surprise = None
 
-    # --- global event scoring (kept in skill) ---
-    score = 0.0
-    highlights: list[str] = []
-    market = detect_market(normalized, snap)
-
-    # Earnings-based event scoring
-    if next_earnings_date:
-        try:
-            next_dt = pd.Timestamp(next_earnings_date)
-            now = pd.Timestamp.now(tz="UTC").tz_localize(None) if pd.Timestamp.now().tzinfo else pd.Timestamp.now()
-            days_to_earnings = int((next_dt.date() - now.date()).days)
-            if days_to_earnings <= 7:
-                score -= 0.45
-                highlights.append(f"下一次财报约 {days_to_earnings} 天后，事件扰动很强")
-            elif days_to_earnings <= 14:
-                score -= 0.25
-                highlights.append(f"下一次财报约 {days_to_earnings} 天后，短期需防预期差")
-        except Exception:
-            pass
-
-    if last_surprise is not None:
-        if last_surprise >= 10:
-            score += 0.15
-        elif last_surprise > 0:
-            score += 0.08
-        elif last_surprise <= -10:
-            score -= 0.15
-        else:
-            score -= 0.08
-        highlights.append(f"最近一次财报 surprise {last_surprise:+.1f}%")
-
-    score = round(clamp(score), 4)
+    # --- raw earnings data (for LLM to interpret) ---
     event_metrics = {
-        "event_score": score,
-        "event_bias": score_to_bias(score),
-        "event_summary": "；".join(highlights) if highlights else "近期缺少强事件扰动，事件层中性",
         "last_surprise_pct": safe_round(last_surprise, 2),
-        "recent_news_titles": [],
         "next_earnings_date": next_earnings_date,
         "last_earnings_date": last_earnings_date,
     }
@@ -726,9 +562,7 @@ def _build_yahoo_snapshot(
     }
     metrics.update(event_metrics)
 
-    metrics["company_type_hint"] = infer_company_type_hint(
-        sector, industry, metrics, market,
-    )
+    # company_type_hint 由 LLM 根据 sector/industry 判断
 
     gaps = [k for k, v in metrics.items() if v is None]
     notes.extend(
