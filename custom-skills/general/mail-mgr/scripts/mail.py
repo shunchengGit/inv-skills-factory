@@ -288,9 +288,9 @@ def cmd_list(args):
                 if line.startswith("Subject: ") or line.startswith("SUBJECT: "):
                     subject = decode_str(line.split(": ", 1)[1] if ": " in line else "")
                 elif line.startswith("From: ") or line.startswith("FROM: "):
-                    from_addr = line.split(": ", 1)[1] if ": " in line else ""
+                    from_addr = decode_str(line.split(": ", 1)[1] if ": " in line else "")
                 elif line.startswith("To: ") or line.startswith("TO: "):
-                    to_addr = line.split(": ", 1)[1] if ": " in line else ""
+                    to_addr = decode_str(line.split(": ", 1)[1] if ": " in line else "")
                 elif line.startswith("Date: ") or line.startswith("DATE: "):
                     date = line.split(": ", 1)[1] if ": " in line else ""
 
@@ -335,13 +335,13 @@ def cmd_read(args):
             sys.exit(1)
 
         import email
-        msg = email.message_from_bytes(raw)
-        subject = decode_str(msg.get("Subject", ""))
-        from_addr = msg.get("From", "")
-        to_addr = msg.get("To", "")
-        date = msg.get("Date", "")
-        cc = msg.get("Cc", "")
-        bcc = msg.get("Bcc", "")
+        msg = email.message_from_bytes(raw, policy=email.policy.default)
+        subject = str(msg.get("Subject", ""))
+        from_addr = str(msg.get("From", ""))
+        to_addr = str(msg.get("To", ""))
+        date = str(msg.get("Date", ""))
+        cc = str(msg.get("Cc", ""))
+        bcc = str(msg.get("Bcc", ""))
 
         text_body = ""
         html_body = ""
