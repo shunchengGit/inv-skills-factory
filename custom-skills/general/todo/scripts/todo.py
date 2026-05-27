@@ -360,7 +360,9 @@ def cmd_add(task: str, priority: str = "medium") -> dict:
     if not TODO_DIR.exists():
         return {"success": False, "error": f"{TODO_DIR} 不存在，请先运行 init"}
 
-    _run_git(["pull"])
+    r = _run_git(["pull"])
+    if r.returncode != 0:
+        return {"success": False, "error": "git pull 失败，请先手动处理冲突或检查网络", "detail": r.stderr.strip()[:300]}
 
     today_file = TODO_DIR / _today_filename()
     emoji = {"high": "🔴", "medium": "🟡", "low": "⚪"}.get(priority, "🟡")
@@ -403,7 +405,9 @@ def cmd_done(keyword: str) -> dict:
     if not TODO_DIR.exists():
         return {"success": False, "error": f"{TODO_DIR} 不存在，请先运行 init"}
 
-    _run_git(["pull"])
+    r = _run_git(["pull"])
+    if r.returncode != 0:
+        return {"success": False, "error": "git pull 失败，请先手动处理冲突或检查网络", "detail": r.stderr.strip()[:300]}
 
     files = [TODO_DIR / _today_filename(), TODO_DIR / TODO_MD]
     total = sum(_mark_done_in_file(f, keyword) for f in files)
