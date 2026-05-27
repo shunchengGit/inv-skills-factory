@@ -6,7 +6,9 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-RESUME_DIR = Path.home() / ".resume"
+INTERVIEW_DIR = Path.home() / ".interview"
+RESUME_DIR = INTERVIEW_DIR / "resume"
+ARCHIVE_DIR = INTERVIEW_DIR / "archived"
 
 
 def list_candidates():

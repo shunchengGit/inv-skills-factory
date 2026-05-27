@@ -10,7 +10,7 @@ metadata:
 
 # Interview Manager
 
-管理 `~/.resume/` 目录下的候选人信息和面试题。
+管理 `~/.interview/` 目录下的候选人信息和面试题。
 
 ## 命令
 
@@ -24,10 +24,12 @@ metadata:
 ## 数据
 
 ```
-~/.resume/
-├── 某某某_Android.pdf        # 候选人简历 PDF
-├── 面试题_某某某.md           # 面试题 + 评分
-└── archived/                 # 已归档候选人
+~/.interview/
+├── resume/                  # 候选人简历 PDF
+│   ├── 某某某_Android.pdf
+│   ├── 面试题_某某某.md      # 面试题 + 评分
+│   └── ...
+└── archived/                # 已归档候选人
 ```
 
 ## 评估框架
