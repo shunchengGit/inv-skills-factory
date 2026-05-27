@@ -1,0 +1,12 @@
+{
+  "name": "todo",
+  "version": "0.1.0",
+  "description": "TODO 管理技能：每日待办、标记完成、归档",
+  "commands": [],
+  "scripts": {
+    "todo": "scripts/todo.py"
+  },
+  "references": {},
+  "dependencies": [],
+  "derivedFrom": "assist"
+}
