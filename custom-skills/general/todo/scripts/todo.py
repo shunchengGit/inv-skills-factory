@@ -189,15 +189,34 @@ def cmd_init() -> dict:
 
     today_tasks = _parse_tasks(TODO_DIR / _today_filename())
     high_priority = _parse_high_priority(TODO_DIR / TODO_MD)
+    daily_routines = _parse_section_table(TODO_DIR / TODO_MD, "每日固定")
 
     return {
         **result,
         "today": {"date": datetime.now().strftime("%Y-%m-%d"), "tasks": today_tasks},
         "high_priority": high_priority,
+        "daily_routines": daily_routines,
     }
 
 
 # ─── today ────────────────────────────────────────────────
+
+
+def _parse_section_table(filepath: Path, section: str) -> list[str]:
+    """提取 section 下的表格行（非 checkbox 内容）。"""
+    if not filepath.exists():
+        return []
+    content = filepath.read_text(encoding="utf-8")
+    pattern = rf"^#+\s+{section}\s*\n(.*?)(?=^#+\s|\Z)"
+    m = re.search(pattern, content, re.DOTALL | re.MULTILINE)
+    if not m:
+        return []
+    lines = []
+    for line in m.group(1).strip().splitlines():
+        line = line.strip()
+        if line and not line.startswith("|-"):
+            lines.append(line)
+    return lines
 
 
 def cmd_today() -> str:
@@ -212,6 +231,13 @@ def cmd_today() -> str:
 
     main = TODO_DIR / TODO_MD
     if main.exists():
+        # 每日固定
+        daily = _parse_section_table(main, "每日固定")
+        if daily:
+            lines.append("\n=== 每日固定 ===")
+            lines.extend(daily)
+
+        # 高优任务
         items = _parse_high_priority(main)
         if items:
             lines.append("\n=== 高优任务 ===")
