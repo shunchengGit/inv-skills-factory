@@ -118,25 +118,6 @@ def _parse_table_section(filepath: Path, section: str) -> list[dict]:
     return rows
 
 
-def _match_weekday(freq: str, today: str) -> bool:
-    """检查频率字符串是否匹配今天星期。如 '周一、三' 匹配 '周三'。"""
-    parts = [p.strip() for p in re.split(r"[、,]", freq) if p.strip()]
-    for p in parts:
-        if p == today:
-            return True
-        if not p.startswith("周") and f"周{p}" == today:
-            return True
-    return False
-
-
-def _get_today_weekly(routines_file: Path) -> list[dict]:
-    """过滤今天适用的每周固定项。"""
-    today_weekday = WEEKDAY_NAMES[datetime.now().weekday()]
-    all_weekly = _parse_weekly_routines(routines_file)
-    return [
-        r for r in all_weekly
-        if _match_weekday(r.get("频率", ""), today_weekday)
-    ]
 
 
 def _daily_template(routines_file: Path) -> str:
@@ -147,19 +128,10 @@ def _daily_template(routines_file: Path) -> str:
 
     # 每日固定
     daily = _parse_daily_routines(routines_file)
-    lines.append("| 时间 | 事项 |")
+    lines.append("| 事项 | 大概时长 |")
     lines.append("|------|------|")
     for r in daily:
-        lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
-
-    # 今日周程
-    weekly = _get_today_weekly(routines_file)
-    if weekly:
-        lines.append("")
-        lines.append("| 时间 | 事项（周程） |")
-        lines.append("|------|------|")
-        for r in weekly:
-            lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+        lines.append(f"| {r.get('事项', '')} | {r.get('大概时长', '')} |")
 
     lines.append("")
     lines.append("## TODO")
@@ -274,14 +246,14 @@ def cmd_init() -> dict:
     today_tasks = _parse_tasks(TODO_DIR / _today_filename())
     high_priority = _parse_section_lines(TODO_DIR / TODO_MD, "高优")
     daily_routines = _parse_daily_routines(TODO_DIR / ROUTINES_MD)
-    weekly_today = _get_today_weekly(TODO_DIR / ROUTINES_MD)
+    weekly_pool = _parse_weekly_routines(TODO_DIR / ROUTINES_MD)
 
     return {
         **result,
         "today": {"date": datetime.now().strftime("%Y-%m-%d"), "tasks": today_tasks},
         "high_priority": high_priority,
         "daily_routines": daily_routines,
-        "weekly_today": weekly_today,
+        "weekly_pool": weekly_pool,
     }
 
 
@@ -314,22 +286,10 @@ def cmd_week() -> str:
         if routines_file.exists():
             daily = _parse_daily_routines(routines_file)
             if daily:
-                lines.append("| 时间 | 事项（每日固定） |")
+                lines.append("| 事项（每日固定） | 大概时长 |")
                 lines.append("|------|------|")
                 for r in daily:
-                    lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
-                lines.append("")
-
-            # 该日周程
-            today_weekly = [
-                r for r in _parse_weekly_routines(routines_file)
-                if _match_weekday(r.get("频率", ""), weekday)
-            ]
-            if today_weekly:
-                lines.append("| 时间 | 事项（周程） |")
-                lines.append("|------|------|")
-                for r in today_weekly:
-                    lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+                    lines.append(f"| {r.get('事项', '')} | {r.get('大概时长', '')} |")
                 lines.append("")
 
         # 当日 TODO
@@ -342,6 +302,17 @@ def cmd_week() -> str:
                     checkbox = "x" if t["status"] == "done" else " "
                     lines.append(f"- [{checkbox}] {t['content']}")
                 lines.append("")
+
+    # 每周任务池
+    if routines_file.exists():
+        weekly = _parse_weekly_routines(routines_file)
+        if weekly:
+            lines.append("## 每周任务池")
+            lines.append("")
+            lines.append("| 事项 | 大概时长 |")
+            lines.append("|------|------|")
+            for r in weekly:
+                lines.append(f"| {r.get('事项', '')} | {r.get('大概时长', '')} |")
 
     return "\n".join(lines).rstrip()
 
@@ -359,19 +330,11 @@ def cmd_today() -> str:
 
     routines_file = TODO_DIR / ROUTINES_MD
     if routines_file.exists():
-        # 每日固定
         daily = _parse_daily_routines(routines_file)
         if daily:
             lines.append("\n=== 每日固定 ===")
             for r in daily:
-                lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
-
-        # 今日周程
-        weekly = _get_today_weekly(routines_file)
-        if weekly:
-            lines.append("\n=== 今日周程 ===")
-            for r in weekly:
-                lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+                lines.append(f"| {r.get('事项', '')} | {r.get('大概时长', '')} |")
 
     # 高优
     main = TODO_DIR / TODO_MD
