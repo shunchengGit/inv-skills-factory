@@ -2,31 +2,30 @@
 """面试管理脚本"""
 
 import argparse
+import json
 import re
 from datetime import datetime
 from pathlib import Path
 
 INTERVIEW_DIR = Path.home() / ".interview"
 RESUME_DIR = INTERVIEW_DIR / "resume"
-ARCHIVE_DIR = INTERVIEW_DIR / "archived"
 
 
 def list_candidates():
-    """列出所有候选人"""
+    """列出所有候选人，输出 JSON。"""
     if not RESUME_DIR.exists():
-        print("面试目录不存在")
+        print(json.dumps({"candidates": [], "total": 0}, ensure_ascii=False))
         return
 
     pdfs = list(RESUME_DIR.glob("*.pdf"))
-    if not pdfs:
-        print("暂无候选人简历")
-        return
-
-    print(f"=== 候选人列表 ({len(pdfs)}人) ===")
+    candidates = []
     for pdf in sorted(pdfs):
         name = extract_name(pdf.name)
+        job_info = _extract_job_info(pdf.name)
         status = check_status(name)
-        print(f"  {name:12s} [{status}]")
+        candidates.append({"name": name, "job": job_info, "status": status, "file": pdf.name})
+
+    print(json.dumps({"candidates": candidates, "total": len(candidates)}, ensure_ascii=False, indent=2))
 
 
 def extract_name(filename: str) -> str:
@@ -210,8 +209,11 @@ def feedback(name: str, score: int = None, rating: str = None):
 
     content = question_file.read_text(encoding="utf-8")
 
-    if score:
-        content = re.sub(r"总分:.*", f"总分: {score}/60", content)
+    if score is not None:
+        if re.search(r"总分[:：]", content):
+            content = re.sub(r"总分[:：].*", f"总分: {score}/60", content)
+        else:
+            content += f"\n\n总分: {score}/60"
 
     if rating:
         for r in ["A", "B", "C", "D"]:
