@@ -1,0 +1,12 @@
+{
+  "name": "interview",
+  "version": "0.1.0",
+  "description": "面试管理技能：候选人列表、出题模板、面试反馈",
+  "commands": [],
+  "scripts": {
+    "interview": "scripts/interview.py"
+  },
+  "references": {},
+  "dependencies": [],
+  "derivedFrom": "assist"
+}
