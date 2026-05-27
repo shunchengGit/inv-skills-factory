@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 REPO_URL = "git@github.com:shunchengGit/knowledge.git"
+REPO_BRANCH = "master"
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 INDEX_FILE = "Index.md"
 
@@ -47,7 +48,7 @@ def init_repo() -> dict:
     """拉取或克隆知识库，返回操作结果。"""
     if not KNOWLEDGE_DIR.exists():
         # 首次：clone
-        r = _run_git(["clone", REPO_URL, str(KNOWLEDGE_DIR)])
+        r = _run_git(["clone", "-b", REPO_BRANCH, REPO_URL, str(KNOWLEDGE_DIR)])
         if r.returncode != 0:
             err = r.stderr.strip()
             if "Could not read from remote" in err or "Permission denied" in err:
@@ -81,7 +82,7 @@ def init_repo() -> dict:
         }
 
     # 已有仓库：pull
-    r = _run_git(["pull"], cwd=KNOWLEDGE_DIR)
+    r = _run_git(["pull", "origin", REPO_BRANCH], cwd=KNOWLEDGE_DIR)
     if r.returncode != 0:
         return {
             "success": False,

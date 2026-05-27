@@ -29,6 +29,7 @@ from datetime import date
 from pathlib import Path
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
+REPO_BRANCH = "master"
 INDEX_FILE = "Index.md"
 FIRECRAWL_URL = "http://localhost:3672/v1/scrape"
 
@@ -221,7 +222,7 @@ def _git_sync(title: str, category: str) -> dict:
         return {"success": False, "step": "commit", "error": r_commit.stderr.strip()[:300]}
 
     r_push = subprocess.run(
-        ["git", "push"],
+        ["git", "push", "origin", REPO_BRANCH],
         cwd=KNOWLEDGE_DIR,
         capture_output=True,
         text=True,
