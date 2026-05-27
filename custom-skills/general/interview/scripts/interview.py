@@ -2,13 +2,11 @@
 """面试管理脚本"""
 
 import argparse
-import os
 import re
 from datetime import datetime
 from pathlib import Path
 
-WORKSPACE = Path(os.environ.get("ASSIST_HOME", "/Users/chengshun/Assist"))
-RESUME_DIR = WORKSPACE / "面试" / "resume"
+RESUME_DIR = Path.home() / ".resume"
 
 
 def list_candidates():
