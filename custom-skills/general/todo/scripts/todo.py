@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -27,7 +26,9 @@ from pathlib import Path
 REPO_URL = "git@github.com:shunchengGit/todo.git"
 TODO_DIR = Path.home() / ".todo"
 TODO_MD = "TODO.md"
-HIGH_PRIORITY_SECTION = "高优"
+ROUTINES_MD = "ROUTINES.md"
+
+WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
 
 
 # ─── git 工具 ─────────────────────────────────────────────
@@ -55,7 +56,6 @@ def _same_remote(path: Path) -> bool:
 
 
 def _git_sync(commit_msg: str) -> dict:
-    """在 ~/.todo 中执行 git add + commit + push。"""
     r_add = _run_git(["add", "-A"])
     if r_add.returncode != 0:
         return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
@@ -76,7 +76,97 @@ def _git_sync(commit_msg: str) -> dict:
     return {"success": True, "push_failed": False}
 
 
-# ─── 文件解析 ─────────────────────────────────────────────
+# ─── ROUTINES.md 解析 ─────────────────────────────────────
+
+
+def _parse_daily_routines(filepath: Path) -> list[dict]:
+    """解析 ROUTINES.md 中 ## 每日固定 表格行。"""
+    return _parse_table_section(filepath, "每日固定")
+
+
+def _parse_weekly_routines(filepath: Path) -> list[dict]:
+    """解析 ROUTINES.md 中 ## 每周固定 表格行，返回 [{item, time, day}]。"""
+    return _parse_table_section(filepath, "每周固定")
+
+
+def _parse_table_section(filepath: Path, section: str) -> list[dict]:
+    if not filepath.exists():
+        return []
+    content = filepath.read_text(encoding="utf-8")
+    pattern = rf"^#+\s+{section}\s*\n(.*?)(?=^#+\s|\Z)"
+    m = re.search(pattern, content, re.DOTALL | re.MULTILINE)
+    if not m:
+        return []
+
+    rows = []
+    header_cols = []
+    for line in m.group(1).strip().splitlines():
+        line = line.strip()
+        if not line or line.startswith("|-") or line.startswith("|--"):
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if not header_cols:
+            header_cols = [c.replace(" ", "_").lower() for c in cells]
+            continue
+        row = {}
+        for i, cell in enumerate(cells):
+            if i < len(header_cols):
+                row[header_cols[i]] = cell
+        rows.append(row)
+
+    return rows
+
+
+def _match_weekday(freq: str, today: str) -> bool:
+    """检查频率字符串是否匹配今天星期。如 '周一、三' 匹配 '周三'。"""
+    parts = [p.strip() for p in re.split(r"[、,]", freq) if p.strip()]
+    for p in parts:
+        if p == today:
+            return True
+        if not p.startswith("周") and f"周{p}" == today:
+            return True
+    return False
+
+
+def _get_today_weekly(routines_file: Path) -> list[dict]:
+    """过滤今天适用的每周固定项。"""
+    today_weekday = WEEKDAY_NAMES[datetime.now().weekday()]
+    all_weekly = _parse_weekly_routines(routines_file)
+    return [
+        r for r in all_weekly
+        if _match_weekday(r.get("频率", ""), today_weekday)
+    ]
+
+
+def _daily_template(routines_file: Path) -> str:
+    """生成今日文件模板（含每日固定时间表 + 今日周程）。"""
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    weekday = WEEKDAY_NAMES[datetime.now().weekday()]
+    lines = [f"# {today_str} {weekday}日程", ""]
+
+    # 每日固定
+    daily = _parse_daily_routines(routines_file)
+    lines.append("| 时间 | 事项 |")
+    lines.append("|------|------|")
+    for r in daily:
+        lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+
+    # 今日周程
+    weekly = _get_today_weekly(routines_file)
+    if weekly:
+        lines.append("")
+        lines.append("| 时间 | 事项（周程） |")
+        lines.append("|------|------|")
+        for r in weekly:
+            lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+
+    lines.append("")
+    lines.append("## TODO")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ─── TODO.md 解析 ─────────────────────────────────────────
 
 
 def _today_filename() -> str:
@@ -84,7 +174,6 @@ def _today_filename() -> str:
 
 
 def _parse_tasks(filepath: Path) -> list[dict]:
-    """解析文件中的 checkbox 行，返回 [{status, priority, content}, ...]."""
     if not filepath.exists():
         return []
     tasks = []
@@ -104,46 +193,40 @@ def _parse_tasks(filepath: Path) -> list[dict]:
     return tasks
 
 
-def _parse_high_priority(filepath: Path) -> list[dict]:
-    """提取 TODO.md 中 ## 高优 section 的全部行."""
+def _parse_section_lines(filepath: Path, section: str) -> list[dict]:
+    """提取指定 section 下的行（checkbox 或纯文本）。"""
     if not filepath.exists():
         return []
     content = filepath.read_text(encoding="utf-8")
-    pattern = rf"^##\s+{HIGH_PRIORITY_SECTION}\s*\n(.*?)(?=^##\s|\Z)"
-    m = re.search(pattern, content, re.DOTALL | re.MULTILINE | re.IGNORECASE)
+    pattern = rf"^#+\s+{section}\s*\n(.*?)(?=^#+\s|\Z)"
+    m = re.search(pattern, content, re.DOTALL | re.MULTILINE)
     if not m:
         return []
     items = []
     for line in m.group(1).strip().splitlines():
         line = line.strip()
-        if not line:
+        if not line or line.startswith("<!--"):
             continue
-        parsed = _parse_tasks_from_line(line)
-        items.append(parsed)
+        m2 = re.match(r"^-\s*\[([ x])\]\s*(.*)", line)
+        if m2:
+            status = "done" if m2.group(1) == "x" else "pending"
+            content = m2.group(2)
+            priority = "medium"
+            for emoji, pri in [("🔴", "high"), ("🟡", "medium"), ("⚪", "low")]:
+                if content.startswith(emoji):
+                    priority = pri
+                    content = content[len(emoji):].strip()
+                    break
+            items.append({"status": status, "priority": priority, "content": content})
+        else:
+            items.append({"content": line})
     return items
-
-
-def _parse_tasks_from_line(line: str) -> dict:
-    """解析单行为 task dict（高优 section 可能含非 checkbox 行）."""
-    m = re.match(r"^-\s*\[([ x])\]\s*(.*)", line)
-    if m:
-        status = "done" if m.group(1) == "x" else "pending"
-        content = m.group(2)
-        priority = "high"
-        for emoji, pri in [("🔴", "high"), ("🟡", "medium"), ("⚪", "low")]:
-            if content.startswith(emoji):
-                priority = pri
-                content = content[len(emoji):].strip()
-                break
-        return {"status": status, "priority": priority, "content": content}
-    return {"content": line}
 
 
 # ─── init ─────────────────────────────────────────────────
 
 
 def _init_repo() -> dict:
-    """克隆或拉取 TODO 仓库."""
     if not TODO_DIR.exists():
         r = _run_git(["clone", REPO_URL, str(TODO_DIR)], cwd=Path.home())
         if r.returncode != 0:
@@ -188,40 +271,26 @@ def cmd_init() -> dict:
         return result
 
     today_tasks = _parse_tasks(TODO_DIR / _today_filename())
-    high_priority = _parse_high_priority(TODO_DIR / TODO_MD)
-    daily_routines = _parse_section_table(TODO_DIR / TODO_MD, "每日固定")
+    high_priority = _parse_section_lines(TODO_DIR / TODO_MD, "高优")
+    daily_routines = _parse_daily_routines(TODO_DIR / ROUTINES_MD)
+    weekly_today = _get_today_weekly(TODO_DIR / ROUTINES_MD)
 
     return {
         **result,
         "today": {"date": datetime.now().strftime("%Y-%m-%d"), "tasks": today_tasks},
         "high_priority": high_priority,
         "daily_routines": daily_routines,
+        "weekly_today": weekly_today,
     }
 
 
 # ─── today ────────────────────────────────────────────────
 
 
-def _parse_section_table(filepath: Path, section: str) -> list[str]:
-    """提取 section 下的表格行（非 checkbox 内容）。"""
-    if not filepath.exists():
-        return []
-    content = filepath.read_text(encoding="utf-8")
-    pattern = rf"^#+\s+{section}\s*\n(.*?)(?=^#+\s|\Z)"
-    m = re.search(pattern, content, re.DOTALL | re.MULTILINE)
-    if not m:
-        return []
-    lines = []
-    for line in m.group(1).strip().splitlines():
-        line = line.strip()
-        if line and not line.startswith("|-"):
-            lines.append(line)
-    return lines
-
-
 def cmd_today() -> str:
     today_file = TODO_DIR / _today_filename()
-    lines = [f"=== {_today_filename().replace('.md', '')} ==="]
+    weekday = WEEKDAY_NAMES[datetime.now().weekday()]
+    lines = [f"=== {_today_filename().replace('.md', '')} {weekday} ==="]
 
     if today_file.exists():
         content = today_file.read_text(encoding="utf-8")
@@ -229,16 +298,26 @@ def cmd_today() -> str:
     else:
         lines.append("（暂无待办）")
 
-    main = TODO_DIR / TODO_MD
-    if main.exists():
+    routines_file = TODO_DIR / ROUTINES_MD
+    if routines_file.exists():
         # 每日固定
-        daily = _parse_section_table(main, "每日固定")
+        daily = _parse_daily_routines(routines_file)
         if daily:
             lines.append("\n=== 每日固定 ===")
-            lines.extend(daily)
+            for r in daily:
+                lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
 
-        # 高优任务
-        items = _parse_high_priority(main)
+        # 今日周程
+        weekly = _get_today_weekly(routines_file)
+        if weekly:
+            lines.append("\n=== 今日周程 ===")
+            for r in weekly:
+                lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+
+    # 高优
+    main = TODO_DIR / TODO_MD
+    if main.exists():
+        items = _parse_section_lines(main, "高优")
         if items:
             lines.append("\n=== 高优任务 ===")
             for item in items:
@@ -259,7 +338,6 @@ def cmd_add(task: str, priority: str = "medium") -> dict:
     if not TODO_DIR.exists():
         return {"success": False, "error": f"{TODO_DIR} 不存在，请先运行 init"}
 
-    # pull
     _run_git(["pull"])
 
     today_file = TODO_DIR / _today_filename()
@@ -269,7 +347,10 @@ def cmd_add(task: str, priority: str = "medium") -> dict:
     if today_file.exists():
         content = today_file.read_text(encoding="utf-8").rstrip() + "\n" + task_line
     else:
-        content = f"# {_today_filename().replace('.md', '')}\n\n{task_line}"
+        # 新建时预填每日模板
+        routines_file = TODO_DIR / ROUTINES_MD
+        template = _daily_template(routines_file) if routines_file.exists() else f"# {_today_filename().replace('.md', '')}\n\n"
+        content = template.rstrip() + "\n" + task_line + "\n"
 
     today_file.write_text(content, encoding="utf-8")
 
@@ -300,7 +381,6 @@ def cmd_done(keyword: str) -> dict:
     if not TODO_DIR.exists():
         return {"success": False, "error": f"{TODO_DIR} 不存在，请先运行 init"}
 
-    # pull
     _run_git(["pull"])
 
     files = [TODO_DIR / _today_filename(), TODO_DIR / TODO_MD]
@@ -322,7 +402,6 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     subparsers.add_parser("init", help="克隆/拉取仓库 + 输出今日待办 JSON")
-
     subparsers.add_parser("today", help="显示今日待办（不触发 git）")
 
     add_parser = subparsers.add_parser("add", help="添加任务")
