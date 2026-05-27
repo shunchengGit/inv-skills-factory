@@ -2,8 +2,10 @@
 """将 custom-skills/ 中的技能通过软链接同步到各 Agent 的技能目录。
 
 用法:
-  python3 sync_skills.py                  # 执行同步
-  python3 sync_skills.py --dry-run        # 仅预览，不执行变更
+  python3 sync_skills.py                         # 执行同步（全部分类）
+  python3 sync_skills.py --category invest       # 仅同步 invest 分类
+  python3 sync_skills.py --category general      # 仅同步 general 分类
+  python3 sync_skills.py --dry-run               # 仅预览，不执行变更
   python3 sync_skills.py --config agent_targets.json
 """
 
@@ -58,16 +60,28 @@ def read_config(config_path: Path) -> list[dict]:
     return result
 
 
-def discover_skills(custom_skills_dir: Path) -> list[Path]:
-    """扫描 custom-skills/，返回所有子目录列表（含 _shared 等基础设施目录）。"""
+def discover_skills(custom_skills_dir: Path, category: str | None = None) -> list[Path]:
+    """递归扫描 custom-skills/，返回所有含 SKILL.md 的子目录。
+
+    category: 可选分类名，如 "invest"/"general"，不传则同步全部。
+    """
     if not custom_skills_dir.exists():
         print(f"错误: custom-skills 目录不存在: {custom_skills_dir}", file=sys.stderr)
         sys.exit(1)
 
+    scan_root = custom_skills_dir
+    if category:
+        scan_root = custom_skills_dir / category
+        if not scan_root.exists():
+            print(f"错误: 分类目录不存在: {scan_root}", file=sys.stderr)
+            sys.exit(1)
+
     skills = []
-    for entry in sorted(custom_skills_dir.iterdir()):
-        if entry.is_dir() and not entry.name.startswith("."):
-            skills.append(entry)
+    for root, dirs, _ in os.walk(scan_root):
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        root_path = Path(root)
+        if (root_path / "SKILL.md").exists():
+            skills.append(root_path)
     return skills
 
 
@@ -174,6 +188,11 @@ def main() -> int:
         action="store_true",
         help="仅预览，不执行任何文件变更",
     )
+    parser.add_argument(
+        "--category",
+        default=None,
+        help="仅同步指定分类目录下的技能 (如 invest/general)，不传则同步全部",
+    )
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
@@ -187,7 +206,7 @@ def main() -> int:
         return 0
 
     # 发现技能
-    skills = discover_skills(custom_skills_dir)
+    skills = discover_skills(custom_skills_dir, category=args.category)
     if not skills:
         print("custom-skills/ 中没有发现有效技能。")
         return 0

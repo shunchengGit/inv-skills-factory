@@ -10,13 +10,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 custom-skills/                  # 自定义 Skills
-  <skill-name>/                 # 每个 Skill 一个子目录（kebab-case）
-    SKILL.md                    # 技能定义文件（必需），YAML frontmatter + Markdown 指令
-    _meta.json                  # 元数据：name/version/description/commands/scripts/references/dependencies/derivedFrom
-    scripts/                    # Python 数据脚本（snake_case.py）
+  general/                      # 通用技能
+    knowledge-mgr/              # 个人知识管理
       ...
-    references/                 # 参考文档
-      ...
+  invest/                       # 投资分析技能
+    <skill-name>/               # 每个 Skill 一个子目录（kebab-case）
+      SKILL.md                  # 技能定义文件（必需），YAML frontmatter + Markdown 指令
+      _meta.json                # 元数据：name/version/description/commands/scripts/references/dependencies/derivedFrom
+      scripts/                  # Python 数据脚本（snake_case.py）
+        ...
+      references/               # 参考文档
+        ...
 ```
 
 ## 技能依赖关系
@@ -42,9 +46,9 @@ stock-research-report-analysis（研报分析，独立脚本）
 ## 新建 Skill
 
 ```bash
-mkdir -p custom-skills/<skill-name>/{scripts,references}
-touch custom-skills/<skill-name>/SKILL.md
-cat > custom-skills/<skill-name>/_meta.json << 'EOF'
+mkdir -p custom-skills/invest/<skill-name>/{scripts,references}
+touch custom-skills/invest/<skill-name>/SKILL.md
+cat > custom-skills/invest/<skill-name>/_meta.json << 'EOF'
 {
   "name": "<skill-name>",
   "version": "0.1.0",

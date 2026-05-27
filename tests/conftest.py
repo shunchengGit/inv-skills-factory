@@ -17,9 +17,20 @@ VALID_HK_STOCK = "0700.HK"
 VALID_US_STOCK = "AAPL"
 
 
+def _find_skill_dir(skill_name: str) -> Path:
+    """在 custom-skills/ 下递归查找技能目录（支持 invest/<name> 等嵌套结构）。"""
+    for root, dirs, _ in os.walk(CUSTOM_SKILLS):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        root_path = Path(root)
+        if root_path.name == skill_name and (root_path / "SKILL.md").exists():
+            return root_path
+    raise FileNotFoundError(f"技能目录未找到: {skill_name}")
+
+
 def run_script(skill_name: str, script_name: str, *args, timeout: int = 60, env: dict | None = None) -> subprocess.CompletedProcess:
     """通过 uv run 执行技能脚本，返回 CompletedProcess。"""
-    script_path = CUSTOM_SKILLS / skill_name / "scripts" / script_name
+    skill_dir = _find_skill_dir(skill_name)
+    script_path = skill_dir / "scripts" / script_name
     cmd = ["uv", "run", str(script_path), *args]
 
     run_env = os.environ.copy()
@@ -31,7 +42,7 @@ def run_script(skill_name: str, script_name: str, *args, timeout: int = 60, env:
         capture_output=True,
         text=True,
         timeout=timeout,
-        cwd=str(CUSTOM_SKILLS / skill_name),
+        cwd=str(skill_dir),
         env=run_env,
     )
 
