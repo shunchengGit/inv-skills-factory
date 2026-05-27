@@ -1,46 +1,20 @@
 # Assist Manager 工作流参考
 
-## 每日工作流（Morning Routine）
+> 注意: TODO 管理已迁移至 `todo` 独立技能；文章抓取/消化已删除。
 
-1. **读取今日 TODO**
-   ```bash
-   python3 scripts/todo.py today
-   ```
+## 周报生成
 
-2. **检查高优任务**
-   - 查看 `TODO/TODO.md` 的"高优"部分
-   - 确认是否有阻塞项
+```bash
+python3 scripts/docgen.py weekly
+python3 scripts/docgen.py weekly --date 2026-05-16
+```
 
-3. **快速整理**
-   - 生成日报草稿：`python3 scripts/docgen.py daily`
-   - 归档昨日已完成的任务
-   - 添加今日新任务
+## 日报生成
 
-4. **每日必排（雷打不动）**
-   - 13:30-14:00 招聘简历获取
-   - 14:00-14:30 产品体验和竞品体验
-   - 14:30-15:00 AI 研究学习
-
-5. **TODO 约束**
-   - 每天最多 2 件 TODO（每日必排不算 TODO）
-   - `[提醒]` 前缀、TB 任务更新、会议室名不算工作任务
-
-## 每周工作流（Weekly Review）
-
-1. **生成周报草稿**
-   ```bash
-   python3 scripts/docgen.py weekly
-   ```
-
-2. **整理收藏**
-   ```bash
-   python3 scripts/docgen.py digest --limit 10
-   ```
-
-3. **归档 TODO**
-   ```bash
-   python3 scripts/todo.py archive
-   ```
+```bash
+python3 scripts/docgen.py daily
+python3 scripts/docgen.py daily --date 2026-05-16
+```
 
 ## 招聘流程
 
@@ -64,7 +38,6 @@
 | 姓名 | 岗位 | 状态 | 评分 | 评级 | 日期 |
 |------|------|------|------|------|------|
 | 王斌 | Android | 已面试 | 45 | A | 2026-05-10 |
-| ... | ... | ... | ... | ... | ... |
 
 ## 文档命名规范
 
@@ -75,7 +48,5 @@
 
 ## 目录维护规则
 
-1. **TODO/**: 保留最近 30 天的每日文件，旧文件归档
-2. **ddcursor/**: 每月至少消化 5 篇，已消化的移动或标记
-3. **面试/resume/**: 已归档候选人移动到 `面试/archived/`
-4. **团队/**: 过期汇报材料（超过 6 个月）考虑归档
+1. **面试/resume/**: 已归档候选人移动到 `面试/archived/`
+2. **团队/**: 过期汇报材料（超过 6 个月）考虑归档
