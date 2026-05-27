@@ -1,0 +1,9 @@
+{
+  "name": "daily-arrange",
+  "version": "0.1.0",
+  "description": "每日安排：整合钉钉日历日程 + TODO 待办，输出结构化今日时间计划",
+  "commands": [],
+  "scripts": {},
+  "references": {},
+  "dependencies": ["dingding", "todo"]
+}
