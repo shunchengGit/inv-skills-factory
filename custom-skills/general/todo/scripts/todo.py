@@ -10,6 +10,7 @@ from __future__ import annotations
 用法:
   uv run custom-skills/general/todo/scripts/todo.py init
   uv run custom-skills/general/todo/scripts/todo.py today
+  uv run custom-skills/general/todo/scripts/todo.py week
   uv run custom-skills/general/todo/scripts/todo.py add "任务内容"
   uv run custom-skills/general/todo/scripts/todo.py add "任务内容" --priority high
   uv run custom-skills/general/todo/scripts/todo.py done "关键词"
@@ -20,7 +21,7 @@ import json
 import re
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 REPO_URL = "git@github.com:shunchengGit/todo.git"
@@ -287,6 +288,64 @@ def cmd_init() -> dict:
 # ─── today ────────────────────────────────────────────────
 
 
+def _week_monday() -> datetime:
+    """返回本周一的日期。"""
+    today = datetime.now()
+    return today - timedelta(days=today.weekday())
+
+
+def cmd_week() -> str:
+    """本周概览：7天日程 + 每日待办。"""
+    routines_file = TODO_DIR / ROUTINES_MD
+    monday = _week_monday()
+    lines = [
+        f"=== 本周概览 ({monday.strftime('%m/%d')}-{(monday + timedelta(days=6)).strftime('%m/%d')}) ===",
+        "",
+    ]
+
+    for i in range(7):
+        day = monday + timedelta(days=i)
+        date_str = day.strftime("%Y-%m-%d")
+        weekday = WEEKDAY_NAMES[i]
+        lines.append(f"## {weekday} {date_str}")
+        lines.append("")
+
+        # 每日固定
+        if routines_file.exists():
+            daily = _parse_daily_routines(routines_file)
+            if daily:
+                lines.append("| 时间 | 事项（每日固定） |")
+                lines.append("|------|------|")
+                for r in daily:
+                    lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+                lines.append("")
+
+            # 该日周程
+            today_weekly = [
+                r for r in _parse_weekly_routines(routines_file)
+                if _match_weekday(r.get("频率", ""), weekday)
+            ]
+            if today_weekly:
+                lines.append("| 时间 | 事项（周程） |")
+                lines.append("|------|------|")
+                for r in today_weekly:
+                    lines.append(f"| {r.get('时间', '')} | {r.get('事项', '')} |")
+                lines.append("")
+
+        # 当日 TODO
+        day_file = TODO_DIR / f"{date_str}.md"
+        if day_file.exists():
+            tasks = _parse_tasks(day_file)
+            if tasks:
+                lines.append("**TODO:**")
+                for t in tasks:
+                    checkbox = "x" if t["status"] == "done" else " "
+                    lines.append(f"- [{checkbox}] {t['content']}")
+                lines.append("")
+
+    return "\n".join(lines).rstrip()
+
+
 def cmd_today() -> str:
     today_file = TODO_DIR / _today_filename()
     weekday = WEEKDAY_NAMES[datetime.now().weekday()]
@@ -403,6 +462,7 @@ def main():
 
     subparsers.add_parser("init", help="克隆/拉取仓库 + 输出今日待办 JSON")
     subparsers.add_parser("today", help="显示今日待办（不触发 git）")
+    subparsers.add_parser("week", help="本周概览：7天日程 + 待办")
 
     add_parser = subparsers.add_parser("add", help="添加任务")
     add_parser.add_argument("task", help="任务内容")
@@ -420,6 +480,8 @@ def main():
             sys.exit(1)
     elif args.command == "today":
         print(cmd_today())
+    elif args.command == "week":
+        print(cmd_week())
     elif args.command == "add":
         result = cmd_add(args.task, args.priority)
         print(json.dumps(result, ensure_ascii=False, indent=2))
