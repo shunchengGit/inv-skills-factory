@@ -11,21 +11,29 @@ from __future__ import annotations
 """知识库完整性检查：死链、孤立文件、URL 可达性。
 
 用法:
-  uv run custom-skills/knowledge-mgr/scripts/km_lint.py
-  uv run custom-skills/knowledge-mgr/scripts/km_lint.py --skip-url-check  # 跳过 URL 可达性检查
+  uv run custom-skills/general/knowledge-mgr/scripts/km_lint.py
+  uv run custom-skills/general/knowledge-mgr/scripts/km_lint.py --skip-url-check  # 跳过 URL 可达性检查
 """
 
 import argparse
 import json
+import os
 import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
-from proxy import detect_proxy
-
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
+
+
+def _detect_proxy() -> str | None:
+    """检测代理：检查环境变量。"""
+    return (
+        os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or os.environ.get("https_proxy")
+        or os.environ.get("http_proxy")
+    )
 INDEX_FILE = "Index.md"
 
 
@@ -96,7 +104,7 @@ def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> list[di
     if skip:
         return [], []
 
-    proxy_url = detect_proxy()
+    proxy_url = _detect_proxy()
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
     # 收集所有 md 文件和对应 URL

@@ -15,9 +15,9 @@ from __future__ import annotations
   store  - 存储知识条目到 ~/.knowledge + 更新 Index.md + git 同步
 
 用法:
-  uv run custom-skills/knowledge-mgr/scripts/km_import.py fetch <url>
-  uv run custom-skills/knowledge-mgr/scripts/km_import.py store --title "标题" --category investing --url https://... --content <md>
-  uv run custom-skills/knowledge-mgr/scripts/km_import.py store --title "标题" --url https://... --content <md>  # 无 category → _unsorted
+  uv run custom-skills/general/knowledge-mgr/scripts/km_import.py fetch <url>
+  uv run custom-skills/general/knowledge-mgr/scripts/km_import.py store --title "标题" --category investing --url https://... --content <md>
+  uv run custom-skills/general/knowledge-mgr/scripts/km_import.py store --title "标题" --url https://... --content <md>  # 无 category → _unsorted
 """
 
 import argparse
@@ -27,9 +27,6 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
-from proxy import detect_proxy
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 INDEX_FILE = "Index.md"
@@ -65,27 +62,33 @@ def _firecrawl_scrape(url: str) -> dict | None:
 
 
 def _pwright_scrape(url: str) -> dict | None:
-    """pwright_scrape 兜底，返回 {title, content} 或 None。"""
-    script = Path(__file__).resolve().parents[1] / "cs-crawl" / "scripts" / "pwright_scrape.py"
-    if not script.exists():
-        script = Path(__file__).resolve().parents[2] / "cs-crawl" / "scripts" / "pwright_scrape.py"
+    """内联 playwright 抓取，返回 {title, content} 或 None。"""
     try:
-        r = subprocess.run(
-            ["uv", "run", str(script), "scrape", url, "--wait-until", "domcontentloaded"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        if r.returncode != 0:
-            return None
-        data = json.loads(r.stdout)
-        if not data.get("success"):
-            return None
-        content = data.get("markdown", "")
-        title = data.get("title", "")
-        if not content or len(content) < 100:
-            return None
-        return {"title": title, "content": content}
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            title = page.title()
+            # 提取正文：优先 article/main，否则 body
+            content_el = page.query_selector("article") or page.query_selector("main") or page.query_selector("body")
+            html = content_el.inner_html() if content_el else page.content()
+
+            import html2text
+            h = html2text.HTML2Text()
+            h.ignore_links = False
+            h.ignore_images = True
+            content = h.handle(html)
+
+            browser.close()
+
+            if not content or len(content.strip()) < 100:
+                return None
+            return {"title": title, "content": content.strip()}
     except Exception:
         return None
 

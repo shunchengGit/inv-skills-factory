@@ -8,7 +8,7 @@ from __future__ import annotations
 """初始化知识库：从远程仓库拉取并输出 Index 结构化数据。
 
 用法:
-  uv run custom-skills/knowledge-mgr/scripts/km_init.py
+  uv run custom-skills/general/knowledge-mgr/scripts/km_init.py
 """
 
 import json
