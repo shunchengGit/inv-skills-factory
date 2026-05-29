@@ -20,7 +20,7 @@ from pathlib import Path
 
 STORE_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = STORE_ROOT / "custom-skills"
-HOOKS_SRC = STORE_ROOT / "hooks"
+HOOKS_SRC = STORE_ROOT / "custom-hooks"
 DEPLOY_FILE = STORE_ROOT / "deploy.json"
 
 
