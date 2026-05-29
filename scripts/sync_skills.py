@@ -1,249 +1,109 @@
 #!/usr/bin/env python3
-"""将 custom-skills/ 中的技能通过软链接同步到各 Agent 的技能目录。
+"""
+将 SkillsStore 的 skills 和 hooks 同步到各 Agent 平台。
 
 用法:
-  python3 sync_skills.py                         # 执行同步（全部分类）
-  python3 sync_skills.py --category invest       # 仅同步 invest 分类
-  python3 sync_skills.py --category general      # 仅同步 general 分类
-  python3 sync_skills.py --dry-run               # 仅预览，不执行变更
-  python3 sync_skills.py --config agent_targets.json
+  python sync_skills.py              # 同步 skills + hooks
+  python sync_skills.py --skills     # 只同步 skills
+  python sync_skills.py --hooks      # 只同步 hooks
+  python sync_skills.py --agent hermes  # 只同步到指定 agent
 """
-
-from __future__ import annotations
 
 import argparse
 import json
 import os
-import sys
+import shutil
 from pathlib import Path
-from typing import Optional
+
+STORE_ROOT = Path(__file__).resolve().parent.parent
+SKILLS_SRC = STORE_ROOT / "custom-skills"
+HOOKS_SRC = STORE_ROOT / "hooks"
+TARGETS_FILE = Path(__file__).resolve().parent / "agent_targets.json"
 
 
-def _resolve(path: str) -> Path:
-    """展开 ~ 并返回绝对路径。"""
-    return Path(os.path.expanduser(path)).resolve()
+def load_targets(agent_name: str | None = None) -> list[dict]:
+    with open(TARGETS_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    agents = [a for a in data["agents"] if a.get("enabled", True)]
+    if agent_name:
+        agents = [a for a in agents if a["name"] == agent_name]
+    return agents
 
 
-def read_config(config_path: Path) -> list[dict]:
-    """读取 agent_targets.json，返回 enabled Agent 列表。
+def sync_skills(target: dict) -> int:
+    """同步 skills 到目标 agent，返回同步数量"""
+    skills_dir = Path(target["skills_dir"]).expanduser()
+    skills_dir.mkdir(parents=True, exist_ok=True)
 
-    对每个 Agent 展开 skills_dir 中的 ~。
-    """
-    if not config_path.exists():
-        print(f"错误: 配置文件不存在: {config_path}", file=sys.stderr)
-        sys.exit(1)
+    count = 0
+    for skill_path in SKILLS_SRC.rglob("SKILL.md"):
+        skill_dir = skill_path.parent
+        rel = skill_dir.relative_to(SKILLS_SRC)
+        dest = skills_dir / rel
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(skill_dir, dest)
+        count += 1
 
-    try:
-        data = json.loads(config_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        print(f"错误: 配置文件 JSON 解析失败: {e}", file=sys.stderr)
-        sys.exit(1)
+    return count
 
-    agents = data.get("agents", [])
-    if not isinstance(agents, list):
-        print("错误: agents 必须是数组", file=sys.stderr)
-        sys.exit(1)
 
-    result = []
-    for agent in agents:
-        if not agent.get("enabled", True):
-            print(f"[跳过] {agent.get('name', 'unknown')}: enabled=false")
+def sync_hooks(target: dict) -> int:
+    """同步 hooks 到目标 agent，只同步该 agent 对应子目录下的 hooks"""
+    hooks_dir = Path(target.get("hooks_dir", "")).expanduser()
+    if not target.get("hooks_dir") or not hooks_dir:
+        return 0
+
+    agent_name = target["name"]
+    agent_hooks_src = HOOKS_SRC / agent_name
+    if not agent_hooks_src.exists():
+        return 0
+
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    count = 0
+    for hook_dir in agent_hooks_src.iterdir():
+        if not hook_dir.is_dir():
             continue
-        name = agent.get("name", "unknown")
-        raw_dir = agent.get("skills_dir")
-        if not raw_dir:
-            print(f"[跳过] {name}: skills_dir 未配置", file=sys.stderr)
-            continue
-        agent["skills_dir"] = str(_resolve(raw_dir))
-        result.append(agent)
+        dest = hooks_dir / hook_dir.name
+        if dest.exists():
+            shutil.rmtree(dest)
+        shutil.copytree(hook_dir, dest)
+        count += 1
 
-    return result
+    return count
 
 
-def discover_skills(custom_skills_dir: Path, category: str | None = None) -> list[Path]:
-    """递归扫描 custom-skills/，返回所有含 SKILL.md 的子目录。
-
-    category: 可选分类名，如 "invest"/"general"，不传则同步全部。
-    """
-    if not custom_skills_dir.exists():
-        print(f"错误: custom-skills 目录不存在: {custom_skills_dir}", file=sys.stderr)
-        sys.exit(1)
-
-    scan_root = custom_skills_dir
-    if category:
-        scan_root = custom_skills_dir / category
-        if not scan_root.exists():
-            print(f"错误: 分类目录不存在: {scan_root}", file=sys.stderr)
-            sys.exit(1)
-
-    skills = []
-    for root, dirs, _ in os.walk(scan_root):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-        root_path = Path(root)
-        if (root_path / "SKILL.md").exists():
-            skills.append(root_path)
-    return skills
-
-
-def _find_bak_path(target: Path) -> Path:
-    """为冲突目录寻找可用的 _bak 名称。
-
-    尝试 target_bak，若已存在则尝试 target_bak2, target_bak3...
-    """
-    parent = target.parent
-    base = target.name
-    bak = parent / f"{base}_bak"
-    if not bak.exists():
-        return bak
-    i = 2
-    while True:
-        bak = parent / f"{base}_bak{i}"
-        if not bak.exists():
-            return bak
-        i += 1
-
-
-def _is_symlink(path: Path) -> bool:
-    """检查路径是否为符号链接。"""
-    return path.is_symlink()
-
-
-def _is_broken_symlink(path: Path) -> bool:
-    """检查是否为断开的符号链接。"""
-    try:
-        path.is_symlink() and not path.exists()
-    except Exception:
-        pass
-    return path.is_symlink() and not os.path.exists(str(path))
-
-
-def sync_skill(
-    skill_dir: Path,
-    agent: dict,
-    *,
-    dry_run: bool = False,
-) -> tuple[str, str]:
-    """将单个技能同步到单个 Agent。
-
-    返回 (操作类型, 描述)。
-
-    场景:
-      - 目标不存在 → 创建软链接
-      - 目标已是正确软链接 → 跳过
-      - 目标是软链接但指向不同 → 更新
-      - 目标是普通目录 → 重命名为 _bak 后创建
-      - 目标是断开软链接 → 删除后重建
-    """
-    skill_name = skill_dir.name
-    target = Path(agent["skills_dir"]) / skill_name
-    source = skill_dir.resolve()
-    agent_name = agent["name"]
-
-    # 场景 A: 目标不存在
-    if not target.exists() and not target.is_symlink():
-        if dry_run:
-            return ("创建", f"[{agent_name}] {skill_name} → {target}")
-        target.symlink_to(source, target_is_directory=True)
-        return ("创建", f"[{agent_name}] {skill_name} → {target}")
-
-    # 场景 E: 断开的符号链接
-    if target.is_symlink() and not target.exists():
-        if dry_run:
-            return ("重建", f"[{agent_name}] {skill_name}: 断开的链接 → 重建")
-        target.unlink()
-        target.symlink_to(source, target_is_directory=True)
-        return ("重建", f"[{agent_name}] {skill_name}: 断开的链接已重建")
-
-    # 场景 B: 已是正确的符号链接
-    if target.is_symlink():
-        current_target = os.readlink(str(target))
-        resolved_current = _resolve(str(current_target))
-        if resolved_current == source:
-            return ("跳过", f"[{agent_name}] {skill_name}: 已是正确链接")
-        # 场景 C: 符号链接但指向不同
-        if dry_run:
-            return ("更新", f"[{agent_name}] {skill_name}: {current_target} → {source}")
-        target.unlink()
-        target.symlink_to(source, target_is_directory=True)
-        return ("更新", f"[{agent_name}] {skill_name}: 链接已更新")
-
-    # 场景 D: 目标存在且不是符号链接（普通目录）
-    bak_path = _find_bak_path(target)
-    if dry_run:
-        return ("重命名", f"[{agent_name}] {skill_name}: {target} → {bak_path.name}，然后创建链接")
-    target.rename(bak_path)
-    target.symlink_to(source, target_is_directory=True)
-    return ("重命名", f"[{agent_name}] {skill_name}: {bak_path.name}（备份），已创建链接 → {source}")
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description="技能同步脚本")
-    parser.add_argument(
-        "--config",
-        default=None,
-        help="agent_targets.json 路径 (默认: 脚本同级目录下的 agent_targets.json)",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="仅预览，不执行任何文件变更",
-    )
-    parser.add_argument(
-        "--category",
-        default=None,
-        help="仅同步指定分类目录下的技能 (如 invest/general)，不传则同步全部",
-    )
+def main():
+    parser = argparse.ArgumentParser(description="同步 SkillsStore 到各 Agent 平台")
+    parser.add_argument("--skills", action="store_true", help="只同步 skills")
+    parser.add_argument("--hooks", action="store_true", help="只同步 hooks")
+    parser.add_argument("--agent", type=str, help="只同步到指定 agent")
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parent.parent
-    custom_skills_dir = repo_root / "custom-skills"
-    config_path = Path(args.config) if args.config else (Path(__file__).parent / "agent_targets.json")
+    do_skills = not args.hooks or args.skills
+    do_hooks = not args.skills or args.hooks
+    # 如果两个都没指定，都做
+    if not args.skills and not args.hooks:
+        do_skills = do_hooks = True
 
-    # 读取配置
-    agents = read_config(config_path)
-    if not agents:
-        print("没有 enabled 的 Agent，退出。")
-        return 0
+    targets = load_targets(args.agent)
+    if not targets:
+        print("没有匹配的 agent 目标")
+        return
 
-    # 发现技能
-    skills = discover_skills(custom_skills_dir, category=args.category)
-    if not skills:
-        print("custom-skills/ 中没有发现有效技能。")
-        return 0
+    for target in targets:
+        name = target["name"]
+        print(f"\n=== {name} ===")
 
-    if args.dry_run:
-        print("=== DRY RUN 模式: 仅预览，不执行变更 ===\n")
+        if do_skills:
+            count = sync_skills(target)
+            print(f"  skills: {count} 个技能同步到 {target['skills_dir']}")
 
-    print(f"Agent 数: {len(agents)}，技能数: {len(skills)}\n")
-
-    # 确保 Agent 技能目录存在
-    for agent in agents:
-        target_dir = Path(agent["skills_dir"])
-        if not target_dir.exists():
-            if args.dry_run:
-                print(f"[创建目录] {agent['name']}: {target_dir}")
-            else:
-                target_dir.mkdir(parents=True, exist_ok=True)
-                print(f"[创建目录] {agent['name']}: {target_dir}")
-
-    # 执行同步
-    stats = {"创建": 0, "跳过": 0, "更新": 0, "重命名": 0, "重建": 0}
-    for skill_dir in skills:
-        for agent in agents:
-            op, msg = sync_skill(skill_dir, agent, dry_run=args.dry_run)
-            stats[op] += 1
-            print(f"  {msg}")
-
-    # 汇总
-    total = sum(stats.values())
-    print(f"\n{'=== DRY RUN 预览 ===' if args.dry_run else '=== 同步完成 ==='}")
-    print(f"总计: {total} 操作")
-    for op, count in stats.items():
-        if count > 0:
-            print(f"  {op}: {count}")
-
-    return 0
+        if do_hooks:
+            count = sync_hooks(target)
+            print(f"  hooks: {count} 个 hook 同步到 {target.get('hooks_dir', '(未配置)')}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

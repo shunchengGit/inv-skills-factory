@@ -5,7 +5,6 @@ Hermes Hook: using-custom-skills
 """
 
 import os
-import json
 
 SKILL_FILE = os.path.expanduser(
     "~/.SkillsStore/custom-skills/general/using-custom-skills/SKILL.md"

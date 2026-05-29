@@ -3,16 +3,19 @@
     {
       "name": "openclaw",
       "skills_dir": "~/.openclaw/skills",
+      "hooks_dir": "~/.openclaw/hooks",
       "enabled": true
     },
     {
       "name": "workbuddy",
       "skills_dir": "~/.workbuddy/skills",
+      "hooks_dir": "~/.workbuddy/hooks",
       "enabled": true
     },
     {
       "name": "hermes",
       "skills_dir": "~/.hermes/skills",
+      "hooks_dir": "~/.hermes/hooks",
       "enabled": true
     }
   ]
