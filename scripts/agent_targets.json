@@ -1,12 +1,6 @@
 {
   "agents": [
     {
-      "name": "openclaw",
-      "skills_dir": "~/.openclaw/skills",
-      "hooks_dir": "~/.openclaw/hooks",
-      "enabled": true
-    },
-    {
       "name": "workbuddy",
       "skills_dir": "~/.workbuddy/skills",
       "hooks_dir": "~/.workbuddy/hooks",
