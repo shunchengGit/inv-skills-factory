@@ -259,6 +259,8 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 以下三项互不依赖，**应尽可能并行执行**。有子代理能力的 Agent 应同时派发三个子任务；无子代理能力的 Agent 按顺序执行即可。
 
+**注意**：这三项是真正的独立数据源（不同脚本/文件），并行不会重复劳动。后续阶段二、三依赖共享数据，不应派给子代理。
+
 | 并行任务 | 脚本 | 预计耗时 |
 |---------|------|---------|
 | **A. 估值快照** | `uv run {valuationDir}/scripts/valuation_snapshot.py <代码> --output json` | 10-30s |
