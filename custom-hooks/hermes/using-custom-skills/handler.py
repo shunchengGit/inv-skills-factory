@@ -5,10 +5,10 @@ Hermes Hook: using-custom-skills
 """
 
 import os
+from pathlib import Path
 
-SKILL_FILE = os.path.expanduser(
-    "~/.SkillsStore/custom-skills/general/using-custom-skills/SKILL.md"
-)
+# Hermes 部署后，技能在 ~/.hermes/skills/ 下
+SKILL_FILE = Path.home() / ".hermes" / "skills" / "using-custom-skills" / "SKILL.md"
 
 
 def handle(event_type: str, context: dict) -> dict:

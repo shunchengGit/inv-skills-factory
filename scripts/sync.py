@@ -113,8 +113,19 @@ def sync_skills(categories: list[str], skills_dir: str, force: bool = False) -> 
             failed += 1
             continue
 
+        # 同步 _shared 工具模块（如有）
+        shared_dir = cat_dir / "_shared"
+        if shared_dir.is_dir():
+            label = f"{cat}/_shared"
+            target = dest_root / "_shared"
+            result = _create_symlink(shared_dir, target, label, force)
+            if result:
+                created += 1
+            else:
+                skipped += 1
+
         for item in cat_dir.iterdir():
-            if not item.is_dir() or not (item / "SKILL.md").exists():
+            if not item.is_dir() or item.name == "_shared" or not (item / "SKILL.md").exists():
                 continue
 
             label = f"{cat}/{item.name}"

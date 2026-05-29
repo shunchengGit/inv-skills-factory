@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 # ── 引入共享框架 ─────────────────────────────────────────────────────
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 from indicators.builder import build_snapshot, render_text_snapshot, fetch_all_concurrent
 
 from indicators_config import INDICATORS

@@ -25,7 +25,7 @@ import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "_shared"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 from proxy import apply_proxy_to_session
 
 BASE_URL_REALTIME = "https://push2.eastmoney.com/api/qt/stock/get"
