@@ -25,7 +25,7 @@ metadata:
 | 来源 | 命令 | 产出 |
 |------|------|------|
 | 钉钉日历 | `dws calendar event list --start <今日T00:00:00+08:00> --end <明日T00:00:00+08:00> --format json` | 今日日程列表 |
-| TODO 任务池 | `python3 custom-skills/general/todo/scripts/todo.py init` | JSON: `{success, action, tasks: {high, important_not_urgent, deferred, done}}` |
+| TODO 任务池 | `python3 custom-skills/general/todo/scripts/todo.py init` | JSON: `{success, action, tasks: {high, important_not_urgent, deferred, done}}` 每个任务含 `id` 字段 |
 | 偏好设置 | `custom-skills/general/daily-arrange/preferences.md` | 工作时段、休息、过滤规则 |
 | 固定例程 | `custom-skills/general/daily-arrange/routines.md` | 每日/每周固定事项 |
 

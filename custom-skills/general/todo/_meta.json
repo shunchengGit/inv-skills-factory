@@ -1,7 +1,7 @@
 {
   "name": "todo",
-  "version": "0.1.0",
-  "description": "TODO 管理技能：每日待办、标记完成、归档",
+  "version": "0.2.0",
+  "description": "TODO 管理技能：单数据源（TODO.md），任务 ID，git rebase 同步",
   "commands": [],
   "scripts": {
     "todo": "scripts/todo.py"

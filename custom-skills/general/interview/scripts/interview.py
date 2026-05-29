@@ -4,14 +4,16 @@
 import argparse
 import json
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 INTERVIEW_DIR = Path.home() / ".interview"
 RESUME_DIR = INTERVIEW_DIR / "resume"
+ARCHIVE_DIR = INTERVIEW_DIR / "archived"
 
 
-def list_candidates():
+def list_candidates(show_all: bool = False):
     """列出所有候选人，输出 JSON。"""
     if not RESUME_DIR.exists():
         print(json.dumps({"candidates": [], "total": 0}, ensure_ascii=False))
@@ -24,6 +26,17 @@ def list_candidates():
         job_info = _extract_job_info(pdf.name)
         status = check_status(name)
         candidates.append({"name": name, "job": job_info, "status": status, "file": pdf.name})
+
+    if show_all and ARCHIVE_DIR.exists():
+        for d in sorted(ARCHIVE_DIR.iterdir()):
+            if not d.is_dir():
+                continue
+            pdfs_in_archive = list(d.glob("*.pdf"))
+            if not pdfs_in_archive:
+                continue
+            name = extract_name(pdfs_in_archive[0].name)
+            job_info = _extract_job_info(pdfs_in_archive[0].name)
+            candidates.append({"name": name, "job": job_info, "status": "已归档", "file": pdfs_in_archive[0].name})
 
     print(json.dumps({"candidates": candidates, "total": len(candidates)}, ensure_ascii=False, indent=2))
 
@@ -223,11 +236,42 @@ def feedback(name: str, score: int = None, rating: str = None):
     print(f"已记录 {name} 的面试反馈")
 
 
+def archive(name: str):
+    """归档已面试候选人"""
+    # 检查候选人存在
+    pdf_files = [f for f in RESUME_DIR.glob("*.pdf") if name in f.name]
+    if not pdf_files:
+        print(f"未找到 {name} 的简历")
+        return
+
+    # 检查已面试
+    question_file = RESUME_DIR / f"面试题_{name}.md"
+    if not question_file.exists():
+        print(f"候选人尚未完成面试（无面试题文件）")
+        return
+    content = question_file.read_text(encoding="utf-8")
+    if "评分" not in content and "score" not in content.lower():
+        print(f"候选人尚未完成面试（面试题未评分）")
+        return
+
+    # 检查未归档
+    dest_dir = ARCHIVE_DIR / name
+    if dest_dir.exists():
+        print(f"该候选人已归档")
+        return
+
+    # 执行归档
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(pdf_files[0]), str(dest_dir / pdf_files[0].name))
+    shutil.move(str(question_file), str(dest_dir / question_file.name))
+    print(f"已归档 {name} → {dest_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="面试管理")
     subparsers = parser.add_subparsers(dest="command")
 
-    subparsers.add_parser("list", help="列出候选人")
+    subparsers.add_parser("list", help="列出候选人").add_argument("--all", action="store_true", help="包含已归档候选人")
 
     gen_parser = subparsers.add_parser("generate", help="生成面试题")
     gen_parser.add_argument("name", help="候选人姓名")
@@ -239,14 +283,19 @@ def main():
     fb_parser.add_argument("--score", type=int, help="总分")
     fb_parser.add_argument("--rating", choices=["A", "B", "C", "D"], help="评级")
 
+    ar_parser = subparsers.add_parser("archive", help="归档已面试候选人")
+    ar_parser.add_argument("name", help="候选人姓名")
+
     args = parser.parse_args()
 
     if args.command == "list":
-        list_candidates()
+        list_candidates(getattr(args, "all", False))
     elif args.command == "generate":
         generate_questions(args.name, args.level)
     elif args.command == "feedback":
         feedback(args.name, args.score, args.rating)
+    elif args.command == "archive":
+        archive(args.name)
     else:
         parser.print_help()
 
