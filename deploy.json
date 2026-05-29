@@ -1,0 +1,25 @@
+{
+  "profiles": {
+    "home": {
+      "hermes": ["general", "invest"],
+      "workbuddy": ["general"]
+    },
+    "work": {
+      "hermes": ["general"],
+      "workbuddy": ["general"]
+    },
+    "server": {
+      "hermes": ["invest"]
+    }
+  },
+  "agents": {
+    "hermes": {
+      "skills_dir": "~/.hermes/skills",
+      "hooks_dir": "~/.hermes/hooks"
+    },
+    "workbuddy": {
+      "skills_dir": "~/.workbuddy/skills",
+      "hooks_dir": "~/.workbuddy/hooks"
+    }
+  }
+}
