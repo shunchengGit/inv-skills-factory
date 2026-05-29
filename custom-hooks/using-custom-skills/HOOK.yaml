@@ -1,0 +1,4 @@
+name: using-custom-skills
+description: 会话开始时注入自定义技能系统上下文，让 Agent 了解可用技能及触发规则
+events:
+  - session:start
