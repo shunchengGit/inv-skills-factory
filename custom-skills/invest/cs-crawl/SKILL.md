@@ -1,8 +1,6 @@
 ---
 name: cs-crawl
-description: >-
-  Web 搜索（SearXNG）+ 全页抓取（Firecrawl）+ 浏览器抓取（Playwright）的工具箱。
-  提供搜索/抓取接口和可用性实测数据，供其他技能调用。
+description: 当需要搜索网页或抓取页面数据时使用，支持搜索引擎和浏览器模拟抓取
 version: 4.0.0
 commands:
   - /cs_crawl_search - Web search via SearXNG

@@ -1,8 +1,6 @@
 ---
 name: interview
-description: >-
-  面试管理技能。列出候选人、生成面试题模板、记录面试反馈。
-  当用户说"面试题怎么出""列出候选人""给XX出面试题""记录面试反馈""候选人评估"时，使用本技能。
+description: 当需要生成面试题、管理候选人或记录面试反馈时使用
 metadata:
   openclaw:
     emoji: 🎯

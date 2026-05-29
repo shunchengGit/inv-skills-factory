@@ -1,8 +1,6 @@
 ---
 name: daily-arrange
-description: >-
-  每日安排技能。从 dingding 读取钉钉日历，从 todo 读取待办任务池，结合本地固定例程和偏好设置，输出结构化每日/每周时间计划。
-  当用户说"今天怎么安排""每日安排""今天有什么""排一下今天""本周计划""today plan"时使用本技能。
+description: 当需要安排每日或每周日程，整合日历事件和待办任务时使用
 version: 0.2.0
 metadata:
   openclaw:

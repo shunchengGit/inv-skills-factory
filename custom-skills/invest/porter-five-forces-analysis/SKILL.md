@@ -1,6 +1,6 @@
 ---
 name: porter-five-forces-analysis
-description: Porter 五力模型行业竞争分析
+description: 当需要分析行业竞争格局、评估企业护城河或判断行业吸引力时使用
 version: 1.3.0
 commands:
   - /porter_five_forces - 对指定行业或公司进行 Porter 五力竞争格局分析

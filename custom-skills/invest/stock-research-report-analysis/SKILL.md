@@ -1,8 +1,6 @@
 ---
 name: stock-research-report-analysis
-description: >-
-  本地券商研报 PDF：LLM 读 Index.md 查找 → extract --folder 提取 → 结构化综合观点。
-  非投资建议；价位判断请配合 cs-stock 与 value-investing-valuation。
+description: 当需要分析本地券商研报PDF时使用，支持提取结构化观点和综合判断
 version: 2.0.0
 commands:
   - /research_pdf extract - 抽取正文到 stdout（edges / first-n / all / folder）

@@ -1,8 +1,6 @@
 ---
 name: knowledge-mgr
-description: >-
-  个人知识管理技能。从 URL 采集知识，LLM 总结分类，存储到 git 仓库，
-  提供 init/import/lint 三个命令覆盖知识管理完整生命周期。
+description: 当需要收集、整理或检索知识资料时使用，支持从网页采集、LLM总结分类并存储到Git仓库
 version: 0.1.0
 commands:
   - /km_init - 拉取知识库并输出 Index 结构化数据

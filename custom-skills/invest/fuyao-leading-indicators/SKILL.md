@@ -1,6 +1,6 @@
 ---
 name: fuyao-leading-indicators
-description: 福耀玻璃前置指标分析 — 纯碱价格、天然气、汇率、汽车销量、集运指数、新能源渗透率等成本/收入端前置指标追踪
+description: 当需要追踪福耀玻璃前置指标时使用，包括纯碱价格、天然气、汇率、汽车销量等成本收入端数据
 version: 4.0.0
 commands:
   - /fuyao_indicators - 完整分析：获取数据 → Agent分析 → 输出报告

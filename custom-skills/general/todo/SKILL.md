@@ -1,8 +1,6 @@
 ---
 name: todo
-description: >-
-  TODO 管理技能（git 仓库驱动，多设备同步）。从 git@github.com:shunchengGit/todo.git 拉取数据。
-  当用户说"今天要做什么""添加任务""标记完成""看看待办""本周计划""我的日程"时，使用本技能。
+description: 当需要查看、添加、完成或管理待办任务时使用，支持多设备同步的任务列表管理
 metadata:
   openclaw:
     emoji: ✅

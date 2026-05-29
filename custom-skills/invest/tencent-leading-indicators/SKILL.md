@@ -1,6 +1,6 @@
 ---
 name: tencent-leading-indicators
-description: 腾讯前置指标分析 — 游戏版号、王者/和平畅销榜、社零、视频号时长、微信支付笔数、港股通南向等前置指标追踪
+description: 当需要追踪腾讯前置指标时使用，包括游戏版号、畅销榜、社零、视频号、微信支付等数据
 version: 2.0.0
 commands:
   - /tencent_indicators - 完整分析：获取数据 → Agent搜索补充 → 逐指标评分 → 综合判断 → 输出报告

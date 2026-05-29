@@ -1,6 +1,6 @@
 ---
 name: quality-growth-qarp
-description: 价值成长（Quality at a Reasonable Price）选股与估值判断技能。估值引擎依赖 value-investing-valuation（脚本+定量框架），本技能叠加 QARP 打法的选股闸门、估值纪律、买入/持有/卖出条件与组合约束，输出从选股到操作的一体化结论。数据层走 cs-stock。
+description: 当需要基于QARP策略选股或做买卖决策时使用，覆盖选股闸门、估值纪律和组合约束
 version: 2.2.0
 commands:
   - /qarp - 对标的做完整 QARP 分析（估值快照 → 选股闸门 → 估值纪律 → 买入/持有/卖出结论）

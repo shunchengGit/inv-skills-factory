@@ -1,8 +1,6 @@
 ---
 name: dingtalk-unified
-description: 钉钉 CLI 全能套件，基于官方 DingTalk Workspace CLI（dws）操作钉钉消息、群聊、通讯录、日历、待办、审批、考勤、日志、DING、AI 表格、钉钉文档、钉盘、AI 听记、邮箱和开放平台文档。用户需要在钉钉内查找联系人、发消息、建群、管理日程、创建待办、处理审批、查看考勤、读写文档、操作 AI 表格、搜索会议听记或调用钉钉开放平台能力时使用。
-description_zh: 钉钉 CLI 套件，覆盖消息、日历、待办、审批、考勤、日志、文档、表格、AI 表格、钉盘、AI 听记、邮箱等产品能力，具体命令以 dws schema/help 为准
-description_en: DingTalk CLI suite powered by dws, covering messages, calendar, todo, approvals, attendance, reports, docs, AI tables, drive, meeting minutes, mail and more
+description: 当需要操作钉钉的日历、通讯录、群聊、待办、审批、考勤、日志、文档、云盘、AI听记、邮箱等功能时使用
 version: 1.0.5
 dws_cli_version: ">=1.0.26"
 ---
