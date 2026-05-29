@@ -49,6 +49,8 @@ uv run {baseDir}/scripts/five_forces_snapshot.py {股票代码} --output json
 
 读取 `{baseDir}/references/porter-framework.md`，对每个力按以下结构分析：
 
+**五力互不依赖，应尽可能并行分析。** 有子代理能力的 Agent 应同时派发五个子任务分别分析；无子代理能力的 Agent 按顺序执行即可。
+
 #### 评分规则
 
 每个力按 `scoring-standard.md` 的 20 分制评分。分越高 = 公司在该维度的护城河越强、竞争力越稳固（与侵蚀力方向相反）。

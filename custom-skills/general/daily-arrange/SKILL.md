@@ -29,48 +29,43 @@ metadata:
 
 ## 执行流程
 
-### Step 1: 加载偏好设置
+### 阶段一：数据采集（并行）
 
-从 `preferences.md` 读取：
-- 工作时段：09:00-20:00
-- 午休：12:00-13:30
-- 晚间休息：18:00-19:00
-- 日历过滤：排除以 `[提醒]` 开头的事件、organizer 含 `Teambition` 的事件
-- 任务时长预估：快速任务(回复/检查/确认/提交)30min，标准任务60min，大型任务(报告/方案/设计/写/整理)90min
+以下三项互不依赖，**应尽可能并行执行**。有子代理能力的 Agent 应同时派发三个子任务；无子代理能力的 Agent 按顺序执行即可。
 
-### Step 2: 获取钉钉日历日程
+| 并行任务 | 命令 | 产出 |
+|---------|------|------|
+| **A. 钉钉日历** | `dws calendar event list --start <今日T00:00:00+08:00> --end <明日T00:00:00+08:00> --format json` | 今日日程列表 |
+| **B. TODO 任务池** | `python3 custom-skills/general/todo/scripts/todo.py init` | JSON: `{success, action, tasks: {high, important_not_urgent, deferred, done}}` |
+| **C. 偏好与例程** | 读取 `preferences.md` + `routines.md`（本地文件） | 工作时段、过滤规则、固定例程 |
 
-```bash
-dws calendar event list --start "YYYY-MM-DDT00:00:00+08:00" --end "YYYY-MM-DDT23:59:59+08:00" --format json
-```
+### 阶段二：编排时间块（依赖阶段一全部结果）
 
-从返回 JSON 中提取每个日程：
-- `summary`（标题）→ 过滤：以 `[提醒]` 开头的**排除**
-- `organizer.displayName` → 过滤：含 `Teambition` 的**排除**，不占时间块
-- `start.dateTime` / `end.dateTime` → 时间范围
-- `location.displayName` → 地点（可选）
+**数据处理**：
 
-### Step 3: 获取 TODO 任务池
+1. 偏好设置解析：
+   - 工作时段：09:00-20:00
+   - 午休：12:00-13:30，晚间休息：18:00-19:00
+   - 日历过滤：排除以 `[提醒]` 开头的事件、organizer 含 `Teambition` 的事件
+   - 任务时长预估：快速任务(回复/检查/确认/提交)30min，标准任务60min，大型任务(报告/方案/设计/写/整理)90min
 
-```bash
-python3 custom-skills/general/todo/scripts/todo.py init
-```
+2. 日历数据解析：
+   - `summary` → 过滤 `[提醒]` 开头
+   - `organizer.displayName` → 过滤含 `Teambition`
+   - `start.dateTime` / `end.dateTime` → 时间范围
 
-从 JSON 的 `tasks` 字段获取全量任务池，按 section 分组：
-- `high` → 高优，优先安排
-- `important_not_urgent` → 重要不紧急，高优排完后安排
-- `deferred` → 暂缓，最后安排
-- `done` → 忽略（已完成）
+3. TODO 数据解析：
+   - `high` → 高优优先安排
+   - `important_not_urgent` → 高优排完后安排
+   - `deferred` → 最后安排
+   - `done` → 忽略
+   - `init` 失败时降级为直接读取 `~/.todo/TODO.md`
 
-如果 `init` 失败（网络不通），降级为直接读取 `~/.todo/TODO.md`，手动解析 `##` section。
+4. 例程数据解析：
+   - 每日固定：有推荐时间的优先安排在该时段，被日历占用则浮动到最近空闲；无推荐时间的灵活排入。标注 🔁
+   - 每周固定：放入本周任务池，尽量安排。标注 🔁
 
-### Step 4: 读取固定例程
-
-从 `routines.md` 读取：
-- **每日固定**：`| 事项 | 时长 | 推荐时间 |` 表格行。有推荐时间的优先安排在该时段，若被日历占用则浮动到最近空闲时段；无推荐时间的灵活排入空闲时段。标注 🔁
-- **每周固定**：`| 事项 | 时长 | 推荐时间 |` 表格行。放入本周任务池，尽量安排，标注 🔁
-
-### Step 5: 编排时间块
+**编排规则**（生成 06:00-24:00 时间轴）：
 
 按以下规则生成今日时间轴（06:00-24:00）：
 
