@@ -192,8 +192,6 @@ def _fallback_us_akshare(symbol: str) -> dict | None:
 
 def cmd_snapshot_yahoo(code: str, market: str) -> dict:
     """港股 / 美股 snapshot（Yahoo Finance 主路径，AkShare 降级）。"""
-    from proxy import clear_proxy_env, restore_proxy_env
-
     yahoo_symbol = to_yahoo_symbol(code, market)
     _has_proxy = bool(os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY"))
 
@@ -234,45 +232,41 @@ def cmd_snapshot_yahoo(code: str, market: str) -> dict:
             "fundamentals": fundamentals,
         }
 
-    # Yahoo 失败，尝试降级
-    clear_proxy_env()
-    try:
-        if market == "hk":
-            fallback = _fallback_hk_sina(code) or _fallback_hk_akshare(code)
-            if fallback:
-                return {
-                    "_command": "snapshot_yahoo",
-                    "code": code,
-                    "market": market,
-                    "name": fallback["name"],
-                    "price": fallback.get("price"),
-                    "change_pct": fallback.get("change_pct"),
-                    "currency": "HKD",
-                    "sector": None,
-                    "industry": None,
-                    "daily": fallback.get("daily", []),
-                    "fundamentals": None,
-                    "_notes": fallback.get("_notes", ["Yahoo Finance 不可用，已降级"]),
-                }
-        else:
-            fallback = _fallback_us_akshare(code)
-            if fallback:
-                return {
-                    "_command": "snapshot_yahoo",
-                    "code": code,
-                    "market": market,
-                    "name": fallback["name"],
-                    "price": None,
-                    "change_pct": None,
-                    "currency": "USD",
-                    "sector": None,
-                    "industry": None,
-                    "daily": fallback.get("daily", []),
-                    "fundamentals": None,
-                    "_notes": ["Yahoo Finance 不可用，已降级到 AkShare"],
-                }
-    finally:
-        restore_proxy_env()
+    # Yahoo 失败，尝试降级（AkShare 走代理也可用，无需清除代理）
+    if market == "hk":
+        fallback = _fallback_hk_sina(code) or _fallback_hk_akshare(code)
+        if fallback:
+            return {
+                "_command": "snapshot_yahoo",
+                "code": code,
+                "market": market,
+                "name": fallback["name"],
+                "price": fallback.get("price"),
+                "change_pct": fallback.get("change_pct"),
+                "currency": "HKD",
+                "sector": None,
+                "industry": None,
+                "daily": fallback.get("daily", []),
+                "fundamentals": None,
+                "_notes": fallback.get("_notes", ["Yahoo Finance 不可用，已降级"]),
+            }
+    else:
+        fallback = _fallback_us_akshare(code)
+        if fallback:
+            return {
+                "_command": "snapshot_yahoo",
+                "code": code,
+                "market": market,
+                "name": fallback["name"],
+                "price": None,
+                "change_pct": None,
+                "currency": "USD",
+                "sector": None,
+                "industry": None,
+                "daily": fallback.get("daily", []),
+                "fundamentals": None,
+                "_notes": ["Yahoo Finance 不可用，已降级到 AkShare"],
+            }
 
     err_notes = ["所有数据源均不可用"]
     if not _has_proxy:

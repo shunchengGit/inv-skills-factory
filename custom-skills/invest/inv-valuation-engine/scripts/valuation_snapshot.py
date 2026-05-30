@@ -2,13 +2,16 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
+#   "akshare>=1.14.0",
+#   "yfinance>=0.2.31",
 #   "pandas>=2.0.0",
+#   "requests>=2.28.0",
 # ]
 # ///
 """
 获取个股估值快照数据，供价值投资估值流程使用。
 
-数据层统一通过 inv-stock-data CLI 获取，不再直接调用 AkShare / yfinance。
+数据层通过 inv-stock-data 模块直接调用（进程内），限流锁在同一进程内生效。
 
 示例:
   uv run {baseDir}/scripts/valuation_snapshot.py AAPL
@@ -19,53 +22,29 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
-
-import time
 
 import pandas as pd
 
+# ── 直接 import inv-stock-data 模块 ──────────────────────────────────────
+_inv_stock_dir = Path(__file__).resolve().parent.parent.parent / "inv-stock-data" / "scripts"
+sys.path.insert(0, str(_inv_stock_dir))
+from cs_stock_info import execute_command
+# 代理管理模块（美港股需要）
+_shared_dir = Path(__file__).resolve().parent.parent.parent / "_shared"
+sys.path.insert(0, str(_shared_dir))
+from proxy import setup_proxy_env
 
 
-
-# 跨进程调用间隔（秒），避免连续 uv run 触发 Yahoo 限流
-_CS_STOCK_CALL_INTERVAL = 5.0
-_last_cs_stock_call = 0.0
-
-
-def _call_cs_stock(*args: str) -> dict[str, Any]:
-    """Call inv-stock-data CLI and return parsed JSON dict.
-
-    跨进程调用自动等待，确保间隔 >= _CS_STOCK_CALL_INTERVAL 秒。
-    """
-    global _last_cs_stock_call
-    from pathlib import Path
-    cs_dir = Path(__file__).resolve().parent.parent.parent / "inv-stock-data"
-    cmd = ["uv", "run", str(cs_dir / "scripts" / "cs_stock_info.py"), *args, "--output", "json"]
-
-    elapsed = time.monotonic() - _last_cs_stock_call
-    if elapsed < _CS_STOCK_CALL_INTERVAL:
-        time.sleep(_CS_STOCK_CALL_INTERVAL - elapsed)
-
+def _call_cs_stock(command: str, symbol: str) -> dict[str, Any]:
+    """调用 inv-stock-data 命令，直接进程内执行。"""
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=cs_dir,
-            timeout=120,
-        )
-        _last_cs_stock_call = time.monotonic()
-        if result.returncode != 0:
-            return {"error": result.stderr.strip()[:300]}
-        return json.loads(result.stdout)
+        return execute_command(command, symbol)
     except Exception as exc:
-        _last_cs_stock_call = time.monotonic()
         return {"error": str(exc)[:200]}
 
 
@@ -231,9 +210,8 @@ def _build_a_share_snapshot(
     notes: list[str],
     data_sources: list[str],
 ) -> Snapshot:
-    """Build snapshot for A-share symbols via inv-stock-data."""
+    """Build snapshot for A-share symbols via inv-stock-data (进程内调用)."""
     plain = to_a_share_plain_code(normalized)
-
     # --- snapshot ---
     snap = _call_cs_stock("snapshot", plain)
     if snap and not snap.get("error"):
@@ -419,12 +397,8 @@ def _build_yahoo_snapshot(
     notes: list[str],
     data_sources: list[str],
 ) -> Snapshot:
-    """Build snapshot for non-A-share (Yahoo) symbols via inv-stock-data.
-
-    使用 `all` 子命令一次获取 snapshot + financial + financials，
-    避免多次跨进程调用触发 Yahoo 限流。
-    """
-
+    """Build snapshot for non-A-share (Yahoo) symbols via inv-stock-data (进程内调用)."""
+    setup_proxy_env()
     # --- 一次调用获取全部数据 ---
     all_data = _call_cs_stock("all", normalized)
 

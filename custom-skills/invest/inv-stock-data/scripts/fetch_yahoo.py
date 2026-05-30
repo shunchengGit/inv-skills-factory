@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 import sys
@@ -12,20 +13,22 @@ from utils import safe_call
 
 # 引入 _shared 代理模块
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
-from proxy import setup_proxy_env, clear_proxy_env, restore_proxy_env
+from proxy import setup_proxy_env
 
 # yfinance 请求间隔（秒），避免短时间密集请求触发 Yahoo 限流
 _YF_CALL_INTERVAL = 3.0
 _last_yf_call = 0.0
+_throttle_lock = threading.Lock()
 
 
 def _yf_throttle():
-    """yfinance 调用前等待，确保请求间隔 >= _YF_CALL_INTERVAL 秒。"""
+    """yfinance 调用前等待，确保请求间隔 >= _YF_CALL_INTERVAL 秒。线程安全。"""
     global _last_yf_call
-    elapsed = time.monotonic() - _last_yf_call
-    if elapsed < _YF_CALL_INTERVAL:
-        time.sleep(_YF_CALL_INTERVAL - elapsed)
-    _last_yf_call = time.monotonic()
+    with _throttle_lock:
+        elapsed = time.monotonic() - _last_yf_call
+        if elapsed < _YF_CALL_INTERVAL:
+            time.sleep(_YF_CALL_INTERVAL - elapsed)
+        _last_yf_call = time.monotonic()
 
 
 def fetch_yahoo_info(symbol: str) -> dict | None:

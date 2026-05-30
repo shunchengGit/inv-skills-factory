@@ -8,7 +8,7 @@
 
 用法:
   sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
-  from proxy import detect_proxy, setup_proxy_env, clear_proxy_env, restore_proxy_env
+  from proxy import detect_proxy, setup_proxy_env
   from proxy import apply_proxy_to_session
 """
 
@@ -18,8 +18,6 @@ import sys
 
 _PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
 _CLASH_PORTS = (7890, 7891, 7897)
-
-_saved_proxy_env: dict[str, str] = {}
 
 
 def detect_proxy() -> str | None:
@@ -77,24 +75,3 @@ def apply_proxy_to_session(session, proxy: str | None = None) -> None:
     if proxy_url:
         session.proxies["http"] = proxy_url
         session.proxies["https"] = proxy_url
-
-
-def clear_proxy_env() -> None:
-    """临时清除代理环境变量，避免国内数据源绕远路。
-
-    在 akshare 等国内数据源获取前调用，完成后由 restore_proxy_env 恢复。
-    """
-    global _saved_proxy_env
-    _saved_proxy_env = {
-        k: os.environ.pop(k)
-        for k in _PROXY_ENV_KEYS
-        if k in os.environ
-    }
-
-
-def restore_proxy_env() -> None:
-    """恢复之前清除的代理环境变量。"""
-    global _saved_proxy_env
-    if _saved_proxy_env:
-        os.environ.update(_saved_proxy_env)
-        _saved_proxy_env = {}
