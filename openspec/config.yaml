@@ -2,13 +2,16 @@ schema: spec-driven
 
 context: |
   ## 项目概述
-  这是一个 Claude Code Skills 管理和开发仓库，存放自定义投资分析技能。
+  这是一个 Skills 管理和开发仓库，通过软链接将技能和 hooks 按场景部署到各 Agent 目录。
 
-  ## 领域
-  股票投资分析：估值判断、行业竞争分析、券商研报分析、前置指标追踪。
+  ## 命名规范
+  技能目录名格式：`{分类前缀}-{语义名}`
+  - base → `base-`
+  - general → `gen-`
+  - invest → `inv-`
 
   ## 技能结构
-  每个 skill 位于 `custom-skills/<name>/`，包含：
+  每个 skill 位于 `custom-skills/<category>/<name>/`，包含：
   - `SKILL.md` — 技能定义文件（YAML frontmatter + Markdown 指令）
   - `_meta.json` — 元数据（name/version/description/commands/scripts/references/dependencies/derivedFrom）
   - `scripts/` — Python 数据脚本
@@ -18,20 +21,19 @@ context: |
   - Python 3.10+
   - 数据源：akshare（A股）、yfinance（美港股）、pymupdf（PDF 提取）、playwright（浏览器抓取）
   - 包管理：uv (venv + pip)
-  - 行情数据管道：cs-stock（统一入口）→ value-investing-valuation（估值引擎）→ quality-growth-qarp（操作决策）
+  - 行情数据管道：inv-stock-data（统一入口）→ inv-valuation-engine（估值引擎）→ inv-qarp-strategy（操作决策）
 
   ## 依赖关系
-  - `cs-stock` — 数据层，所有投资技能的底层依赖
-  - `value-investing-valuation` — 估值引擎，依赖 cs-stock
-  - `quality-growth-qarp` — 操作决策层，依赖 cs-stock + value-investing-valuation
-  - `porter-five-forces-analysis` — 五力分析，依赖 cs-stock
-  - `tencent-leading-indicators` / `fuyao-leading-indicators` — 前置指标（独立脚本）
-  - `stock-research-report-analysis` — 研报分析（独立脚本）
+  - `inv-stock-data` — 数据层，所有投资技能的底层依赖
+  - `inv-valuation-engine` — 估值引擎，依赖 inv-stock-data
+  - `inv-qarp-strategy` — 操作决策层，依赖 inv-stock-data + inv-valuation-engine
+  - `inv-porter-five-forces` — 五力分析，依赖 inv-stock-data
+  - `inv-tencent-indicators` / `inv-fuyao-indicators` — 前置指标（独立脚本）
+  - `inv-research-analyzer` — 研报分析（独立脚本）
 
   ## 命名约定
-  - Skill 目录名：kebab-case
+  - Skill 目录名：`{前缀}-{语义名}` kebab-case
   - 脚本文件：snake_case.py
-  - 命令前缀：/cs_stock_, /qarp_, /fuyao_, /tencent_, /porter_, /research_pdf_
 
 rules:
   proposal:

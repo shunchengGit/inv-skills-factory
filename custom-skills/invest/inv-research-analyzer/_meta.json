@@ -1,0 +1,23 @@
+{
+  "name": "inv-research-analyzer",
+  "version": "2.0.0",
+  "description": "本地券商研报PDF分析：LLM读Index.md查找 → extract --folder提取 → 结构化综合观点",
+  "commands": [
+    "/research_pdf extract - 抽取正文（支持--folder）",
+    "/research_pdf list - 列出匹配PDF（调试用）",
+    "/research_pdf scan - 扫描来源目录，输出待归档清单JSON",
+    "/research_pdf archive - 接收归档方案JSON，执行移动、建索引、push"
+  ],
+  "scripts": {
+    "research_pdf.py": "研报分析主脚本，子命令init/list/extract/scan/archive"
+  },
+  "references": {
+    "web-fallback-for-non-a-share.md": "非A股标的Web降级策略",
+    "adhoc-pdf-and-expert-calls.md": "临时PDF与专家电话纪要处理",
+    "extended-cycle-analysis-workflow.md": "周期股深度分析扩展",
+    "foreign-stock-research-workflow.md": "外资研报分析工作流",
+    "research-integration-notes.md": "研报整合实战笔记"
+  },
+  "dependencies": ["inv-stock-data", "inv-web-crawler"],
+  "derivedFrom": null
+}

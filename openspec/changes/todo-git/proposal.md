@@ -1,6 +1,6 @@
 ## Why
 
-当前 `todo.py` 纯本地文件操作（`~/Assist/TODO/`），无版本历史、无法多设备同步。参考 `knowledge-mgr` 的 git 仓库模式，将 TODO 数据纳入版本管理，实现单人+多设备间的自然同步。
+当前 `todo.py` 纯本地文件操作（`~/Assist/TODO/`），无版本历史、无法多设备同步。参考 `gen-knowledge-curator` 的 git 仓库模式，将 TODO 数据纳入版本管理，实现单人+多设备间的自然同步。
 
 ## What Changes
 

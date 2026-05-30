@@ -62,10 +62,10 @@
 ### Requirement: 模块位置与导入方式
 `proxy.py` SHALL 位于 `custom-skills/_shared/proxy.py`。各技能脚本通过 `sys.path.insert(0, Path(__file__).resolve().parents[N] / "_shared")` 引入后 `from proxy import ...`。
 
-#### Scenario: 从 cs-stock 脚本导入
-- **WHEN** `cs-stock/scripts/cs_stock_info.py` 需要 `setup_proxy_env` 和 `clear_proxy_env`
+#### Scenario: 从 inv-stock-data 脚本导入
+- **WHEN** `inv-stock-data/scripts/cs_stock_info.py` 需要 `setup_proxy_env` 和 `clear_proxy_env`
 - **THEN** 通过 `from proxy import setup_proxy_env, clear_proxy_env, restore_proxy_env` 导入，无需 pip install
 
 #### Scenario: 从 fuyao 脚本导入
-- **WHEN** `fuyao-leading-indicators/scripts/eastmoney_fetch.py` 需要 `apply_proxy_to_session`
+- **WHEN** `inv-fuyao-indicators/scripts/eastmoney_fetch.py` 需要 `apply_proxy_to_session`
 - **THEN** 通过 `from proxy import detect_proxy, apply_proxy_to_session` 导入

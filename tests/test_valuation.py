@@ -1,16 +1,16 @@
-"""value-investing-valuation 估值引擎测试。"""
+"""inv-valuation-engine 估值引擎测试。"""
 
 import pytest
 from conftest import VALID_A_STOCK, parse_json_output, run_script
 
-VALUATION_DIR = "../value-investing-valuation/scripts"
+VALUATION_DIR = "../inv-valuation-engine/scripts"
 
 
 @pytest.mark.smoke
 def test_valuation_snapshot_a_stock():
     """估值快照 A 股返回完整数据。"""
     result = run_script(
-        "value-investing-valuation", "valuation_snapshot.py",
+        "inv-valuation-engine", "valuation_snapshot.py",
         VALID_A_STOCK, "--output", "json", timeout=90,
     )
     if result.returncode != 0:
@@ -28,7 +28,7 @@ def test_valuation_snapshot_a_stock():
 def test_valuation_report_a_stock():
     """估值报告生成五档结论。"""
     result = run_script(
-        "value-investing-valuation", "valuation_report.py",
+        "inv-valuation-engine", "valuation_report.py",
         VALID_A_STOCK, timeout=90,
     )
     if result.returncode != 0:
@@ -44,7 +44,7 @@ def test_valuation_report_a_stock():
 def test_valuation_compare():
     """多股比较返回数据。"""
     result = run_script(
-        "value-investing-valuation", "valuation_compare.py",
+        "inv-valuation-engine", "valuation_compare.py",
         "000001", "600519", timeout=90,
     )
     if result.returncode != 0:

@@ -53,8 +53,8 @@
 ## Symlink Strategy
 
 ```
-source:  ~/.SkillsStore/custom-skills/cs-stock/
-target:  ~/Library/Application Support/Claude/skills/cs-stock/
+source:  ~/.SkillsStore/custom-skills/inv-stock-data/
+target:  ~/Library/Application Support/Claude/skills/inv-stock-data/
 
 场景 A: target 不存在 → ln -s source target
 场景 B: target 是软链接且指向正确 → 跳过

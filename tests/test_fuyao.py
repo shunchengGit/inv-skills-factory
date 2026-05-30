@@ -1,4 +1,4 @@
-"""fuyao-leading-indicators 前置指标测试。"""
+"""inv-fuyao-indicators 前置指标测试。"""
 
 import pytest
 from conftest import parse_json_output, run_script
@@ -8,7 +8,7 @@ from conftest import parse_json_output, run_script
 def test_fuyao_indicators_skip_auto():
     """跳过 Playwright 的前置指标快照返回 8 个指标。"""
     result = run_script(
-        "fuyao-leading-indicators", "fuyao_indicators.py",
+        "inv-fuyao-indicators", "fuyao_indicators.py",
         "--skip-auto", "--output", "json", timeout=120,
     )
     if result.returncode != 0:
@@ -34,7 +34,7 @@ def test_fuyao_indicators_skip_auto():
 def test_fuyao_indicators_fields():
     """每个指标包含计分所需的核心字段。"""
     result = run_script(
-        "fuyao-leading-indicators", "fuyao_indicators.py",
+        "inv-fuyao-indicators", "fuyao_indicators.py",
         "--skip-auto", "--output", "json", timeout=120,
     )
     if result.returncode != 0:

@@ -1,4 +1,4 @@
-"""porter-five-forces-analysis 五力分析测试。"""
+"""inv-porter-five-forces 五力分析测试。"""
 
 import pytest
 from conftest import VALID_A_STOCK, parse_json_output, run_script
@@ -8,7 +8,7 @@ from conftest import VALID_A_STOCK, parse_json_output, run_script
 def test_five_forces_snapshot():
     """五力快照返回预评分数据。"""
     result = run_script(
-        "porter-five-forces-analysis", "five_forces_snapshot.py",
+        "inv-porter-five-forces", "five_forces_snapshot.py",
         VALID_A_STOCK, "--output", "json", timeout=60,
     )
     if result.returncode != 0:
@@ -35,7 +35,7 @@ def test_five_forces_snapshot():
 def test_five_forces_snapshot_has_company_info():
     """快照包含公司基本信息。"""
     result = run_script(
-        "porter-five-forces-analysis", "five_forces_snapshot.py",
+        "inv-porter-five-forces", "five_forces_snapshot.py",
         VALID_A_STOCK, "--output", "json", timeout=60,
     )
     if result.returncode != 0:

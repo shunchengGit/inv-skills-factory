@@ -1,4 +1,4 @@
-"""tencent-leading-indicators 前置指标测试。"""
+"""inv-tencent-indicators 前置指标测试。"""
 
 import pytest
 from conftest import parse_json_output, run_script
@@ -8,7 +8,7 @@ from conftest import parse_json_output, run_script
 def test_tencent_indicators():
     """腾讯前置指标返回 6 个指标。"""
     result = run_script(
-        "tencent-leading-indicators", "tencent_indicators.py",
+        "inv-tencent-indicators", "tencent_indicators.py",
         "--output", "json", timeout=60,
     )
     if result.returncode != 0:
@@ -31,7 +31,7 @@ def test_tencent_indicators():
 def test_tencent_indicators_data_methods():
     """验证脚本获取 vs Agent 搜索的指标分布。"""
     result = run_script(
-        "tencent-leading-indicators", "tencent_indicators.py",
+        "inv-tencent-indicators", "tencent_indicators.py",
         "--output", "json", timeout=60,
     )
     if result.returncode != 0:

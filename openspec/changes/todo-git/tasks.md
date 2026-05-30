@@ -1,6 +1,6 @@
 ## 1. Git 基础设施
 
-- [x] 1.1 从 `knowledge-mgr` 搬运 `_run_git`、`_is_git_repo`、`_same_remote`、`_git_sync` 到 `todo.py`，改常量为 `TODO_REPO`/`TODO_DIR`
+- [x] 1.1 从 `gen-knowledge-curator` 搬运 `_run_git`、`_is_git_repo`、`_same_remote`、`_git_sync` 到 `todo.py`，改常量为 `TODO_REPO`/`TODO_DIR`
 
 ## 2. init 命令
 

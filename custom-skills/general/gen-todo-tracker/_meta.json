@@ -1,0 +1,12 @@
+{
+  "name": "gen-todo-tracker",
+  "version": "0.2.0",
+  "description": "TODO 管理技能：单数据源（TODO.md），任务 ID，git rebase 同步",
+  "commands": [],
+  "scripts": {
+    "todo": "scripts/todo.py"
+  },
+  "references": {},
+  "dependencies": [],
+  "derivedFrom": "assist"
+}

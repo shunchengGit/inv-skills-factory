@@ -1,6 +1,6 @@
 ## Context
 
-当前 `todo.py` 在 `~/Assist/TODO/` 下做纯文件读写，无多设备同步能力。`knowledge-mgr` 已验证 git 仓库 + pull-before-write + commit+push 模式在单人+多设备场景下可行。本设计将同一模式移植到 TODO 管理。
+当前 `todo.py` 在 `~/Assist/TODO/` 下做纯文件读写，无多设备同步能力。`gen-knowledge-curator` 已验证 git 仓库 + pull-before-write + commit+push 模式在单人+多设备场景下可行。本设计将同一模式移植到 TODO 管理。
 
 ## Goals / Non-Goals
 
@@ -9,7 +9,7 @@
 - 数据存储在 `~/.todo/`（git 仓库，remote `git@github.com:shunchengGit/todo.git`，master 分支）
 - 写操作（add/done）自动 git pull → write → commit → push
 - 读操作（init/today）输出结构化 JSON，供 AI agent 解析
-- 直接复用 `knowledge-mgr` 的 git 操作模式
+- 直接复用 `gen-knowledge-curator` 的 git 操作模式
 
 **Non-Goals:**
 - 不处理 `archive`（MVP 外）
@@ -20,7 +20,7 @@
 
 ### 1. 单脚本 vs 多脚本
 
-**选单脚本 `todo.py` + 子命令。** 参考 `assist` 技能的风格（一个脚本管理一个领域），而不是 `knowledge-mgr` 的多脚本拆分。TODO 的领域逻辑极少（增删查改），多脚本会增加路径引用复杂度，收益为零。
+**选单脚本 `todo.py` + 子命令。** 参考 `assist` 技能的风格（一个脚本管理一个领域），而不是 `gen-knowledge-curator` 的多脚本拆分。TODO 的领域逻辑极少（增删查改），多脚本会增加路径引用复杂度，收益为零。
 
 ### 2. Git 同步策略：pull-before-write
 
@@ -67,7 +67,7 @@ add "xxx"
 
 `today.tasks` 仅解析 `- [ ]` / `- [x]` 行，提取优先级 emoji（🔴/🟡/⚪）和内容。`high_priority` 从 `TODO.md` 的 `## 高优` section 提取全部行。
 
-### 6. 复用 knowledge-mgr 的 git 工具函数
+### 6. 复用 gen-knowledge-curator 的 git 工具函数
 
 `_run_git`、`_is_git_repo`、`_same_remote`、`_git_sync` 四个函数从 `km_init.py` + `km_import.py` 照搬，只改常量（REPO_URL、TODO_DIR）。不抽取共享库 —— 技能隔离原则。
 
