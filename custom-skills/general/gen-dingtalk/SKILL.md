@@ -400,3 +400,12 @@ dws schema <path> --jq '.tool.flag_overlay'
 - [references/recovery-guide.md](./references/recovery-guide.md)：recovery 闭环
 - [references/products/](./references/products/)：各产品命令参考
 - [scripts/](./scripts/)：官方批量工作流脚本和 WorkBuddy setup 脚本
+
+## 相关技能
+
+以下技能基于本 Skill 的底层能力，封装了特定的钉钉业务工作流：
+
+- `gen-dingtalk-share-to-group`：群消息发送（搜索群 → 发送文本/Markdown）
+- `gen-dingtalk-weekly-summary`：知识库周报读取与总结
+- `gen-dingtalk-weekly-update`：个人周总结文档更新
+- `gen-dingtalk-group-analytics`：群聊月度消息分析与报告生成

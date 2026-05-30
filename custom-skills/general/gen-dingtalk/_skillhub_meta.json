@@ -1,7 +1,8 @@
 {
-  "name": "钉钉套件",
+  "name": "gen-dingtalk",
+  "description": "当需要操作钉钉的日历、通讯录、群聊、待办、审批、考勤、日志、文档、云盘、AI听记、邮箱等功能时使用",
   "installedAt": 1779413341598,
   "source": "marketplace",
   "iconSource": "dingtalk-unified",
-  "version": "1.0.4"
+  "version": "1.0.5"
 }

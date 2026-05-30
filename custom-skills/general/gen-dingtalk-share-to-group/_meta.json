@@ -1,0 +1,12 @@
+{
+  "name": "gen-dingtalk-share-to-group",
+  "version": "1.0.0",
+  "description": "将链接、文章或文本消息分享到指定的钉钉群聊。支持搜索群名、发送文本/Markdown消息。基于 dws CLI 实现。",
+  "commands": [],
+  "scripts": {
+    "share_to_group": "scripts/share_to_group.py"
+  },
+  "references": {},
+  "dependencies": ["gen-dingtalk"],
+  "derivedFrom": "dingtalk-share-to-group"
+}
