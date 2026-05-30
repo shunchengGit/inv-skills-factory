@@ -1,5 +1,5 @@
 ---
-name: gen-dingtalk-weekly-review
+name: gen-dingtalk-team-weekly-review
 description: 从钉钉客户端知识库的"周会周报"文件夹中查找最新周报，按指定格式总结业务迭代和技术专项（仅重大进展）。基于 dws CLI 实现。
 version: 2.0.0
 trigger:

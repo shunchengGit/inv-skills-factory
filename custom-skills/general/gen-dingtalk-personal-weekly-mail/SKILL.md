@@ -1,5 +1,5 @@
 ---
-name: gen-dingtalk-weekly-mail
+name: gen-dingtalk-personal-weekly-mail
 description: 个人周报生成技能。当用户说"写周报"、"生成周报"、"个人周报"、"发周报邮件"、"周报整理"时触发。从钉钉文档读取周报模板，将表格中每日工作按类别整理到"个人工作"部分，生成优化格式的邮件草稿。基于 dws CLI 和企业微信邮箱(exmail)实现。
 version: 1.0.0
 trigger:
