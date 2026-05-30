@@ -645,7 +645,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
     print(sep)
 
     for a in actions:
-        src_path = Path(a["source_path"])
+        src_path = Path(a["source_path"]).expanduser()
         target_folder = a["target_folder"]
         target_dir = root / target_folder
         target_path = target_dir / src_path.name

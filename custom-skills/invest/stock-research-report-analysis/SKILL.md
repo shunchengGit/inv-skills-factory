@@ -202,8 +202,8 @@ echo '<JSON>' | $PY "$SK" archive
 ```json
 {
   "actions": [
-    {"source_path": "/Users/chengshun/Downloads/2026-05-20-2057.HK-JPMorgan-中通快递.pdf", "target_folder": "中通快递"},
-    {"source_path": "/Users/chengshun/Downloads/行业-半导体深度.pdf", "target_folder": "行业研究-半导体"}
+    {"source_path": "~/Downloads/2026-05-20-2057.HK-JPMorgan-中通快递.pdf", "target_folder": "中通快递"},
+    {"source_path": "~/Downloads/行业-半导体深度.pdf", "target_folder": "行业研究-半导体"}
   ]
 }
 ```
