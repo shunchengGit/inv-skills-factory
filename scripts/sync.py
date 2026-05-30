@@ -96,8 +96,43 @@ def _create_symlink(source: Path, target: Path, label: str = "", force: bool = F
         return False
 
 
-def sync_skills(categories: list[str], skills_dir: str, force: bool = False) -> tuple[int, int, int]:
-    """同步技能（软链接）。返回 (created, skipped, failed)"""
+def _collect_expected_skills(categories: list[str]) -> set[str]:
+    """收集期望同步的所有技能目录名（不含路径）"""
+    expected = set()
+    all_categories = ["base"] + categories
+    for cat in all_categories:
+        cat_dir = SKILLS_SRC / cat
+        if not cat_dir.exists():
+            continue
+        # _shared
+        if (cat_dir / "_shared").is_dir():
+            expected.add("_shared")
+        for item in cat_dir.iterdir():
+            if item.is_dir() and item.name != "_shared" and (item / "SKILL.md").exists():
+                expected.add(item.name)
+    return expected
+
+
+def _remove_stale_links(dest_root: Path, expected: set[str], dry_run: bool = False) -> int:
+    """删除目标目录中不再需要的软链接，返回删除数量"""
+    removed = 0
+    if not dest_root.exists():
+        return removed
+    for item in dest_root.iterdir():
+        if not item.is_symlink():
+            continue
+        if item.name not in expected:
+            if dry_run:
+                print(f"  [dry-run] 删除旧链接: {item.name}")
+            else:
+                print(f"  删除旧链接: {item.name}")
+                item.unlink()
+            removed += 1
+    return removed
+
+
+def sync_skills(categories: list[str], skills_dir: str, force: bool = False, dry_run: bool = False) -> tuple[int, int, int, int]:
+    """同步技能（软链接）。返回 (created, skipped, failed, removed)"""
     dest_root = Path(skills_dir).expanduser()
     dest_root.mkdir(parents=True, exist_ok=True)
 
@@ -137,19 +172,29 @@ def sync_skills(categories: list[str], skills_dir: str, force: bool = False) -> 
             else:
                 skipped += 1
 
-    return created, skipped, failed
+    # 清理旧链接
+    expected = _collect_expected_skills(categories)
+    removed = _remove_stale_links(dest_root, expected, dry_run=dry_run)
+
+    return created, skipped, failed, removed
 
 
-def sync_hooks(agent_name: str, hooks_dir: str, force: bool = False) -> tuple[int, int, int]:
-    """同步 hooks（软链接）。返回 (created, skipped, failed)"""
+def sync_hooks(agent_name: str, hooks_dir: str, force: bool = False, dry_run: bool = False) -> tuple[int, int, int, int]:
+    """同步 hooks（软链接）。返回 (created, skipped, failed, removed)"""
     src = HOOKS_SRC / agent_name
     if not src.exists():
-        return 0, 0, 0
+        return 0, 0, 0, 0
 
     dest_root = Path(hooks_dir).expanduser()
     dest_root.mkdir(parents=True, exist_ok=True)
 
     created, skipped, failed = 0, 0, 0
+
+    # 收集期望的 hooks
+    expected_hooks = set()
+    for hook_dir in src.iterdir():
+        if hook_dir.is_dir():
+            expected_hooks.add(hook_dir.name)
 
     for hook_dir in src.iterdir():
         if not hook_dir.is_dir():
@@ -164,7 +209,18 @@ def sync_hooks(agent_name: str, hooks_dir: str, force: bool = False) -> tuple[in
         else:
             skipped += 1
 
-    return created, skipped, failed
+    # 清理旧链接
+    removed = 0
+    for item in dest_root.iterdir():
+        if item.is_symlink() and item.name not in expected_hooks:
+            if dry_run:
+                print(f"  [dry-run] 删除旧 hook 链接: {item.name}")
+            else:
+                print(f"  删除旧 hook 链接: {item.name}")
+                item.unlink()
+            removed += 1
+
+    return created, skipped, failed, removed
 
 
 def list_profiles(config: dict):
@@ -200,7 +256,7 @@ def main():
         return
 
     agents_cfg = config["agents"]
-    total_created, total_skipped, total_failed = 0, 0, 0
+    total_created, total_skipped, total_failed, total_removed = 0, 0, 0, 0
 
     for agent_name, categories in profile.items():
         if args.agent and agent_name != args.agent:
@@ -218,11 +274,12 @@ def main():
                 cats = ", ".join(["base"] + categories)
                 print(f"  [dry-run] skills: [{cats}] → {cfg['skills_dir']}")
             else:
-                c, s, f = sync_skills(categories, cfg["skills_dir"], force=args.force)
+                c, s, f, r = sync_skills(categories, cfg["skills_dir"], force=args.force, dry_run=args.dry_run)
                 total_created += c
                 total_skipped += s
                 total_failed += f
-                print(f"  skills: {c} created, {s} skipped, {f} failed → {cfg['skills_dir']}")
+                total_removed += r
+                print(f"  skills: {c} created, {s} skipped, {f} failed, {r} removed → {cfg['skills_dir']}")
 
         if not args.skills_only:
             hooks_dir = cfg.get("hooks_dir", "")
@@ -231,13 +288,14 @@ def main():
             elif args.dry_run:
                 print(f"  [dry-run] hooks: → {hooks_dir}")
             else:
-                c, s, f = sync_hooks(agent_name, hooks_dir, force=args.force)
+                c, s, f, r = sync_hooks(agent_name, hooks_dir, force=args.force, dry_run=args.dry_run)
                 total_created += c
                 total_skipped += s
                 total_failed += f
-                print(f"  hooks: {c} created, {s} skipped, {f} failed → {hooks_dir}")
+                total_removed += r
+                print(f"  hooks: {c} created, {s} skipped, {f} failed, {r} removed → {hooks_dir}")
 
-    print(f"\nDone. total: {total_created} created, {total_skipped} skipped, {total_failed} failed")
+    print(f"\nDone. total: {total_created} created, {total_skipped} skipped, {total_failed} failed, {total_removed} removed")
 
 
 if __name__ == "__main__":
