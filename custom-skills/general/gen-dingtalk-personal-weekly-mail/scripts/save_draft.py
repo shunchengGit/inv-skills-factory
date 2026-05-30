@@ -5,7 +5,7 @@ Save email draft to Tencent Enterprise Mail (exmail) via IMAP APPEND.
 Usage:
     python3 save_draft.py --from "程舜 <chengs@tuwan.com>" \\
                           --to "hhh@tuwan.com" \\
-                          --cc "qupq@tuwan.com,xial@tuwan.com,wangfz@tuwan.com" \\
+                          --cc "qupq@tuwan.com,wangfz@tuwan.com" \\
                           --subject "程舜 5.22 周报" \\
                           --html-file /tmp/email_body.html \\
                           --text-file /tmp/email_body.txt \\

@@ -115,7 +115,7 @@ imap.login("<发件邮箱>", "<授权码>")
 msg = MIMEMultipart("alternative")
 msg["From"] = "程舜 <chengs@tuwan.com>"
 msg["To"] = "hhh@tuwan.com"          # 何总
-msg["Cc"] = "qupq@tuwan.com, xial@tuwan.com, wangfz@tuwan.com"
+msg["Cc"] = "qupq@tuwan.com, wangfz@tuwan.com"
 msg["Subject"] = "程舜 X.XX 周报"
 
 msg.attach(MIMEText(text_content, "plain", "utf-8"))
