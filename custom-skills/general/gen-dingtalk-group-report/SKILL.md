@@ -1,5 +1,5 @@
 ---
-name: gen-dingtalk-group-analytics
+name: gen-dingtalk-group-report
 description: 按月维度拉取指定钉钉群聊消息到本地，并生成数据分析报告。基于 dws CLI 实现。
 version: 1.0.0
 trigger:

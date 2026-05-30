@@ -1,5 +1,5 @@
 {
-  "name": "gen-dingtalk-group-analytics",
+  "name": "gen-dingtalk-group-report",
   "version": "1.0.0",
   "description": "按月拉取钉钉群聊消息并生成数据分析HTML报告，支持多维度统计与可视化",
   "commands": [],
@@ -7,6 +7,8 @@
     "group_monthly_analysis": "scripts/group_monthly_analysis.py"
   },
   "references": {},
-  "dependencies": ["gen-dingtalk"],
+  "dependencies": [
+    "gen-dingtalk"
+  ],
   "derivedFrom": "dingtalk-group-monthly-analysis"
 }

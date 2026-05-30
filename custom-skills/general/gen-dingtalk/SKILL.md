@@ -406,6 +406,6 @@ dws schema <path> --jq '.tool.flag_overlay'
 以下技能基于本 Skill 的底层能力，封装了特定的钉钉业务工作流：
 
 - `gen-dingtalk-share-to-group`：群消息发送（搜索群 → 发送文本/Markdown）
-- `gen-dingtalk-weekly-summary`：知识库周报读取与总结
-- `gen-dingtalk-weekly-update`：个人周总结文档更新
-- `gen-dingtalk-group-analytics`：群聊月度消息分析与报告生成
+- `gen-dingtalk-weekly-review`：知识库周报读取与总结
+- `gen-dingtalk-daily-log`：个人周总结文档更新
+- `gen-dingtalk-group-report`：群聊月度消息分析与报告生成

@@ -1,5 +1,5 @@
 ---
-name: gen-dingtalk-weekly-update
+name: gen-dingtalk-daily-log
 description: 在钉钉个人空间的周总结文档中添加/更新今日工作内容。当用户说"更新周总结""周报加工作""今日加上""周总结加条目""my weekly summary"时触发。基于 dws CLI 实现。
 version: 1.0.0
 trigger:

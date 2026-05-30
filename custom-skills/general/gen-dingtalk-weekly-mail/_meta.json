@@ -1,5 +1,5 @@
 {
-  "name": "gen-weekly-report",
+  "name": "gen-dingtalk-weekly-mail",
   "version": "1.0.0",
   "description": "从钉钉文档读取周报模板，按类别整理内容并生成邮件草稿存入企业微信邮箱",
   "commands": [],
@@ -7,6 +7,9 @@
     "save_draft": "scripts/save_draft.py"
   },
   "references": {},
-  "dependencies": ["gen-dingtalk", "gen-mail-agent"],
+  "dependencies": [
+    "gen-dingtalk",
+    "gen-mail-agent"
+  ],
   "derivedFrom": "personal-weekly-report"
 }
