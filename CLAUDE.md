@@ -24,7 +24,11 @@ custom-skills/                  # 技能源码（按分类隔离）
     base-skill-loader/          #   技能使用指南
   general/                      # 通用技能
     gen-daily-planner/          #   日程安排
-    gen-dingtalk/               #   钉钉集成
+    gen-dingtalk/               #   钉钉集成（底层能力）
+    gen-dingtalk-group-report/  #   群聊月度消息分析报告
+    gen-dingtalk-personal-daily/  #   个人每日工作日志
+    gen-dingtalk-personal-weekly-mail/  #   个人周报邮件生成
+    gen-dingtalk-team-weekly-review/    #   团队周报审阅总结
     gen-interviewer/            #   面试辅助
     gen-knowledge-curator/      #   知识管理
     gen-mail-agent/             #   邮件管理
@@ -89,6 +93,13 @@ python scripts/sync.py --list                  # 列出可用 profiles
 ## 技能依赖关系
 
 ```
+gen-dingtalk（钉钉底层能力）────────────────────────┐
+  ↑                                                │
+  ├── gen-dingtalk-personal-daily（个人工作日志）    │
+  ├── gen-dingtalk-group-report（群聊分析报告）     │
+  ├── gen-dingtalk-personal-weekly-mail（周报邮件） │
+  └── gen-dingtalk-team-weekly-review（周报总结）   │
+
 inv-stock-data（数据层）────────────────────────────┐
   ↑                                                │
   ├── inv-valuation-engine（估值引擎）              │
