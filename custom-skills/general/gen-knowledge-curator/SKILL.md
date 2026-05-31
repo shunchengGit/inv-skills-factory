@@ -15,7 +15,7 @@ commands:
 | 命令 | 用途 |
 |------|------|
 | `/km_init` | 从远程仓库拉取知识库到 `~/.knowledge`，输出 Index 结构化数据 |
-| `/km_import <url>` | 抓取 URL 内容 → Claude 总结分类 → 存储到知识库 |
+| `/km_import <url>` | 抓取 URL 内容 → Agent 总结分类 → 存储到知识库 |
 | `/km_lint` | 检查 Index.md 死链、孤立文件、URL 可达性 |
 
 ## 脚本
@@ -30,9 +30,9 @@ commands:
 ## 典型工作流
 
 ```
-1. /km_init                              ← 拉取知识库，Claude 感知所有条目
+1. /km_init                              ← 拉取知识库，感知所有条目
 2. /km_import https://example.com/article ← 抓取内容
-3. Claude 总结 + 选分类（对话中完成）
+3. Agent 总结 + 选分类（对话中完成）
 4. km_import.py store --title ... --category ... ← 存储并同步
 5. /km_lint                              ← 定期检查完整性
 ```

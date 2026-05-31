@@ -86,7 +86,7 @@ uv run custom-skills/invest/inv-web-crawler/scripts/pwright_scrape.py scrape "<u
 
 ### 4. 投资分析 + 分类
 
-Claude 对每个成功抓取的内容做投资视角分析：
+对每个成功抓取的内容做投资视角分析：
 
 **摘要**：
 - 核心论点（1-2 句）

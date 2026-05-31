@@ -61,7 +61,7 @@ Git 仓库驱动的 TODO 管理，数据存储在 `~/.todo/`（remote `git@githu
 ## 典型工作流
 
 ```
-1. todo.py init           ← 拉取最新数据，Claude 感知全量任务池
+1. todo.py init           ← 拉取最新数据，感知全量任务池
 2. todo.py add "xxx"      ← 添加任务到 TODO.md，自动 push
 3. todo.py done "xxx"     ← 完成任务，移到已完成 section，自动 push
 ```
