@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
 from git import is_repo, same_remote, clone, pull
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index
 
 REPO_URL = os.environ.get("KNOWLEDGE_REPO_URL", "git@github.com:shunchengGit/knowledge.git")

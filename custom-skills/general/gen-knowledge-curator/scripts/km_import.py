@@ -30,6 +30,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from pwright import scrape_url as pwright_scrape_url
 from git import sync as _git_sync
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import slugify, build_entry
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"

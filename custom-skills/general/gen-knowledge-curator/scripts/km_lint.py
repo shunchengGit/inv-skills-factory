@@ -25,6 +25,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from proxy import detect_proxy
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
