@@ -20,7 +20,6 @@ commands: []
 | `pwright.html_to_markdown(html)` | HTML → Markdown |
 | `pwright.check_playwright()` | 检查 playwright 是否已安装 |
 | `pwright.detect_proxy()` | 检测本地 Clash 代理 |
-| `env.load_dotenv()` | 加载项目根 .env 到 os.environ |
 
 ## 在脚本中使用
 
