@@ -28,7 +28,7 @@ DEFAULT_MAX_PAGES = 30
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
-from git import is_repo, sync as _git_sync
+from git import is_repo, clone, pull, sync as _git_sync
 
 DATE_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 TICKER_PATTERNS = [
@@ -722,36 +722,30 @@ def cmd_archive(args: argparse.Namespace) -> int:
 
 def cmd_init(args: argparse.Namespace) -> int:
     """初始化研报库：从远程仓库 clone 或 pull。"""
-    import subprocess as sp
-
     root = Path(args.root).expanduser()
     remote = getattr(args, "remote", REPORT_REMOTE)
 
     if root.exists():
-        git_dir = root / ".git"
-        if not git_dir.exists():
+        if not is_repo(root):
             print(f"错误: {root} 已存在但不是 git 仓库，无法初始化", file=sys.stderr)
             return 1
         print(f"研报库已存在，执行 git pull...")
-        r = sp.run(["git", "-C", str(root), "pull"], capture_output=True, text=True)
-        if r.returncode != 0:
-            print(f"git pull 失败: {r.stderr.strip()[:300]}", file=sys.stderr)
+        result = pull(root)
+        if not result["success"]:
+            print(f"git pull 失败: {result.get('error', '')[:300]}", file=sys.stderr)
             return 1
-        print(r.stdout.strip() or "已是最新")
-        # 重建索引
+        print(result.get("files_changed", "") or "已是最新")
         cmd_index(args)
         return 0
 
-    # clone
     parent = root.parent
     parent.mkdir(parents=True, exist_ok=True)
     print(f"git clone {remote} → {root} ...")
-    r = sp.run(["git", "clone", remote, str(root)], capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"git clone 失败: {r.stderr.strip()[:300]}", file=sys.stderr)
+    result = clone(remote, root)
+    if not result["success"]:
+        print(f"git clone 失败: {result.get('error', '')[:300]}", file=sys.stderr)
         return 1
-    print(r.stderr.strip() or "clone 完成")
-    # 首次 clone 后建索引
+    print("clone 完成")
     cmd_index(args)
     return 0
 
