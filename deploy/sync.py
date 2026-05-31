@@ -6,11 +6,11 @@ Skills & hooks 同步脚本（软链接模式）。
 软链接指向源目录，修改源文件即刻生效，无需重新同步。
 
 用法:
-  python sync.py --profile home
-  python sync.py --profile work --dry-run
-  python sync.py --profile home --agent hermes
-  python sync.py --profile home --hooks-only
-  python sync.py --list
+  python deploy/sync.py --profile home
+  python deploy/sync.py --profile work --dry-run
+  python deploy/sync.py --profile home --agent hermes
+  python deploy/sync.py --profile home --hooks-only
+  python deploy/sync.py --list
 
 base 分类始终同步，无需在 profile 中声明。
 """
@@ -28,7 +28,7 @@ from dotenv import load as _load_dotenv
 _load_dotenv()
 SKILLS_SRC = STORE_ROOT / "custom-skills"
 HOOKS_SRC = STORE_ROOT / "custom-hooks"
-DEPLOY_FILE = STORE_ROOT / "deploy.json"
+DEPLOY_FILE = Path(__file__).resolve().parent / "deploy.json"
 
 
 def load_config() -> dict:
