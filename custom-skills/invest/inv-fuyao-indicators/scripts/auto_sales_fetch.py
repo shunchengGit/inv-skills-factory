@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
-from pwright import launch_browser, check_playwright
+from pwright import launch_browser
 
 CPCA_HOME = "https://www.cpcaauto.com/"
 CPCA_NEWSLIST = "https://www.cpcaauto.com/newslist.php?types=csjd"
@@ -45,13 +45,6 @@ def fetch_auto_sales(max_retries: int = 2, raw_only: bool = False) -> dict:
         "fetched_at": "...",
     }
     """
-    if not check_playwright():
-        return {
-            "error": "playwright 未安装。请运行: uv run playwright install chromium",
-            "source": "cpca",
-            "parse_status": "failed",
-        }
-
     last_error = None
     for attempt in range(max_retries + 1):
         try:

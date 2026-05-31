@@ -29,7 +29,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
-from pwright import scrape_url as pwright_scrape_url, check_playwright as _check_pwright
+from pwright import scrape_url as pwright_scrape_url
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 REPO_BRANCH = "master"
@@ -67,16 +67,14 @@ def _firecrawl_scrape(url: str) -> dict | None:
 
 def _pwright_scrape(url: str) -> dict | None:
     """Playwright 抓取兜底，返回 {title, content} 或 None。"""
-    if not _check_pwright():
-        return None
-
     try:
         result = pwright_scrape_url(url)
-        if result["success"] and result["markdown"] and len(result["markdown"].strip()) >= 100:
-            return {"title": result["title"], "content": result["markdown"].strip()}
+    except RuntimeError:
         return None
-    except Exception:
-        return None
+
+    if result["success"] and result["markdown"] and len(result["markdown"].strip()) >= 100:
+        return {"title": result["title"], "content": result["markdown"].strip()}
+    return None
 
 
 def cmd_fetch(url: str) -> dict:
