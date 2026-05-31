@@ -9,17 +9,14 @@ commands: []
 
 提供 JS 渲染页面抓取的核心能力：浏览器启动、智能正文提取、html2text 转换。
 
-## 脚本
+## 公开接口
 
 | 函数 | 用途 |
 |------|------|
-| `pwright.scrape_url(url)` | 抓取 URL → Markdown |
-| `pwright.extract_text(url)` | 抓取 URL → 纯文本 |
-| `pwright.launch_browser()` | 启动浏览器，返回 (pw, browser, context, page) |
-| `pwright.extract_main_html(page)` | 智能提取正文 HTML |
-| `pwright.html_to_markdown(html)` | HTML → Markdown |
-| `pwright.check_playwright()` | 检查 playwright 是否已安装 |
-| `pwright.detect_proxy()` | 检测本地 Clash 代理 |
+| `scrape_url(url)` | 一站式抓取 → Markdown |
+| `extract_text(url)` | 一站式抓取 → 纯文本 |
+| `launch_browser()` | 启动浏览器，返回 (pw, browser, context, page) |
+| `detect_proxy()` | 检测本地 Clash 代理 |
 
 ## 在脚本中使用
 

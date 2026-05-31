@@ -1,13 +1,12 @@
 """Playwright 无头浏览器抓取核心模块。
 
-供所有需要 JS 渲染抓取的技能脚本调用，消除各脚本中重复的浏览器启动、
-内容提取、html2text 转换逻辑。
+供所有需要 JS 渲染抓取的技能脚本调用。
 
 用法:
   import sys
   from pathlib import Path
   sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
-  from pwright import scrape_url, extract_text, check_playwright
+  from pwright import scrape_url, extract_text, launch_browser, detect_proxy
 """
 
 from __future__ import annotations
@@ -34,12 +33,7 @@ _CONTENT_SELECTORS = [
 _CLASH_PORTS = (7890, 7891, 7897)
 
 
-def check_playwright() -> bool:
-    try:
-        from playwright.sync_api import sync_playwright  # noqa: F401
-        return True
-    except ImportError:
-        return False
+# ── 公开接口 ──────────────────────────────────────────────────
 
 
 def detect_proxy() -> str | None:
@@ -56,11 +50,6 @@ def detect_proxy() -> str | None:
         except (ConnectionRefusedError, OSError):
             pass
     return None
-
-
-def _ensure_playwright():
-    if not check_playwright():
-        raise RuntimeError("playwright 未安装。请运行: uv run playwright install chromium")
 
 
 def launch_browser(
@@ -91,7 +80,53 @@ def launch_browser(
     return pw, browser, context, page
 
 
-def extract_main_html(page, selector: str | None = None) -> str:
+def scrape_url(
+    url: str,
+    *,
+    selector: str | None = None,
+    wait_ms: int = 3000,
+    wait_until: str = "domcontentloaded",
+    max_chars: int = 60000,
+    proxy: str | None = None,
+) -> dict:
+    """用 Playwright 抓取 URL，返回 markdown 内容。"""
+    return _do_scrape(
+        url, _extract_md, "markdown",
+        selector=selector, wait_ms=wait_ms, wait_until=wait_until,
+        max_chars=max_chars, proxy=proxy,
+    )
+
+
+def extract_text(
+    url: str,
+    *,
+    wait_ms: int = 3000,
+    proxy: str | None = None,
+) -> dict:
+    """用 Playwright 抓取 URL，返回纯文本（不做 markdown 转换）。"""
+    return _do_scrape(
+        url, _extract_txt, "text",
+        wait_ms=wait_ms, wait_until="domcontentloaded", proxy=proxy,
+    )
+
+
+# ── 内部实现 ──────────────────────────────────────────────────
+
+
+def _check_playwright() -> bool:
+    try:
+        from playwright.sync_api import sync_playwright  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _ensure_playwright():
+    if not _check_playwright():
+        raise RuntimeError("playwright 未安装。请运行: uv run playwright install chromium")
+
+
+def _extract_main_html(page, selector: str | None = None) -> str:
     """智能提取正文 HTML，优先匹配语义标签，回退全页。"""
     if selector:
         try:
@@ -114,7 +149,7 @@ def extract_main_html(page, selector: str | None = None) -> str:
     return page.content()
 
 
-def extract_main_text(page) -> str:
+def _extract_main_text(page) -> str:
     """智能提取正文纯文本，优先语义标签，回退 body.inner_text()。"""
     for sel in _CONTENT_SELECTORS:
         try:
@@ -128,7 +163,7 @@ def extract_main_text(page) -> str:
     return page.inner_text("body")
 
 
-def html_to_markdown(html: str) -> str:
+def _html_to_markdown(html: str) -> str:
     import html2text
     h = html2text.HTML2Text()
     h.ignore_images = True
@@ -165,38 +200,8 @@ def _do_scrape(
 
 
 def _extract_md(page, selector: str | None = None) -> str:
-    return html_to_markdown(extract_main_html(page, selector=selector))
+    return _html_to_markdown(_extract_main_html(page, selector=selector))
 
 
 def _extract_txt(page, _selector: str | None = None) -> str:
-    return extract_main_text(page)
-
-
-def scrape_url(
-    url: str,
-    *,
-    selector: str | None = None,
-    wait_ms: int = 3000,
-    wait_until: str = "domcontentloaded",
-    max_chars: int = 60000,
-    proxy: str | None = None,
-) -> dict:
-    """用 Playwright 抓取 URL，返回 markdown 内容。"""
-    return _do_scrape(
-        url, _extract_md, "markdown",
-        selector=selector, wait_ms=wait_ms, wait_until=wait_until,
-        max_chars=max_chars, proxy=proxy,
-    )
-
-
-def extract_text(
-    url: str,
-    *,
-    wait_ms: int = 3000,
-    proxy: str | None = None,
-) -> dict:
-    """用 Playwright 抓取 URL，返回纯文本（不做 markdown 转换）。"""
-    return _do_scrape(
-        url, _extract_txt, "text",
-        wait_ms=wait_ms, wait_until="domcontentloaded", proxy=proxy,
-    )
+    return _extract_main_text(page)
