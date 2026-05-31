@@ -19,17 +19,14 @@ Note: exmail send_email API cannot save drafts. This script uses IMAP APPEND
 import argparse
 import imaplib
 import os
+import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
-# 加载项目根 .env
-_env_file = Path(__file__).resolve().parents[4] / ".env"
-if _env_file.exists():
-    for _line in _env_file.read_text().splitlines():
-        if _line.strip() and not _line.startswith("#") and "=" in _line:
-            _k, _, _v = _line.partition("=")
-            os.environ.setdefault(_k.strip(), _v.strip().strip("\"'"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+from dotenv import load as _load_dotenv
+_load_dotenv()
 
 
 def save_draft(from_addr, to_addr, cc_addr, subject, html_content, text_content,
