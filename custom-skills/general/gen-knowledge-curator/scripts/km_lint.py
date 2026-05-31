@@ -23,17 +23,10 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
+from proxy import detect_proxy
+
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
-
-
-def _detect_proxy() -> str | None:
-    """检测代理：检查环境变量。"""
-    return (
-        os.environ.get("HTTPS_PROXY")
-        or os.environ.get("HTTP_PROXY")
-        or os.environ.get("https_proxy")
-        or os.environ.get("http_proxy")
-    )
 INDEX_DIR = "index"
 
 
@@ -119,7 +112,7 @@ def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> list[di
     if skip:
         return [], []
 
-    proxy_url = _detect_proxy()
+    proxy_url = detect_proxy()
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
     # 收集所有 md 文件和对应 URL

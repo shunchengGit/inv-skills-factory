@@ -3,8 +3,8 @@
 邮件管理脚本 — SMTP/IMAP 直连。
 
 凭据：
-  环境变量 TL_MAIL_USER / TL_MAIL_PASS，写入 ~/.zshrc。
-  首次运行无环境变量时交互提示输入并自动追加。
+  从项目根 .env 读取 TL_MAIL_USER / TL_MAIL_PASS。
+  未配置时交互提示输入并写入 .env。
 
 默认服务器：
   SMTP: smtp.exmail.qq.com:465 (SSL)

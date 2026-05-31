@@ -23,7 +23,17 @@ dependencies:
 | 命令 | 用途 |
 |------|------|
 | `/research <主题>` | 研究投资主题，搜索并整理到知识库 |
-| `/research-batch <url1> <url2> ...` | 批量抓取已知 URL 到知识库 |
+| `/research <主题> --max 5` | 限制抓取数量 |
+| `/research <主题> --urls <url1> <url2>` | 跳过搜索，直接抓取已知 URL |
+
+## 脚本
+
+```bash
+uv run custom-skills/invest/inv-topic-researcher/scripts/research.py "<主题>"
+# 输出 JSON：{topic, total, skipped, imported, failed, results: [{url, title, content, source, status}]}
+```
+
+脚本完成搜索→去重→抓取，Agent 拿到 JSON 后逐条分析分类并 `km_import.py store`。
 
 ## 适用场景
 
