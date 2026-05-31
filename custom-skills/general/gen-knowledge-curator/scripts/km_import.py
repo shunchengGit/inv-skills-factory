@@ -62,34 +62,27 @@ def _firecrawl_scrape(url: str) -> dict | None:
         return None
 
 
-def _pwright_scrape(url: str) -> dict | None:
-    """内联 playwright 抓取，返回 {title, content} 或 None。"""
+def _has_pwright() -> bool:
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.sync_api import sync_playwright  # noqa: F401
+        return True
     except ImportError:
+        return False
+
+
+def _pwright_scrape(url: str) -> dict | None:
+    """Playwright 抓取兜底，返回 {title, content} 或 None。"""
+    if not _has_pwright():
         return None
 
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
+    from pwright import scrape_url as pwright_scrape_url
+
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            title = page.title()
-            # 提取正文：优先 article/main，否则 body
-            content_el = page.query_selector("article") or page.query_selector("main") or page.query_selector("body")
-            html = content_el.inner_html() if content_el else page.content()
-
-            import html2text
-            h = html2text.HTML2Text()
-            h.ignore_links = False
-            h.ignore_images = True
-            content = h.handle(html)
-
-            browser.close()
-
-            if not content or len(content.strip()) < 100:
-                return None
-            return {"title": title, "content": content.strip()}
+        result = pwright_scrape_url(url)
+        if result["success"] and result["markdown"] and len(result["markdown"].strip()) >= 100:
+            return {"title": result["title"], "content": result["markdown"].strip()}
+        return None
     except Exception:
         return None
 

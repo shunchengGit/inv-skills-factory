@@ -15,17 +15,14 @@
 
 import datetime
 import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
+from pwright import launch_browser, check_playwright
 
 CPCA_HOME = "https://www.cpcaauto.com/"
 CPCA_NEWSLIST = "https://www.cpcaauto.com/newslist.php?types=csjd"
-
-
-def _check_playwright_available() -> bool:
-    try:
-        from playwright.sync_api import sync_playwright  # noqa: F401
-        return True
-    except ImportError:
-        return False
 
 
 def fetch_auto_sales(max_retries: int = 2, raw_only: bool = False) -> dict:
@@ -43,24 +40,22 @@ def fetch_auto_sales(max_retries: int = 2, raw_only: bool = False) -> dict:
         "wholesale_sales": 192.0,
         "nev_penetration": 60.6,
         "parse_status": "success" | "partial" | "failed",
-        "raw_text": "...",  # parse_status 非 success 或 raw_only 时包含
+        "raw_text": "...",
         "source": "cpca",
         "fetched_at": "...",
     }
     """
-    if not _check_playwright_available():
+    if not check_playwright():
         return {
             "error": "playwright 未安装。请运行: uv run playwright install chromium",
             "source": "cpca",
             "parse_status": "failed",
         }
 
-    from playwright.sync_api import sync_playwright
-
     last_error = None
     for attempt in range(max_retries + 1):
         try:
-            raw_text, result = _do_fetch_auto_sales(sync_playwright, raw_only=raw_only)
+            raw_text, result = _do_fetch_auto_sales(raw_only=raw_only)
             if raw_only:
                 return {
                     "raw_text": raw_text,
@@ -69,7 +64,6 @@ def fetch_auto_sales(max_retries: int = 2, raw_only: bool = False) -> dict:
                     "fetched_at": datetime.datetime.now().isoformat(timespec="seconds"),
                 }
             if not result.get("error"):
-                # 正则解析结果 + raw_text fallback
                 if result.get("parse_status") != "success":
                     result["raw_text"] = raw_text
                 return result
@@ -84,22 +78,14 @@ def fetch_auto_sales(max_retries: int = 2, raw_only: bool = False) -> dict:
     }
 
 
-def _do_fetch_auto_sales(sync_playwright, raw_only: bool = False) -> tuple[str, dict]:
+def _do_fetch_auto_sales(raw_only: bool = False) -> tuple[str, dict]:
     """实际执行 Playwright 抓取逻辑。
 
     返回 (raw_text, parsed_result)。
     """
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1920, "height": 1080},
-        )
-        page = context.new_page()
+    pw, browser, context, page = launch_browser()
 
+    try:
         # Step 1: 从首页获取文章链接
         article_urls = _find_article_urls(page)
 
@@ -117,8 +103,9 @@ def _do_fetch_auto_sales(sync_playwright, raw_only: bool = False) -> tuple[str, 
         page.goto(CPCA_HOME, wait_until="networkidle", timeout=20000)
         page.wait_for_timeout(2000)
         all_text = page.inner_text("body") + "\n\n" + all_text
-
+    finally:
         browser.close()
+        pw.stop()
 
     if raw_only:
         return all_text, {}
