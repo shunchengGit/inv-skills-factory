@@ -60,65 +60,55 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 
 从 Index 输出中提取所有已导入 URL，跳过重复。
 
-### 3. 抓取
+### 3. 逐条处理（抓取 → 分析 → 存储，一条一条来）
 
-每个新 URL 依次尝试：
+**每抓到一条有效内容，立即分析存储，不批量积攒。**
+后续 URL 失败不影响已入库的内容。
+
+对每个新 URL：
+
+```
+┌─ 抓取 ─────────────────────────────────────────┐
+│ 1. Firecrawl POST :3672/v1/scrape              │
+│    → 成功（≥500字符且非拦截页）→ 跳到分析      │
+│    → 失败 → 步骤 2                             │
+│ 2. pwright 兜底                                │
+│    uv run .../pwright_scrape.py scrape "<url>"  │
+│    → 成功（≥100字符）→ 跳到分析                │
+│    → 失败 → 记录失败原因，继续下一个 URL        │
+├─ 分析 ─────────────────────────────────────────┤
+│ 3. 投资视角分析：                              │
+│    - 摘要：核心论点 + 关键数据 + 信号方向       │
+│    - 分类：investing / company-analysis /       │
+│            industry-trends / macro / valuation   │
+│    - 标题：简洁中文标题                         │
+├─ 存储 ─────────────────────────────────────────┤
+│ 4. 立即入库：                                  │
+│    uv run .../km_import.py store \              │
+│      --title "..." --category "..." \           │
+│      --url "..." --content "..."                │
+│    → git.sync() 自动 push                      │
+└────────────────────────────────────────────────┘
+```
+
+抓取工具选择：
 
 | 优先级 | 工具 | 适用站点 |
 |--------|------|---------|
 | 1 | Firecrawl (`:3672/v1/scrape`) | CNBC、BBC、Wikipedia、CFI |
 | 2 | pwright (`pwright_scrape.py scrape`) | Investopedia、Yahoo Finance 等 JS 渲染页面 |
 
-```bash
-# Firecrawl
-curl -s -X POST http://localhost:3672/v1/scrape \
-  -H "Content-Type: application/json" \
-  -d '{"url": "<url>"}'
-
-# pwright 兜底
-uv run custom-skills/invest/inv-web-crawler/scripts/pwright_scrape.py scrape "<url>"
-```
-
 内容质量检查：
 - 正文 ≥ 500 字符（Firecrawl）或 ≥ 100 字符（pwright）
 - 排除 Cloudflare 拦截页（含 "Just a moment"、"Checking your browser"）
 - 排除纯导航页（链接密度过高）
 
-### 4. 投资分析 + 分类
-
-对每个成功抓取的内容做投资视角分析：
-
-**摘要**：
-- 核心论点（1-2 句）
-- 关键数据点
-- 对投资判断的影响方向（偏多/偏空/中性）
-
-**分类**（选最匹配的，新主题则新建）：
-- 已有分类示例：`investing`、`company-analysis`、`industry-trends`、`macro`、`valuation`
-- 新建分类用英文 kebab-case
-
-**元数据**：
-```yaml
-url: <原始URL>
-imported: <日期>
-category: <分类>
-source: firecrawl | pwright
-```
-
-### 5. 存储
-
-```bash
-uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py store \
-  --title "<标题>" \
-  --category "<分类>" \
-  --url "<URL>" \
-  --content "<Markdown>"
-```
-
 ## 异常处理
 
 | 异常 | 处理 |
 |------|------|
+| 某条 URL 失败 | 记录原因，**继续下一条**，不影响已入库内容 |
+| 某条分析/存储失败 | 记录原因，继续下一条 |
 | SearXNG 不可用 | 提示用户给 URL，切 `/research-batch` |
 | 搜索无结果 | 换英文关键词重试 1 次；仍无结果则提示扩大搜索词 |
 | 结果全为已导入 | 输出"无新内容"，结束 |
