@@ -19,12 +19,13 @@ import argparse
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
+STORE_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(STORE_ROOT / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
-
-STORE_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = STORE_ROOT / "custom-skills"
 HOOKS_SRC = STORE_ROOT / "custom-hooks"
 DEPLOY_FILE = STORE_ROOT / "deploy.json"

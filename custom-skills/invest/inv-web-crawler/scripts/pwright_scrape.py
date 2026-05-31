@@ -27,7 +27,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from pwright import scrape_url, extract_text
 
 

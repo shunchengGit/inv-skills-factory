@@ -36,7 +36,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
 

@@ -27,7 +27,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from pwright import scrape_url as pwright_scrape_url
 from git import sync as _git_sync
 

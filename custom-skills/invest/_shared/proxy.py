@@ -1,6 +1,6 @@
 """统一代理检测与管理模块（重导出层）。
 
-核心逻辑已迁移至 scripts/proxy.py，本文件保持向后兼容。
+核心逻辑已迁移至 lib/proxy.py，本文件保持向后兼容。
 供 invest 分类下的脚本继续使用原有 import 路径。
 
 用法:
@@ -13,8 +13,8 @@ import os
 import sys
 from pathlib import Path
 
-# 从 scripts/proxy.py 导入核心检测逻辑
-_scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
+# 从 lib/proxy.py 导入核心检测逻辑
+_scripts_dir = Path(__file__).resolve().parents[3] / "lib"
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
 from proxy import detect_proxy  # noqa: E402, F401

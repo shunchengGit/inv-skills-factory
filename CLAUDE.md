@@ -48,10 +48,13 @@ custom-hooks/                   # Hooks 源码（按 agent 隔离）
   hermes/                       # Hermes 专属 hooks
     base-skill-loader/          #   技能加载 hook
 
-scripts/
+lib/
   dotenv.py                     # .env 加载
   proxy.py                      # 代理检测
   pwright.py                    # Playwright 抓取
+  git.py                        # Git 操作
+
+scripts/
   sync.py                       # 部署同步
 
 deploy.json                     # 部署配置：profiles + agents
