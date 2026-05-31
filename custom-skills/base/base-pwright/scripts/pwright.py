@@ -137,6 +137,41 @@ def html_to_markdown(html: str) -> str:
     return h.handle(html)
 
 
+def _do_scrape(
+    url: str,
+    extract_fn,
+    result_key: str,
+    *,
+    selector: str | None = None,
+    wait_ms: int = 3000,
+    wait_until: str = "domcontentloaded",
+    max_chars: int = 60000,
+    proxy: str | None = None,
+) -> dict:
+    pw, browser, context, page = launch_browser(proxy=proxy)
+    try:
+        page.goto(url, wait_until=wait_until, timeout=30000)
+        page.wait_for_timeout(wait_ms)
+        title = page.title()
+        content = extract_fn(page, selector)
+        if len(content) > max_chars:
+            content = content[:max_chars] + "\n\n... (truncated)"
+        return {"success": True, "url": url, "title": title, result_key: content, "error": None}
+    except Exception as e:
+        return {"success": False, "url": url, "title": None, result_key: None, "error": str(e)[:500]}
+    finally:
+        browser.close()
+        pw.stop()
+
+
+def _extract_md(page, selector: str | None = None) -> str:
+    return html_to_markdown(extract_main_html(page, selector=selector))
+
+
+def _extract_txt(page, _selector: str | None = None) -> str:
+    return extract_main_text(page)
+
+
 def scrape_url(
     url: str,
     *,
@@ -147,39 +182,11 @@ def scrape_url(
     proxy: str | None = None,
 ) -> dict:
     """用 Playwright 抓取 URL，返回 markdown 内容。"""
-    _ensure_playwright()
-
-    pw, browser, context, page = launch_browser(proxy=proxy)
-
-    try:
-        page.goto(url, wait_until=wait_until, timeout=30000)
-        page.wait_for_timeout(wait_ms)
-
-        title = page.title()
-        html = extract_main_html(page, selector=selector)
-        md = html_to_markdown(html)
-
-        if len(md) > max_chars:
-            md = md[:max_chars] + "\n\n... (truncated)"
-
-        return {
-            "success": True,
-            "url": url,
-            "title": title,
-            "markdown": md,
-            "error": None,
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "url": url,
-            "title": None,
-            "markdown": None,
-            "error": str(e)[:500],
-        }
-    finally:
-        browser.close()
-        pw.stop()
+    return _do_scrape(
+        url, _extract_md, "markdown",
+        selector=selector, wait_ms=wait_ms, wait_until=wait_until,
+        max_chars=max_chars, proxy=proxy,
+    )
 
 
 def extract_text(
@@ -189,34 +196,7 @@ def extract_text(
     proxy: str | None = None,
 ) -> dict:
     """用 Playwright 抓取 URL，返回纯文本（不做 markdown 转换）。"""
-    _ensure_playwright()
-
-    pw, browser, context, page = launch_browser(proxy=proxy)
-
-    try:
-        page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        page.wait_for_timeout(wait_ms)
-
-        title = page.title()
-        text = extract_main_text(page)
-
-        if len(text) > 60000:
-            text = text[:60000] + "\n\n... (truncated)"
-
-        return {
-            "success": True,
-            "url": url,
-            "title": title,
-            "text": text,
-            "error": None,
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "url": url,
-            "text": None,
-            "error": str(e)[:500],
-        }
-    finally:
-        browser.close()
-        pw.stop()
+    return _do_scrape(
+        url, _extract_txt, "text",
+        wait_ms=wait_ms, wait_until="domcontentloaded", proxy=proxy,
+    )

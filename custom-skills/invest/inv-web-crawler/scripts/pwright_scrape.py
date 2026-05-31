@@ -41,10 +41,12 @@ def main():
     p_scrape.add_argument("--wait", type=int, default=3000, help="页面加载后额外等待毫秒数")
     p_scrape.add_argument("--wait-until", default="domcontentloaded",
                            choices=["domcontentloaded", "load", "networkidle"])
+    p_scrape.add_argument("--proxy", help="代理地址")
 
     p_text = sub.add_parser("text", help="抓取 URL → 纯文本")
     p_text.add_argument("url")
     p_text.add_argument("--wait", type=int, default=3000, help="页面加载后额外等待毫秒数")
+    p_text.add_argument("--proxy", help="代理地址")
 
     args = parser.parse_args()
 
@@ -54,9 +56,10 @@ def main():
             selector=args.selector,
             wait_ms=args.wait,
             wait_until=args.wait_until,
+            proxy=args.proxy,
         )
     elif args.command == "text":
-        result = extract_text(args.url, wait_ms=args.wait)
+        result = extract_text(args.url, wait_ms=args.wait, proxy=args.proxy)
     else:
         parser.print_help()
         sys.exit(1)
