@@ -43,6 +43,7 @@ custom-skills/                  # 技能源码（按分类隔离）
     inv-tencent-indicators/     #   前置指标（腾讯）
     inv-fuyao-indicators/       #   前置指标（福耀）
     inv-research-analyzer/      #   研报分析
+    inv-topic-researcher/       #   投资主题研究
 
 custom-hooks/                   # Hooks 源码（按 agent 隔离）
   hermes/                       # Hermes 专属 hooks
@@ -112,6 +113,10 @@ inv-stock-data（数据层）─────────────────
   │     └── inv-qarp-strategy（操作决策）           │
   ├── inv-porter-five-forces（五力分析）            │
   └── (其他技能通过 CLI 子进程调用)                  │
+
+inv-topic-researcher ─┐
+  ├── inv-web-crawler（搜索+抓取）
+  └── gen-knowledge-curator（存储）  ↑ 串联两个技能的编排层
 
 inv-tencent-indicators / inv-fuyao-indicators（前置指标，独立脚本）
 inv-research-analyzer（研报分析，独立脚本）
