@@ -58,29 +58,43 @@ def pull(path: Path, branch: str = "master") -> dict:
     }
 
 
-def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: str = "master") -> dict:
-    """pull --rebase → add → commit → push，返回 {success, push_failed?, error?}。"""
+def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: str = "master",
+         max_retries: int = 2) -> dict:
+    """pull --rebase → add → commit → push（push 失败自动重试）。
+
+    返回 {success, push_failed?, error?, no_change?}。
+    """
     r_pull = run(["pull", "--rebase", "origin", branch], cwd=cwd)
     if r_pull.returncode != 0:
         if "conflict" in (r_pull.stderr + r_pull.stdout).lower():
             run(["rebase", "--abort"], cwd=cwd)
             return {"success": False, "step": "pull", "error": "合并冲突，请手动解决后重试"}
-        # non-conflict pull failure (no remote, network) — 继续尝试 push
+        # non-conflict pull failure (no remote, network) — 继续尝试
 
     r_add = run(["add", files], cwd=cwd)
     if r_add.returncode != 0:
         return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
 
     r_commit = run(["commit", "-m", commit_msg], cwd=cwd)
-    if r_commit.returncode != 0 and "nothing to commit" not in r_commit.stdout:
+    if r_commit.returncode != 0:
+        if "nothing to commit" in r_commit.stdout:
+            return {"success": True, "push_failed": False, "no_change": True}
         return {"success": False, "step": "commit", "error": r_commit.stderr.strip()[:300]}
 
-    r_push = run(["push", "origin", branch], cwd=cwd, timeout=30)
-    if r_push.returncode != 0:
-        return {
-            "success": True,
-            "push_failed": True,
-            "hint": f"push 失败，本地已保存。稍后手动: git -C {cwd} push",
-            "push_error": r_push.stderr.strip()[:300],
-        }
-    return {"success": True, "push_failed": False}
+    for attempt in range(max_retries + 1):
+        r_push = run(["push", "origin", branch], cwd=cwd, timeout=30)
+        if r_push.returncode == 0:
+            return {"success": True, "push_failed": False}
+        if attempt < max_retries:
+            # re-pull before retry
+            r_retry_pull = run(["pull", "--rebase", "origin", branch], cwd=cwd)
+            if r_retry_pull.returncode != 0 and "conflict" in (r_retry_pull.stderr + r_retry_pull.stdout).lower():
+                run(["rebase", "--abort"], cwd=cwd)
+                return {"success": False, "step": "pull", "error": "合并冲突，请手动解决后重试"}
+
+    return {
+        "success": True,
+        "push_failed": True,
+        "hint": f"push 失败，本地已保存。稍后手动: git -C {cwd} push",
+        "push_error": r_push.stderr.strip()[:300],
+    }

@@ -28,7 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
-from git import run as _run_git, is_repo, same_remote, sync as _git_sync
+from git import is_repo, same_remote, clone, pull, sync as _git_sync
 
 REPO_URL = os.environ.get("TODO_REPO_URL", "git@github.com:shunchengGit/todo.git")
 TODO_DIR = Path.home() / ".todo"
@@ -124,50 +124,6 @@ def _list_todo_md() -> dict[str, list[dict]]:
     for zh_name, key in SECTION_KEYS.items():
         sections[key] = _parse_section_lines(filepath, zh_name)
     return sections
-
-
-# ─── git 工具 ─────────────────────────────────────────────
-
-
-def _atomic_git_op(write_fn, commit_msg: str, max_retries: int = 2) -> dict:
-    """安全 git 写入：pull --rebase → write → add → commit → push，失败重试。"""
-    for attempt in range(max_retries + 1):
-        r = _run_git(["pull", "--rebase"], cwd=TODO_DIR)
-        if r.returncode != 0:
-            if "conflict" in r.stderr.lower():
-                _run_git(["rebase", "--abort"], cwd=TODO_DIR)
-                return {"success": False, "error": "合并冲突，请手动解决后重试"}
-            if attempt == 0 and "no remote" not in r.stderr.lower():
-                return {"success": False, "error": "git pull 失败", "detail": r.stderr.strip()[:300]}
-            continue
-
-        write_fn()
-
-        r_add = _run_git(["add", TODO_MD], cwd=TODO_DIR)
-        if r_add.returncode != 0:
-            return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
-
-        r_commit = _run_git(["commit", "-m", commit_msg], cwd=TODO_DIR)
-        if r_commit.returncode != 0 and "nothing to commit" not in r_commit.stdout:
-            return {"success": False, "step": "commit", "error": r_commit.stderr.strip()[:300]}
-
-        if "nothing to commit" in r_commit.stdout:
-            return {"success": True, "push_failed": False, "no_change": True}
-
-        r_push = _run_git(["push"], cwd=TODO_DIR, timeout=30)
-        if r_push.returncode != 0:
-            if attempt < max_retries:
-                continue
-            return {
-                "success": True,
-                "push_failed": True,
-                "hint": "push 失败，本地已保存。稍后手动: git -C ~/.todo push",
-                "push_error": r_push.stderr.strip()[:300],
-            }
-
-        return {"success": True, "push_failed": False}
-
-    return {"success": False, "error": "重试次数耗尽，请检查网络或手动同步"}
 
 
 # ─── TODO.md 写入 ─────────────────────────────────────────
@@ -282,17 +238,7 @@ def _find_and_move_to_done(keyword: str | None, task_id: str | None) -> tuple[in
 
 def _init_repo() -> dict:
     if not TODO_DIR.exists():
-        r = _run_git(["clone", REPO_URL, str(TODO_DIR)], cwd=Path.home())
-        if r.returncode != 0:
-            err = r.stderr.strip()
-            if "Could not read from remote" in err or "Permission denied" in err:
-                hint = "请检查 SSH key 配置：ssh -T git@github.com"
-            elif "Repository not found" in err or "not found" in err.lower():
-                hint = f"远程仓库不存在，请确认 {REPO_URL} 是否已创建"
-            else:
-                hint = "网络连接失败，请检查网络或代理设置"
-            return {"success": False, "action": "clone", "error": err[:500], "hint": hint}
-        return {"success": True, "action": "clone"}
+        return clone(REPO_URL, TODO_DIR)
 
     if not is_repo(TODO_DIR):
         return {
@@ -308,17 +254,7 @@ def _init_repo() -> dict:
             "hint": "请手动调整 git remote 或备份后重新 init",
         }
 
-    r = _run_git(["pull", "--rebase"])
-    if r.returncode != 0:
-        if "conflict" in r.stderr.lower():
-            _run_git(["rebase", "--abort"])
-        return {
-            "success": False, "action": "pull",
-            "error": r.stderr.strip()[:500],
-            "hint": "git pull 失败，可能需要手动解决冲突",
-        }
-
-    return {"success": True, "action": "pull"}
+    return pull(TODO_DIR)
 
 
 def cmd_init() -> dict:
@@ -347,7 +283,8 @@ def cmd_add(task: str, priority: str = "medium") -> dict:
                     return {"success": True, "task": task, "priority": priority, "id": t["id"], "duplicate": True}
 
     tid = _task_id(task)
-    result = _atomic_git_op(lambda: _add_to_todo_md(task, priority), f"add: {task}")
+    _add_to_todo_md(task, priority)
+    result = _git_sync(TODO_DIR, f"add: {task}", files=TODO_MD)
     if not result["success"]:
         return result
 
@@ -397,15 +334,13 @@ def cmd_done(keyword: str | None, task_id: str | None = None) -> dict:
             "candidates": [{"id": c["id"], "content": c["content"]} for c in candidates],
         }
 
-    result = _atomic_git_op(
-        lambda: _find_and_move_to_done(keyword, task_id),
-        f"done: {keyword or task_id}",
-    )
+    _find_and_move_to_done(keyword, task_id)
+    result = _git_sync(TODO_DIR, f"done: {keyword or task_id}", files=TODO_MD)
     if not result["success"]:
         return result
 
     matched_contents = [c["content"] for c in candidates]
-    return {"success": True, "matched": len(candidates), "completed": matched_contents, **{k: v for k, v in result.items() if k not in ("matched_contents",)}}
+    return {"success": True, "matched": len(candidates), "completed": matched_contents, **{k: v for k, v in result.items() if k != "matched_contents"}}
 
 
 # ─── tidy ─────────────────────────────────────────────────
@@ -473,11 +408,9 @@ def cmd_migrate() -> dict:
     if not TODO_DIR.exists():
         return {"success": False, "error": f"{TODO_DIR} 不存在，请先运行 init"}
 
-    r = _run_git(["pull", "--rebase"])
-    if r.returncode != 0:
-        if "conflict" in r.stderr.lower():
-            _run_git(["rebase", "--abort"])
-        return {"success": False, "error": "git pull 失败", "detail": r.stderr.strip()[:300]}
+    result = pull(TODO_DIR)
+    if not result["success"]:
+        return {"success": False, "error": "git pull 失败", "detail": result.get("error", "")[:300]}
 
     # 整理现有 TODO.md
     _tidy_todo_md()
