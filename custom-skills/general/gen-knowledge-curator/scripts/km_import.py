@@ -33,7 +33,7 @@ from git import sync as _git_sync
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 REPO_BRANCH = "master"
-INDEX_FILE = "Index.md"
+INDEX_DIR = "index"
 FIRECRAWL_URL = "http://localhost:3672/v1/scrape"
 
 
@@ -137,49 +137,13 @@ def _build_entry_md(title: str, url: str, category: str, content: str) -> str:
 
 
 def _update_index(category: str, title: str, rel_path: str, url: str) -> None:
-    """更新 Index.md：在对应 category 下追加条目。"""
-    index_path = KNOWLEDGE_DIR / INDEX_FILE
-
-    if not index_path.exists():
-        index_path.write_text("# Knowledge Index\n", encoding="utf-8")
-
-    lines = index_path.read_text(encoding="utf-8").splitlines()
-
-    # 找到 ## <category> 的位置
-    cat_header = f"## {category}"
-    cat_line_idx = None
-    for i, line in enumerate(lines):
-        if line.strip() == cat_header:
-            cat_line_idx = i
-            break
-
-    entry_line = f"- [{title}]({rel_path}) — {url}"
-
-    if cat_line_idx is not None:
-        # 在该 category 最后一个条目后插入
-        insert_idx = cat_line_idx + 1
-        while insert_idx < len(lines) and lines[insert_idx].startswith("- "):
-            insert_idx += 1
-        lines.insert(insert_idx, entry_line)
-    else:
-        # 新建 category section
-        # 找到最后一个 ## 行的位置
-        last_section_idx = 0
-        for i, line in enumerate(lines):
-            if line.startswith("## "):
-                last_section_idx = i
-        # 找到该 section 结束位置（下一个 ## 或文件末尾）
-        insert_idx = last_section_idx + 1
-        while insert_idx < len(lines) and not lines[insert_idx].startswith("## "):
-            insert_idx += 1
-        # 如果文件末尾没有空行，加一个
-        if insert_idx < len(lines) and lines[insert_idx - 1] != "":
-            lines.insert(insert_idx, "")
-            insert_idx += 1
-        lines.insert(insert_idx, cat_header)
-        lines.insert(insert_idx + 1, entry_line)
-
-    index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    """追加条目到 index/{category}.md。"""
+    index_dir = KNOWLEDGE_DIR / INDEX_DIR
+    index_dir.mkdir(parents=True, exist_ok=True)
+    index_file = index_dir / f"{category}.md"
+    entry_line = f"- [{title}]({rel_path}) — {url}\n"
+    with open(index_file, "a", encoding="utf-8") as f:
+        f.write(entry_line)
 
 
 def cmd_store(title: str, category: str, url: str, content: str) -> dict:

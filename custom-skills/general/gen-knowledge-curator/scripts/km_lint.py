@@ -34,41 +34,56 @@ def _detect_proxy() -> str | None:
         or os.environ.get("https_proxy")
         or os.environ.get("http_proxy")
     )
-INDEX_FILE = "Index.md"
+INDEX_DIR = "index"
+
+
+def _migrate_if_needed() -> None:
+    """旧 Index.md → index/*.md 自动迁移。"""
+    old_index = KNOWLEDGE_DIR / "Index.md"
+    index_dir = KNOWLEDGE_DIR / INDEX_DIR
+    if not old_index.exists() or index_dir.exists():
+        return
+
+    index_dir.mkdir(parents=True, exist_ok=True)
+    current_file = None
+
+    for line in old_index.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^##\s+(.+)", line)
+        if m:
+            current_file = index_dir / f"{m.group(1).strip()}.md"
+            continue
+        if current_file and line.startswith("- "):
+            with open(current_file, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+
+    old_index.rename(old_index.with_suffix(".md.bak"))
 
 
 def parse_index() -> tuple[dict[str, list[dict]], set[str]]:
-    """解析 Index.md，返回 (categories, indexed_paths)。
-
-    categories: {category: [{title, path, url}, ...]}
-    indexed_paths: Index.md 中引用的所有相对路径集合
-    """
-    index_path = KNOWLEDGE_DIR / INDEX_FILE
-    if not index_path.exists():
+    """解析 index/*.md，返回 (categories, indexed_paths)。"""
+    _migrate_if_needed()
+    index_dir = KNOWLEDGE_DIR / INDEX_DIR
+    if not index_dir.exists():
         return {}, set()
 
-    content = index_path.read_text(encoding="utf-8")
     categories: dict[str, list[dict]] = {}
     indexed_paths: set[str] = set()
-    current_category = None
 
-    for line in content.splitlines():
-        m = re.match(r"^##\s+(.+)", line)
-        if m:
-            current_category = m.group(1).strip()
-            if current_category not in categories:
-                categories[current_category] = []
-            continue
-
-        m = re.match(r"^-\s+\[(.+?)\]\((.+?)\)\s*[—–-]\s*(.+)", line)
-        if m and current_category is not None:
-            entry = {
-                "title": m.group(1).strip(),
-                "path": m.group(2).strip(),
-                "url": m.group(3).strip(),
-            }
-            categories[current_category].append(entry)
-            indexed_paths.add(entry["path"])
+    for f in sorted(index_dir.glob("*.md")):
+        category = f.stem
+        entries: list[dict] = []
+        for line in f.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^-\s+\[(.+?)\]\((.+?)\)\s*[—–-]\s*(.+)", line)
+            if m:
+                entry = {
+                    "title": m.group(1).strip(),
+                    "path": m.group(2).strip(),
+                    "url": m.group(3).strip(),
+                }
+                entries.append(entry)
+                indexed_paths.add(entry["path"])
+        if entries:
+            categories[category] = entries
 
     return categories, indexed_paths
 
@@ -159,7 +174,7 @@ def check_orphans(indexed_paths: set[str]) -> list[dict]:
     """检查存在但未被 Index.md 引用的 md 文件。"""
     orphans = []
     for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.name == INDEX_FILE:
+        if md_file.parent.name == INDEX_DIR:
             continue
         rel = str(md_file.relative_to(KNOWLEDGE_DIR))
         if rel not in indexed_paths:

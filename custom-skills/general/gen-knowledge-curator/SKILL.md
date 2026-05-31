@@ -41,7 +41,10 @@ commands:
 
 ```
 ~/.knowledge/                    ← git 仓库
-├── Index.md                     ← 全局索引
+├── index/                       ← 分类索引（每分类一个文件，减少 git 冲突）
+│   ├── investing.md
+│   ├── programming.md
+│   └── ...
 ├── investing/                   ← 分类目录（自动创建）
 │   └── dcf-valuation.md
 ├── programming/
