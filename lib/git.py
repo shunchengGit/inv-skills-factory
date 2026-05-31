@@ -59,7 +59,14 @@ def pull(path: Path, branch: str = "master") -> dict:
 
 
 def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: str = "master") -> dict:
-    """add + commit + push，返回 {success, push_failed?, error?}。"""
+    """pull --rebase → add → commit → push，返回 {success, push_failed?, error?}。"""
+    r_pull = run(["pull", "--rebase", "origin", branch], cwd=cwd)
+    if r_pull.returncode != 0:
+        if "conflict" in (r_pull.stderr + r_pull.stdout).lower():
+            run(["rebase", "--abort"], cwd=cwd)
+            return {"success": False, "step": "pull", "error": "合并冲突，请手动解决后重试"}
+        # non-conflict pull failure (no remote, network) — 继续尝试 push
+
     r_add = run(["add", files], cwd=cwd)
     if r_add.returncode != 0:
         return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
