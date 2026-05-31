@@ -63,10 +63,14 @@ def _ensure_playwright():
         raise RuntimeError("playwright 未安装。请运行: uv run playwright install chromium")
 
 
-def launch_browser(proxy: str | None = None):
+def launch_browser(
+    proxy: str | None = None,
+    user_agent: str | None = None,
+    viewport: dict | None = None,
+):
     """启动 Playwright 无头浏览器，返回 (playwright, browser, context, page)。
 
-    caller 负责在完成后调用 browser.close()。
+    caller 负责在完成后调用 browser.close() 和 pw.stop()。
     """
     from playwright.sync_api import sync_playwright
 
@@ -80,8 +84,8 @@ def launch_browser(proxy: str | None = None):
 
     browser = pw.chromium.launch(**launch_opts)
     context = browser.new_context(
-        user_agent=_UA,
-        viewport={"width": 1920, "height": 1080},
+        user_agent=user_agent or _UA,
+        viewport=viewport or {"width": 1920, "height": 1080},
     )
     page = context.new_page()
     return pw, browser, context, page

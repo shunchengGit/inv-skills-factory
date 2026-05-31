@@ -28,6 +28,9 @@ import sys
 from datetime import date
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
+from pwright import scrape_url as pwright_scrape_url, check_playwright as _check_pwright
+
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 REPO_BRANCH = "master"
 INDEX_FILE = "Index.md"
@@ -62,21 +65,10 @@ def _firecrawl_scrape(url: str) -> dict | None:
         return None
 
 
-def _has_pwright() -> bool:
-    try:
-        from playwright.sync_api import sync_playwright  # noqa: F401
-        return True
-    except ImportError:
-        return False
-
-
 def _pwright_scrape(url: str) -> dict | None:
     """Playwright 抓取兜底，返回 {title, content} 或 None。"""
-    if not _has_pwright():
+    if not _check_pwright():
         return None
-
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
-    from pwright import scrape_url as pwright_scrape_url
 
     try:
         result = pwright_scrape_url(url)

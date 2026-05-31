@@ -1,10 +1,7 @@
-"""统一代理检测与管理模块。
+"""统一代理检测与管理模块（重导出层）。
 
-供所有需要代理的技能脚本调用，消除各脚本中重复的代理检测逻辑。
-
-提供两种代理应用方式：
-1. setup_proxy_env() — 设 os.environ（给 yfinance/curl_cffi 用）
-2. apply_proxy_to_session() — 设 session.proxies（给 requests 用）
+核心逻辑已迁移至 base-pwright，本文件保持向后兼容。
+供 invest 分类下的脚本继续使用原有 import 路径。
 
 用法:
   sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
@@ -13,32 +10,16 @@
 """
 
 import os
-import socket
 import sys
+from pathlib import Path
 
-_PROXY_ENV_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
+# 从 base-pwright 导入核心检测逻辑
+_scripts_dir = Path(__file__).resolve().parents[2] / "base" / "base-pwright" / "scripts"
+if str(_scripts_dir) not in sys.path:
+    sys.path.insert(0, str(_scripts_dir))
+from pwright import detect_proxy  # noqa: E402, F401
+
 _CLASH_PORTS = (7890, 7891, 7897)
-
-
-def detect_proxy() -> str | None:
-    """检测可用代理：优先环境变量，其次默认 Clash 端口。
-
-    检测顺序：
-    1. HTTPS_PROXY / HTTP_PROXY / https_proxy / http_proxy 环境变量
-    2. 本地 Clash 端口扫描 (7890, 7891, 7897)
-    3. 均不可用则返回 None
-    """
-    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or \
-            os.environ.get("https_proxy") or os.environ.get("http_proxy")
-    if proxy:
-        return proxy
-    for port in _CLASH_PORTS:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                return f"http://127.0.0.1:{port}"
-        except (ConnectionRefusedError, OSError):
-            pass
-    return None
 
 
 def setup_proxy_env(override: str | None = None) -> bool:
