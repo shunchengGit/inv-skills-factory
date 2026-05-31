@@ -12,12 +12,21 @@ from __future__ import annotations
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-REPO_URL = "git@github.com:shunchengGit/knowledge.git"
+# 加载项目根 .env
+_env_file = Path(__file__).resolve().parents[4] / ".env"
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        if _line.strip() and not _line.startswith("#") and "=" in _line:
+            _k, _, _v = _line.partition("=")
+            os.environ.setdefault(_k.strip(), _v.strip().strip("\"'"))
+
+REPO_URL = os.environ.get("KNOWLEDGE_REPO_URL", "git@github.com:shunchengGit/knowledge.git")
 REPO_BRANCH = "master"
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 INDEX_FILE = "Index.md"

@@ -25,6 +25,14 @@ from pathlib import Path
 DEFAULT_WITHIN_DAYS = 183
 DEFAULT_MAX_PAGES = 30
 
+# 加载项目根 .env
+_env_file = Path(__file__).resolve().parents[4] / ".env"
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        if _line.strip() and not _line.startswith("#") and "=" in _line:
+            _k, _, _v = _line.partition("=")
+            os.environ.setdefault(_k.strip(), _v.strip().strip("\"'"))
+
 DATE_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 TICKER_PATTERNS = [
     # 带后缀的代码（优先级最高，最精确）：0700.HK / 600276.SS / 300124.SZ / 2330.TW / 005930.KS
@@ -53,7 +61,7 @@ TICKER_PATTERNS = [
 ]
 
 DEFAULT_ROOT = Path.home() / "股票研报"
-REPORT_REMOTE = "git@github.com:shunchengGit/stock-report.git"
+REPORT_REMOTE = os.environ.get("STOCK_REPORT_REPO_URL", "git@github.com:shunchengGit/stock-report.git")
 INDEX_FILE = Path(__file__).resolve().parent.parent / "research-index.json"
 
 
