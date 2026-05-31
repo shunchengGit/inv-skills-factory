@@ -16,7 +16,7 @@ commands:
 |------|------|
 | `/km_init` | 从远程仓库拉取知识库到 `~/.knowledge`，输出 Index 结构化数据 |
 | `/km_import <url>` | 抓取 URL 内容 → Agent 总结分类 → 存储到知识库 |
-| `/km_lint` | 检查 Index.md 死链、孤立文件、URL 可达性 |
+| `/km_lint` | 检查 Index.md 死链、孤立文件、URL 可达性（支持 `--fix` 自动修复） |
 
 ## 脚本
 
@@ -25,7 +25,7 @@ commands:
 | `scripts/km_init.py` | 拉取仓库 + 输出 Index JSON |
 | `scripts/km_import.py fetch <url>` | 抓取 URL 内容（Firecrawl → pwright 兜底） |
 | `scripts/km_import.py store --title T --category C --url U --content MD` | 存储知识条目 + 更新 Index + git 同步 |
-| `scripts/km_lint.py` | 检查知识库完整性 |
+| `scripts/km_lint.py` | 检查知识库完整性（支持 `--fix` 自动修复） |
 
 ## 典型工作流
 
