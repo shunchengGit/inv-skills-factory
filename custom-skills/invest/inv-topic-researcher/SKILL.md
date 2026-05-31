@@ -124,6 +124,16 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 | git push 失败 | 本地已保存，稍后 `km_init` 同步 |
 | 全部失败 | 输出失败原因汇总，不写入空条目 |
 
+### 6. 验证
+
+研究完成后跑一次 lint 确认知识库完整性：
+
+```bash
+uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py
+```
+
+发现问题（死链/孤立文件）及时修复。
+
 ## 输出格式
 
 ```
@@ -147,6 +157,9 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 |-----|------|
 | https://... | timeout |
 | https://... | blocked (Cloudflare) |
+
+## 知识库完整性
+{km_lint 结果摘要}
 ```
 
 ## 依赖
