@@ -6,12 +6,16 @@
   import sys
   from pathlib import Path
   sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
-  from pwright import scrape_url, extract_text, launch_browser, detect_proxy
+  from pwright import scrape_url, extract_text, launch_browser
 """
 
 from __future__ import annotations
 
-import socket
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[4] / "scripts"))
+from proxy import detect_proxy as _detect_proxy  # noqa: E402
 
 _UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -30,26 +34,8 @@ _CONTENT_SELECTORS = [
     ".markdown-body",
 ]
 
-_CLASH_PORTS = (7890, 7891, 7897)
-
 
 # ── 公开接口 ──────────────────────────────────────────────────
-
-
-def detect_proxy() -> str | None:
-    """检测可用代理：优先环境变量，其次本地 Clash 端口扫描。"""
-    import os
-    proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or \
-            os.environ.get("https_proxy") or os.environ.get("http_proxy")
-    if proxy:
-        return proxy
-    for port in _CLASH_PORTS:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                return f"http://127.0.0.1:{port}"
-        except (ConnectionRefusedError, OSError):
-            pass
-    return None
 
 
 def launch_browser(
@@ -64,7 +50,7 @@ def launch_browser(
     from playwright.sync_api import sync_playwright
 
     _ensure_playwright()
-    proxy_url = proxy or detect_proxy()
+    proxy_url = proxy or _detect_proxy()
 
     pw = sync_playwright().start()
     launch_opts: dict = {"headless": True}

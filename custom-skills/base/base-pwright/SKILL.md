@@ -16,7 +16,6 @@ commands: []
 | `scrape_url(url)` | 一站式抓取 → Markdown |
 | `extract_text(url)` | 一站式抓取 → 纯文本 |
 | `launch_browser()` | 启动浏览器，返回 (pw, browser, context, page) |
-| `detect_proxy()` | 检测本地 Clash 代理 |
 
 ## 在脚本中使用
 

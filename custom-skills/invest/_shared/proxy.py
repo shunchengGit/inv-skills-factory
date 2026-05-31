@@ -1,6 +1,6 @@
 """统一代理检测与管理模块（重导出层）。
 
-核心逻辑已迁移至 base-pwright，本文件保持向后兼容。
+核心逻辑已迁移至 scripts/proxy.py，本文件保持向后兼容。
 供 invest 分类下的脚本继续使用原有 import 路径。
 
 用法:
@@ -13,13 +13,11 @@ import os
 import sys
 from pathlib import Path
 
-# 从 base-pwright 导入核心检测逻辑
-_scripts_dir = Path(__file__).resolve().parents[2] / "base" / "base-pwright" / "scripts"
+# 从 scripts/proxy.py 导入核心检测逻辑
+_scripts_dir = Path(__file__).resolve().parents[3] / "scripts"
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
-from pwright import detect_proxy  # noqa: E402, F401
-
-_CLASH_PORTS = (7890, 7891, 7897)
+from proxy import detect_proxy  # noqa: E402, F401
 
 
 def setup_proxy_env(override: str | None = None) -> bool:
