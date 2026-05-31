@@ -21,6 +21,9 @@ import os
 import shutil
 from pathlib import Path
 
+from dotenv import load as _load_dotenv
+_load_dotenv()
+
 STORE_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = STORE_ROOT / "custom-skills"
 HOOKS_SRC = STORE_ROOT / "custom-hooks"
@@ -234,7 +237,7 @@ def list_profiles(config: dict):
 
 def main():
     parser = argparse.ArgumentParser(description="Sync skills & hooks to agents (symlink)")
-    parser.add_argument("--profile", required=True, help="profile name (required)")
+    parser.add_argument("--profile", default=os.environ.get("SYNC_PROFILE"), help="profile name (default: $SYNC_PROFILE)")
     parser.add_argument("--agent", help="only sync this agent")
     parser.add_argument("--dry-run", action="store_true", help="preview only")
     parser.add_argument("--hooks-only", action="store_true")
@@ -247,6 +250,11 @@ def main():
 
     if args.list:
         list_profiles(config)
+        return
+
+    if not args.profile:
+        print("请指定 --profile 或在 .env 中设置 SYNC_PROFILE")
+        print("available:", ", ".join(sorted(config["profiles"])))
         return
 
     profile = config["profiles"].get(args.profile)
