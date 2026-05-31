@@ -25,60 +25,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from proxy import detect_proxy
+from knowledge import parse_index
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 INDEX_DIR = "index"
-
-
-def _migrate_if_needed() -> None:
-    """旧 Index.md → index/*.md 自动迁移。"""
-    old_index = KNOWLEDGE_DIR / "Index.md"
-    index_dir = KNOWLEDGE_DIR / INDEX_DIR
-    if not old_index.exists() or index_dir.exists():
-        return
-
-    index_dir.mkdir(parents=True, exist_ok=True)
-    current_file = None
-
-    for line in old_index.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^##\s+(.+)", line)
-        if m:
-            current_file = index_dir / f"{m.group(1).strip()}.md"
-            continue
-        if current_file and line.startswith("- "):
-            with open(current_file, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-
-    old_index.rename(old_index.with_suffix(".md.bak"))
-
-
-def parse_index() -> tuple[dict[str, list[dict]], set[str]]:
-    """解析 index/*.md，返回 (categories, indexed_paths)。"""
-    _migrate_if_needed()
-    index_dir = KNOWLEDGE_DIR / INDEX_DIR
-    if not index_dir.exists():
-        return {}, set()
-
-    categories: dict[str, list[dict]] = {}
-    indexed_paths: set[str] = set()
-
-    for f in sorted(index_dir.glob("*.md")):
-        category = f.stem
-        entries: list[dict] = []
-        for line in f.read_text(encoding="utf-8").splitlines():
-            m = re.match(r"^-\s+\[(.+?)\]\((.+?)\)\s*[—–-]\s*(.+)", line)
-            if m:
-                entry = {
-                    "title": m.group(1).strip(),
-                    "path": m.group(2).strip(),
-                    "url": m.group(3).strip(),
-                }
-                entries.append(entry)
-                indexed_paths.add(entry["path"])
-        if entries:
-            categories[category] = entries
-
-    return categories, indexed_paths
 
 
 def check_dead_links(categories: dict[str, list[dict]]) -> list[dict]:
@@ -198,7 +148,7 @@ def cmd_lint(skip_url_check: bool = False) -> dict:
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
         }
 
-    categories, indexed_paths = parse_index()
+    categories, indexed_paths = parse_index(KNOWLEDGE_DIR, INDEX_DIR)
     total = sum(len(e) for e in categories.values())
 
     dead_links = check_dead_links(categories)
@@ -217,12 +167,105 @@ def cmd_lint(skip_url_check: bool = False) -> dict:
     }
 
 
+def fix_dead_links(dead_links: list[dict]) -> list[dict]:
+    """自动修复死链：从 Index 中移除引用但文件不存在的条目。"""
+    fixed = []
+    index_dir = KNOWLEDGE_DIR / INDEX_DIR
+    if not index_dir.exists():
+        return fixed
+
+    for item in dead_links:
+        path = item["path"]
+        title = item["title"]
+        for idx_file in index_dir.glob("*.md"):
+            content = idx_file.read_text(encoding="utf-8")
+            new_lines = []
+            removed = False
+            for line in content.splitlines():
+                if path in line and f"[{title}]" in line:
+                    removed = True
+                    continue
+                new_lines.append(line)
+            if removed:
+                idx_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+                fixed.append({"path": path, "title": title, "action": "removed_from_index"})
+    return fixed
+
+
+def fix_orphans(orphans: list[dict]) -> list[dict]:
+    """自动修复孤立文件：将未被 Index 引用的文件自动加入对应分类的 Index。"""
+    fixed = []
+    index_dir = KNOWLEDGE_DIR / INDEX_DIR
+    if not index_dir.exists():
+        return fixed
+
+    for item in orphans:
+        path = item["path"]
+        title = item["title"]
+        # 从路径推断分类（如 investing/xxx.md → investing）
+        category = path.split("/")[0] if "/" in path else "_unsorted"
+        idx_file = index_dir / f"{category}.md"
+        if not idx_file.exists():
+            idx_file.write_text(f"## {category}\n", encoding="utf-8")
+
+        # 读取现有内容，避免重复添加
+        content = idx_file.read_text(encoding="utf-8")
+        if path in content:
+            continue
+
+        # 追加到 Index
+        with open(idx_file, "a", encoding="utf-8") as f:
+            f.write(f"- [{title}]({path}) — local\n")
+        fixed.append({"path": path, "title": title, "action": "added_to_index", "category": category})
+    return fixed
+
+
+def fix_missing_urls(missing_urls: list[dict]) -> list[dict]:
+    """自动修复缺失 URL：在 frontmatter 中添加 url: null 标记。"""
+    fixed = []
+    for item in missing_urls:
+        path = item["path"]
+        file_path = KNOWLEDGE_DIR / path
+        if not file_path.exists():
+            continue
+        content = file_path.read_text(encoding="utf-8")
+        if "url:" in content:
+            continue
+        # 在 frontmatter 中插入 url: null
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                fm = parts[1].strip()
+                body = parts[2]
+                new_fm = fm + "\nurl: null"
+                new_content = f"---\n{new_fm}\n---{body}"
+                file_path.write_text(new_content, encoding="utf-8")
+                fixed.append({"path": path, "action": "added_url_null"})
+    return fixed
+
+
 def main():
     parser = argparse.ArgumentParser(description="知识库完整性检查")
     parser.add_argument("--skip-url-check", action="store_true", help="跳过 URL 可达性检查")
+    parser.add_argument("--fix", action="store_true", help="自动修复发现的问题（死链、孤立文件、缺失 URL）")
     args = parser.parse_args()
 
     result = cmd_lint(skip_url_check=args.skip_url_check)
+
+    if args.fix:
+        fix_actions = {}
+        if result["dead_links"]:
+            fix_actions["dead_links_fixed"] = fix_dead_links(result["dead_links"])
+        if result["orphans"]:
+            fix_actions["orphans_fixed"] = fix_orphans(result["orphans"])
+        if result["missing_urls"]:
+            fix_actions["missing_urls_fixed"] = fix_missing_urls(result["missing_urls"])
+
+        # 重新 lint 确认修复结果
+        if fix_actions:
+            result = cmd_lint(skip_url_check=args.skip_url_check)
+            result["fix_actions"] = fix_actions
+
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

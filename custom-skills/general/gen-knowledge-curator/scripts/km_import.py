@@ -12,7 +12,7 @@ from __future__ import annotations
 
 两个子命令：
   fetch  - 抓取 URL 内容（Firecrawl → pwright 兜底）
-  store  - 存储知识条目到 ~/.knowledge + 更新 Index.md + git 同步
+  store  - 存储知识条目到 ~/.knowledge + 更新 index/{category}.md + git 同步
 
 用法:
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py fetch <url>
@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from pwright import scrape_url as pwright_scrape_url
 from git import sync as _git_sync
+from knowledge import slugify, build_entry
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 REPO_BRANCH = "master"
@@ -57,7 +58,6 @@ def _firecrawl_scrape(url: str) -> dict | None:
         title = data.get("metadata", {}).get("title", "")
         if not content or len(content) < 500:
             return None
-        # 检测 Cloudflare/反爬拦截页
         if "请稍候" in content or "Just a moment" in content or "Checking your browser" in content:
             return None
         return {"title": title, "content": content}
@@ -79,7 +79,6 @@ def _pwright_scrape(url: str) -> dict | None:
 
 def cmd_fetch(url: str) -> dict:
     """抓取 URL 内容，Firecrawl 优先，pwright 兜底。"""
-    # 1. Firecrawl
     result = _firecrawl_scrape(url)
     if result:
         return {
@@ -90,7 +89,6 @@ def cmd_fetch(url: str) -> dict:
             "url": url,
         }
 
-    # 2. pwright 兜底
     result = _pwright_scrape(url)
     if result:
         return {
@@ -111,31 +109,6 @@ def cmd_fetch(url: str) -> dict:
 # ─── store 子命令 ─────────────────────────────────────────
 
 
-def _slugify(title: str) -> str:
-    """标题 → kebab-case slug。"""
-    # 保留中文、字母、数字；其他替换为 -
-    s = re.sub(r"[^\w一-鿿]+", "-", title.strip())
-    s = s.strip("-")
-    # 中文不做转换，直接保留；过长截断
-    if len(s) > 80:
-        s = s[:80].rstrip("-")
-    return s or "untitled"
-
-
-def _build_entry_md(title: str, url: str, category: str, content: str) -> str:
-    """构建知识条目 md 内容。"""
-    today = date.today().isoformat()
-    return (
-        f"---\n"
-        f"url: {url}\n"
-        f"imported: {today}\n"
-        f"category: {category}\n"
-        f"---\n\n"
-        f"# {title}\n\n"
-        f"{content}\n"
-    )
-
-
 def _update_index(category: str, title: str, rel_path: str, url: str) -> None:
     """追加条目到 index/{category}.md。"""
     index_dir = KNOWLEDGE_DIR / INDEX_DIR
@@ -147,7 +120,7 @@ def _update_index(category: str, title: str, rel_path: str, url: str) -> None:
 
 
 def cmd_store(title: str, category: str, url: str, content: str) -> dict:
-    """存储知识条目到 ~/.knowledge，更新 Index.md，git 同步。"""
+    """存储知识条目到 ~/.knowledge，更新 index，git 同步。"""
     if not KNOWLEDGE_DIR.exists():
         return {
             "success": False,
@@ -155,21 +128,23 @@ def cmd_store(title: str, category: str, url: str, content: str) -> dict:
         }
 
     category = category or "_unsorted"
-    slug = _slugify(title)
+    slug = slugify(title)
+    today = date.today().isoformat()
     rel_path = f"{category}/{slug}.md"
     file_path = KNOWLEDGE_DIR / rel_path
 
-    # 创建目录
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    # 同名文件加日期后缀避免覆盖
+    if file_path.exists():
+        slug = f"{slug}-{today}"
+        rel_path = f"{category}/{slug}.md"
+        file_path = KNOWLEDGE_DIR / rel_path
 
-    # 写入 md 文件
-    entry_md = _build_entry_md(title, url, category, content)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    entry_md = build_entry(title, url, category, content)
     file_path.write_text(entry_md, encoding="utf-8")
 
-    # 更新 Index.md
     _update_index(category, title, rel_path, url)
 
-    # git 同步
     commit_msg = f"import: {title} → {category}/"
     git_result = _git_sync(KNOWLEDGE_DIR, commit_msg, branch=REPO_BRANCH)
 
