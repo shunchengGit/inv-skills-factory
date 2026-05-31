@@ -36,6 +36,11 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Optional
 
+# 自动加载项目根 .env
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
+from env import load_dotenv
+load_dotenv()
+
 DEFAULT_SMTP_HOST = "smtp.exmail.qq.com"
 DEFAULT_SMTP_PORT = 465
 DEFAULT_IMAP_HOST = "imap.exmail.qq.com"
