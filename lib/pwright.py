@@ -38,8 +38,9 @@ def launch_browser(
     proxy: str | None = None,
     user_agent: str | None = None,
     viewport: dict | None = None,
+    headless: bool = True,
 ):
-    """启动 Playwright 无头浏览器，返回 (playwright, browser, context, page)。
+    """启动 Playwright 浏览器，返回 (playwright, browser, context, page)。
 
     caller 负责在完成后调用 browser.close() 和 pw.stop()。
     """
@@ -49,7 +50,7 @@ def launch_browser(
     proxy_url = proxy or _detect_proxy()
 
     pw = sync_playwright().start()
-    launch_opts: dict = {"headless": True}
+    launch_opts: dict = {"headless": headless}
     if proxy_url:
         launch_opts["proxy"] = {"server": proxy_url}
 
