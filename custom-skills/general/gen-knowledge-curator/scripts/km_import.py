@@ -17,6 +17,8 @@ from __future__ import annotations
 用法:
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py fetch <url>
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py store --title "标题" --category investing --url https://... --content <md>
+  # 从文件导入（推荐，避免管道截断问题）：
+  uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py store --title "标题" --category investing --url https://... --content-file /tmp/article.md
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py store --title "标题" --url https://... --content <md>  # 无 category → _unsorted
 """
 
@@ -121,12 +123,26 @@ def _update_index(category: str, title: str, rel_path: str, url: str) -> None:
         f.write(entry_line)
 
 
-def cmd_store(title: str, category: str, url: str, content: str) -> dict:
+def cmd_store(title: str, category: str, url: str, content: str, min_content_length: int = 100) -> dict:
     """存储知识条目到 ~/.knowledge，更新 index，git 同步。"""
     if not KNOWLEDGE_DIR.exists():
         return {
             "success": False,
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
+        }
+
+    # 内容验证
+    content = content.strip()
+    if not content:
+        return {
+            "success": False,
+            "error": "content 为空，请检查输入内容",
+        }
+    
+    if len(content) < min_content_length:
+        return {
+            "success": False,
+            "error": f"content 过短（{len(content)} 字符，最低要求 {min_content_length} 字符），疑似内容被截断，请检查输入",
         }
 
     category = category or "_unsorted"
@@ -172,14 +188,28 @@ def main():
     p_store.add_argument("--title", required=True)
     p_store.add_argument("--category", default="")
     p_store.add_argument("--url", required=True)
-    p_store.add_argument("--content", required=True, help="Markdown 正文内容")
+    p_store.add_argument("--content", default="", help="Markdown 正文内容。直接传入内容，或使用 '-' 从 stdin 读取")
+    p_store.add_argument("--content-file", help="从文件读取 Markdown 内容（与 --content 互斥）。示例: --content-file /tmp/article.md")
+    p_store.add_argument("--min-content-length", type=int, default=100, help="内容最小长度校验（默认 100 字符）")
 
     args = parser.parse_args()
 
     if args.command == "fetch":
         result = cmd_fetch(args.url)
     elif args.command == "store":
-        result = cmd_store(args.title, args.category, args.url, args.content)
+        # 优先从文件读取内容
+        content = args.content
+        if hasattr(args, 'content_file') and args.content_file:
+            content = Path(args.content_file).read_text(encoding="utf-8")
+        elif content == "-":
+            # 从 stdin 读取
+            import sys
+            content = sys.stdin.read()
+        
+        # 获取最小长度校验值
+        min_length = getattr(args, 'min_content_length', 100)
+        
+        result = cmd_store(args.title, args.category, args.url, content, min_content_length=min_length)
     else:
         parser.print_help()
         sys.exit(1)

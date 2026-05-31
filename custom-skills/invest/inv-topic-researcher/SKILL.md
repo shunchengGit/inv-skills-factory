@@ -98,10 +98,13 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 │            industry-trends / macro / valuation   │
 │    - 标题：简洁中文标题                         │
 ├─ 存储 ─────────────────────────────────────────┤
-│ 4. 立即入库：                                  │
-│    uv run .../km_import.py store \              │
-│      --title "..." --category "..." \           │
-│      --url "..." --content "..."                │
+│ 4. 立即入库（推荐 --content-file 方式）：       │
+│    # 先写入临时文件                             │
+│    write_file /tmp/entry.md "内容..."          │
+│    # 再用 --content-file 导入（避免管道截断）   │
+│    uv run .../km_import.py store \             │
+│      --title "..." --category "..." \          │
+│      --url "..." --content-file /tmp/entry.md  │
 │    → git.sync() 自动 push                      │
 └────────────────────────────────────────────────┘
 ```
@@ -131,6 +134,7 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 | 超时（30s） | 重试 1 次，仍失败则标记 failed |
 | 反爬拦截 | 跳过，标记 blocked（Reuters、Macrotrends 等已知拦截站） |
 | 内容过短 | 跳过，标记 low_content |
+| 内容截断（km_import.py） | 改用 `--content-file` 参数或 `write_file` 直接写入文件 |
 | git push 失败 | 本地已保存，稍后 `km_init` 同步 |
 | 全部失败 | 输出失败原因汇总，不写入空条目 |
 

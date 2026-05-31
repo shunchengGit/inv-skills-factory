@@ -25,6 +25,7 @@ commands:
 | `scripts/km_init.py` | 拉取仓库 + 输出 Index JSON |
 | `scripts/km_import.py fetch <url>` | 抓取 URL 内容（Firecrawl → pwright 兜底） |
 | `scripts/km_import.py store --title T --category C --url U --content MD` | 存储知识条目 + 更新 Index + git 同步 |
+| `scripts/km_import.py store --title T --category C --url U --content-file F` | 从文件读取内容并存储（推荐，避免管道截断） |
 | `scripts/km_lint.py` | 检查知识库完整性（支持 `--fix` 自动修复） |
 
 ## 典型工作流
@@ -34,6 +35,8 @@ commands:
 2. /km_import https://example.com/article ← 抓取内容
 3. Agent 总结 + 选分类（对话中完成）
 4. km_import.py store --title ... --category ... ← 存储并同步
+   # 推荐用法：先 write_file 写入 /tmp/xxx.md，再用 --content-file 参数导入
+   # 备选：直接传入 --content 参数（注意管道截断风险）
 5. /km_lint                              ← 定期检查完整性
 ```
 

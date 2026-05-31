@@ -97,6 +97,36 @@ def scrape_firecrawl(url: str) -> dict | None:
         return None
 
 
+def scrape_firecrawl_batch(urls: list[str]) -> list[dict | None]:
+    """批量 Firecrawl 抓取，返回 [{title, content, source} 或 None, ...]。"""
+    import requests
+    results = []
+    for url in urls:
+        try:
+            r = requests.post(
+                FIRECRAWL_URL,
+                json={"url": url},
+                headers={"User-Agent": UA},
+                timeout=30,
+            )
+            if r.status_code != 200:
+                results.append(None)
+                continue
+            data = r.json().get("data", {})
+            content = data.get("markdown") or data.get("content", "")
+            title = data.get("metadata", {}).get("title", "")
+            if not content or len(content) < 500:
+                results.append(None)
+                continue
+            if any(kw in content for kw in ("Just a moment", "Checking your browser", "请稍候")):
+                results.append(None)
+                continue
+            results.append({"title": title, "content": content, "source": "firecrawl"})
+        except Exception:
+            results.append(None)
+    return results
+
+
 def scrape_pwright(url: str) -> dict | None:
     """Playwright 兜底抓取，返回 {title, content, source} 或 None。"""
     import subprocess
@@ -158,22 +188,37 @@ def main():
         print(json.dumps({"status": "no_new_content", "total": len(candidates), "skipped": skipped}))
         return
 
-    # 3. 逐条抓取
+    # 3. 逐条抓取（支持批量并发）
     results = []
-    for i, item in enumerate(new_items):
-        url = item["url"]
-        print(f"# [{i+1}/{len(new_items)}] 抓取: {url[:80]}", file=sys.stderr)
-        scraped = scrape_url(url)
-
-        if scraped:
-            scraped["url"] = url
-            scraped["status"] = "success"
-            results.append(scraped)
-            print(f"#   ✓ {len(scraped['content'])} chars ({scraped['source']})", file=sys.stderr)
-        else:
-            results.append({"url": url, "status": "failed", "reason": "scrape_failed"})
-            print(f"#   ✗ 抓取失败", file=sys.stderr)
-
+    batch_size = 3  # 并发数
+    for i in range(0, len(new_items), batch_size):
+        batch = new_items[i:i+batch_size]
+        print(f"# [{i+1}/{len(new_items)}] 批量抓取 {len(batch)} 个 URL", file=sys.stderr)
+        
+        # 先批量尝试 Firecrawl
+        urls = [item["url"] for item in batch]
+        batch_results = scrape_firecrawl_batch(urls)
+        
+        for j, (item, scraped) in enumerate(zip(batch, batch_results)):
+            url = item["url"]
+            if scraped:
+                scraped["url"] = url
+                scraped["status"] = "success"
+                results.append(scraped)
+                print(f"#   ✓ {len(scraped['content'])} chars ({scraped['source']})", file=sys.stderr)
+            else:
+                # Firecrawl 失败，降级到 pwright
+                print(f"#   → Firecrawl 失败，降级 pwright: {url[:80]}", file=sys.stderr)
+                scraped = scrape_pwright(url)
+                if scraped:
+                    scraped["url"] = url
+                    scraped["status"] = "success"
+                    results.append(scraped)
+                    print(f"#   ✓ {len(scraped['content'])} chars ({scraped['source']})", file=sys.stderr)
+                else:
+                    results.append({"url": url, "status": "failed", "reason": "scrape_failed"})
+                    print(f"#   ✗ 抓取失败", file=sys.stderr)
+        
         time.sleep(1)  # 礼貌间隔
 
     imported = sum(1 for r in results if r["status"] == "success")
