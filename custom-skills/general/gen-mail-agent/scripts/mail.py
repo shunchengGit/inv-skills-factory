@@ -191,14 +191,24 @@ def cmd_send(args):
         print(json.dumps({"success": False, "message": "没有有效的收件人地址"}), file=sys.stderr)
         sys.exit(1)
 
+    body = args.body
+    body_html = args.body_html
+    if args.body_file:
+        import pathlib
+        body_content = pathlib.Path(args.body_file).read_text(encoding='utf-8')
+        if body_html or (body_content.strip().startswith('<!') or body_content.strip().startswith('<')):
+            body_html = body_content
+        else:
+            body = body_content
+
     msg = build_message(
         sender=user,
         to=to,
         cc=cc,
         bcc=bcc,
         subject=args.subject,
-        body=args.body,
-        body_html=args.body_html,
+        body=body,
+        body_html=body_html,
         attachments=args.attachments,
     )
 
@@ -396,14 +406,24 @@ def cmd_draft(args):
     cc = parse_recipients(args.cc)
     bcc = parse_recipients(args.bcc)
 
+    body = args.body
+    body_html = args.body_html
+    if args.body_file:
+        import pathlib
+        body_content = pathlib.Path(args.body_file).read_text(encoding='utf-8')
+        if body_html or (body_content.strip().startswith('<!') or body_content.strip().startswith('<')):
+            body_html = body_content
+        else:
+            body = body_content
+
     msg = build_message(
         sender=user,
         to=to,
         cc=cc,
         bcc=bcc,
         subject=args.subject or "(无主题)",
-        body=args.body,
-        body_html=args.body_html,
+        body=body,
+        body_html=body_html,
         attachments=args.attachments or [],
     )
 
@@ -540,6 +560,7 @@ def main():
     p.add_argument("--subject", required=True, help="邮件主题")
     p.add_argument("--body", help="纯文本正文")
     p.add_argument("--body-html", help="HTML 正文")
+    p.add_argument("--body-file", help="从文件读取正文内容")
     p.add_argument("--attachments", nargs="*", default=[], help="附件路径")
     p.add_argument("--smtp-host", default=DEFAULT_SMTP_HOST)
     p.add_argument("--smtp-port", type=int, default=DEFAULT_SMTP_PORT)
@@ -570,6 +591,7 @@ def main():
     p.add_argument("--subject", help="主题")
     p.add_argument("--body", help="纯文本正文")
     p.add_argument("--body-html", help="HTML 正文")
+    p.add_argument("--body-file", help="从文件读取正文内容")
     p.add_argument("--attachments", nargs="*", default=[], help="附件路径")
     p.add_argument("--folder", default="Drafts")
     p.add_argument("--replace", action="store_true", help="替换已有草稿")
@@ -611,8 +633,8 @@ def main():
 
     if args.command == "send":
         # send 需要额外检查
-        if not args.body and not args.body_html:
-            print(json.dumps({"success": False, "message": "必须提供 --body 或 --body-html"}), file=sys.stderr)
+        if not args.body and not args.body_html and not args.body_file:
+            print(json.dumps({"success": False, "message": "必须提供 --body 或 --body-html 或 --body-file"}), file=sys.stderr)
             sys.exit(1)
         cmd_send(args)
     elif args.command == "list":
