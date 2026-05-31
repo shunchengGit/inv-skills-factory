@@ -104,7 +104,10 @@ li { margin-bottom: 4px; }
 
 **exmail 的 send_email 只能发送不能存草稿。必须用 IMAP APPEND 方式。**
 
+收件人信息从 `.env` 文件读取（`WEEKLY_REPORT_FROM`、`WEEKLY_REPORT_TO`、`WEEKLY_REPORT_CC`）。
+
 ```python
+import os
 import imaplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -113,9 +116,9 @@ imap = imaplib.IMAP4_SSL("imap.exmail.qq.com", 993)
 imap.login("<发件邮箱>", "<授权码>")
 
 msg = MIMEMultipart("alternative")
-msg["From"] = "程舜 <chengs@tuwan.com>"
-msg["To"] = "hhh@tuwan.com"          # 何总
-msg["Cc"] = "qupq@tuwan.com, wangfz@tuwan.com"
+msg["From"] = os.environ["WEEKLY_REPORT_FROM"]   # 从 .env 读取
+msg["To"] = os.environ["WEEKLY_REPORT_TO"]       # 从 .env 读取
+msg["Cc"] = os.environ.get("WEEKLY_REPORT_CC", "")  # 从 .env 读取
 msg["Subject"] = "程舜 X.XX 周报"
 
 msg.attach(MIMEText(text_content, "plain", "utf-8"))
@@ -139,7 +142,11 @@ imap.logout()
 
 ## 收件人信息
 
-从 MEMORY.md 中读取常用联系人邮箱。如记忆中没有，可通过 `mcp__exmail__get_recent_emails` 查找历史邮件确认邮箱地址。
+收件人邮箱配置在项目根目录的 `.env` 文件中：
+
+- `WEEKLY_REPORT_FROM` — 发件人
+- `WEEKLY_REPORT_TO` — 主收件人
+- `WEEKLY_REPORT_CC` — 抄送人（逗号分隔）
 
 **注意**：公司邮箱格式不统一，不能按规则推测，必须从记忆或邮件记录中确认。
 
