@@ -12,7 +12,7 @@ Skills 管理和开发仓库，通过软链接将技能和 hooks 按场景（pro
 
 | 分类 | 前缀 | 示例 |
 |------|------|------|
-| base | `base-` | base-skill-loader, base-pwright |
+| base | `base-` | base-skill-loader |
 | general | `gen-` | gen-daily-planner |
 | invest | `inv-` | inv-stock-data |
 
@@ -22,7 +22,6 @@ Skills 管理和开发仓库，通过软链接将技能和 hooks 按场景（pro
 custom-skills/                  # 技能源码（按分类隔离）
   base/                         # 基础技能（所有 profile 必含）
     base-skill-loader/          #   技能使用指南
-    base-pwright/               #   Playwright 抓取基础模块
   general/                      # 通用技能
     gen-daily-planner/          #   日程安排
     gen-dingtalk/               #   钉钉集成（底层能力）
@@ -50,7 +49,10 @@ custom-hooks/                   # Hooks 源码（按 agent 隔离）
     base-skill-loader/          #   技能加载 hook
 
 scripts/
-  sync.py                       # 同步脚本（软链接模式）
+  dotenv.py                     # .env 加载
+  proxy.py                      # 代理检测
+  pwright.py                    # Playwright 抓取
+  sync.py                       # 部署同步
 
 deploy.json                     # 部署配置：profiles + agents
 
@@ -94,12 +96,6 @@ python scripts/sync.py --list                  # 列出可用 profiles
 ## 技能依赖关系
 
 ```
-base-pwright（Playwright 抓取基础模块）────────────┐
-  ↑                                                │
-  ├── inv-web-crawler（网页抓取）                   │
-  ├── inv-fuyao-indicators（乘联会销量）            │
-  └── gen-knowledge-curator（知识导入 fallback）    │
-
 gen-dingtalk（钉钉底层能力）────────────────────────┐
   ↑                                                │
   ├── gen-dingtalk-personal-daily（个人工作日志）    │

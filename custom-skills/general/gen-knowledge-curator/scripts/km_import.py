@@ -28,7 +28,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "base" / "base-pwright" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
 from pwright import scrape_url as pwright_scrape_url
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
