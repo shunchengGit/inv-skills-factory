@@ -54,11 +54,16 @@ SearXNG 不可用时（Connection refused），提示用户提供 URL，用 `/re
 
 ### 2. 去重
 
+先拉取知识库，从 Index 中提取所有已导入 URL，避免重复入库：
+
 ```bash
 uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
+# 输出 JSON：{"success": true, "index": {"categories": {"investing": [{"url": "..."}, ...]}}}
 ```
 
-从 Index 输出中提取所有已导入 URL，跳过重复。
+从输出的 `index.categories` 中遍历所有条目，收集 `url` 字段 → 得到已导入 URL 集合。
+
+用这个集合过滤搜索结果，只对新 URL 进入步骤 3。结果全为重复时直接结束，输出"无新内容"。
 
 ### 3. 逐条处理（抓取 → 分析 → 存储，一条一条来）
 
