@@ -104,7 +104,7 @@ li { margin-bottom: 4px; }
 
 **exmail 的 send_email 只能发送不能存草稿。必须用 IMAP APPEND 方式。**
 
-收件人信息从 `.env` 文件读取（`WEEKLY_REPORT_FROM`、`WEEKLY_REPORT_TO`、`WEEKLY_REPORT_CC`）。
+收件人信息从 `.env` 文件读取（`TL_MAIL_USER` 为发件人、`WEEKLY_REPORT_TO`、`WEEKLY_REPORT_CC`）。
 
 ```python
 import os
@@ -116,7 +116,7 @@ imap = imaplib.IMAP4_SSL("imap.exmail.qq.com", 993)
 imap.login("<发件邮箱>", "<授权码>")
 
 msg = MIMEMultipart("alternative")
-msg["From"] = os.environ["WEEKLY_REPORT_FROM"]   # 从 .env 读取
+msg["From"] = f"程舜 <{os.environ['TL_MAIL_USER']}>"  # 发件人 = 展示名 + TL_MAIL_USER
 msg["To"] = os.environ["WEEKLY_REPORT_TO"]       # 从 .env 读取
 msg["Cc"] = os.environ.get("WEEKLY_REPORT_CC", "")  # 从 .env 读取
 msg["Subject"] = "程舜 X.XX 周报"
@@ -144,7 +144,7 @@ imap.logout()
 
 收件人邮箱配置在项目根目录的 `.env` 文件中：
 
-- `WEEKLY_REPORT_FROM` — 发件人
+- `TL_MAIL_USER` — 发件人邮箱（展示名硬编码为"程舜"）
 - `WEEKLY_REPORT_TO` — 主收件人
 - `WEEKLY_REPORT_CC` — 抄送人（逗号分隔）
 
