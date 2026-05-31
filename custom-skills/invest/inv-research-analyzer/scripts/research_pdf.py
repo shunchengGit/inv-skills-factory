@@ -28,6 +28,7 @@ DEFAULT_MAX_PAGES = 30
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
+from git import is_repo, sync as _git_sync
 
 DATE_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 TICKER_PATTERNS = [
@@ -784,32 +785,18 @@ def _collect_file_list(root: Path) -> list[dict]:
 
 def _git_commit_and_push(root: Path) -> None:
     """在研报库目录执行 git add -A && git commit && git push。"""
-    import subprocess as sp
-
-    git_dir = root / ".git"
-    if not git_dir.exists():
+    if not is_repo(root):
         print("# 研报库不是 git 仓库，跳过提交", file=sys.stderr)
         return
 
-    # 检查是否有变更
-    result = sp.run(["git", "-C", str(root), "status", "--porcelain"],
-                    capture_output=True, text=True)
-    if not result.stdout.strip():
-        print("# 无变更，跳过提交")
-        return
-
     today = date.today().isoformat()
-    cmds = [
-        (["git", "-C", str(root), "add", "-A"], "git add"),
-        (["git", "-C", str(root), "commit", "-m", f"chore: 归档研报 {today}"], "git commit"),
-        (["git", "-C", str(root), "push"], "git push"),
-    ]
-    for cmd, label in cmds:
-        r = sp.run(cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            print(f"# ⚠ {label} 失败: {r.stderr.strip()[:200]}", file=sys.stderr)
-            return
-    print(f"# git commit & push 完成 ({today})")
+    result = _git_sync(root, f"chore: 归档研报 {today}")
+    if result["success"]:
+        print(f"# git commit & push 完成 ({today})")
+    elif result.get("push_failed"):
+        print(f"# ⚠ push 失败: {result.get('push_error', '')}", file=sys.stderr)
+    else:
+        print(f"# ⚠ git 失败: {result.get('error', '')}", file=sys.stderr)
 
 
 def build_parser() -> argparse.ArgumentParser:

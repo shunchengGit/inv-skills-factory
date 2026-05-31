@@ -23,13 +23,13 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
 from pwright import scrape_url as pwright_scrape_url
+from git import sync as _git_sync
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 REPO_BRANCH = "master"
@@ -182,46 +182,6 @@ def _update_index(category: str, title: str, rel_path: str, url: str) -> None:
     index_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _git_sync(title: str, category: str) -> dict:
-    """在 ~/.knowledge 中执行 git add + commit + push。"""
-    r_add = subprocess.run(
-        ["git", "add", "-A"],
-        cwd=KNOWLEDGE_DIR,
-        capture_output=True,
-        text=True,
-    )
-    if r_add.returncode != 0:
-        return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
-
-    commit_msg = f"import: {title} → {category}/"
-    r_commit = subprocess.run(
-        ["git", "commit", "-m", commit_msg],
-        cwd=KNOWLEDGE_DIR,
-        capture_output=True,
-        text=True,
-    )
-    # nothing to commit 是正常情况
-    if r_commit.returncode != 0 and "nothing to commit" not in r_commit.stdout:
-        return {"success": False, "step": "commit", "error": r_commit.stderr.strip()[:300]}
-
-    r_push = subprocess.run(
-        ["git", "push", "origin", REPO_BRANCH],
-        cwd=KNOWLEDGE_DIR,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    if r_push.returncode != 0:
-        return {
-            "success": True,
-            "push_failed": True,
-            "hint": "push 失败，本地已保存。请稍后手动执行: git -C ~/.knowledge push",
-            "push_error": r_push.stderr.strip()[:300],
-        }
-
-    return {"success": True, "push_failed": False}
-
-
 def cmd_store(title: str, category: str, url: str, content: str) -> dict:
     """存储知识条目到 ~/.knowledge，更新 Index.md，git 同步。"""
     if not KNOWLEDGE_DIR.exists():
@@ -246,7 +206,8 @@ def cmd_store(title: str, category: str, url: str, content: str) -> dict:
     _update_index(category, title, rel_path, url)
 
     # git 同步
-    git_result = _git_sync(title, category)
+    commit_msg = f"import: {title} → {category}/"
+    git_result = _git_sync(KNOWLEDGE_DIR, commit_msg, branch=REPO_BRANCH)
 
     return {
         "success": True,

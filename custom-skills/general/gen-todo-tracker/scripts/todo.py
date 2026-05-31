@@ -21,7 +21,6 @@ import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
+from git import run as _run_git, is_repo, same_remote, sync as _git_sync
 
 REPO_URL = os.environ.get("TODO_REPO_URL", "git@github.com:shunchengGit/todo.git")
 TODO_DIR = Path.home() / ".todo"
@@ -129,34 +129,13 @@ def _list_todo_md() -> dict[str, list[dict]]:
 # ─── git 工具 ─────────────────────────────────────────────
 
 
-def _run_git(args: list[str], cwd: Path | None = None, timeout: int = 60) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git"] + args,
-        cwd=cwd or TODO_DIR,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-
-
-def _is_git_repo(path: Path) -> bool:
-    return (path / ".git").exists()
-
-
-def _same_remote(path: Path) -> bool:
-    r = _run_git(["remote", "get-url", "origin"], cwd=path)
-    if r.returncode != 0:
-        return False
-    return r.stdout.strip() == REPO_URL
-
-
 def _atomic_git_op(write_fn, commit_msg: str, max_retries: int = 2) -> dict:
     """安全 git 写入：pull --rebase → write → add → commit → push，失败重试。"""
     for attempt in range(max_retries + 1):
-        r = _run_git(["pull", "--rebase"])
+        r = _run_git(["pull", "--rebase"], cwd=TODO_DIR)
         if r.returncode != 0:
             if "conflict" in r.stderr.lower():
-                _run_git(["rebase", "--abort"])
+                _run_git(["rebase", "--abort"], cwd=TODO_DIR)
                 return {"success": False, "error": "合并冲突，请手动解决后重试"}
             if attempt == 0 and "no remote" not in r.stderr.lower():
                 return {"success": False, "error": "git pull 失败", "detail": r.stderr.strip()[:300]}
@@ -164,25 +143,25 @@ def _atomic_git_op(write_fn, commit_msg: str, max_retries: int = 2) -> dict:
 
         write_fn()
 
-        r_add = _run_git(["add", TODO_MD])
+        r_add = _run_git(["add", TODO_MD], cwd=TODO_DIR)
         if r_add.returncode != 0:
             return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
 
-        r_commit = _run_git(["commit", "-m", commit_msg])
+        r_commit = _run_git(["commit", "-m", commit_msg], cwd=TODO_DIR)
         if r_commit.returncode != 0 and "nothing to commit" not in r_commit.stdout:
             return {"success": False, "step": "commit", "error": r_commit.stderr.strip()[:300]}
 
         if "nothing to commit" in r_commit.stdout:
             return {"success": True, "push_failed": False, "no_change": True}
 
-        r_push = _run_git(["push"], timeout=30)
+        r_push = _run_git(["push"], cwd=TODO_DIR, timeout=30)
         if r_push.returncode != 0:
             if attempt < max_retries:
                 continue
             return {
                 "success": True,
                 "push_failed": True,
-                "hint": "push 失败，本地已保存。稍后手动: git -C ~/.todo pull --rebase && git -C ~/.todo push",
+                "hint": "push 失败，本地已保存。稍后手动: git -C ~/.todo push",
                 "push_error": r_push.stderr.strip()[:300],
             }
 
@@ -315,14 +294,14 @@ def _init_repo() -> dict:
             return {"success": False, "action": "clone", "error": err[:500], "hint": hint}
         return {"success": True, "action": "clone"}
 
-    if not _is_git_repo(TODO_DIR):
+    if not is_repo(TODO_DIR):
         return {
             "success": False, "action": "none",
             "error": f"{TODO_DIR} 已存在但不是 git 仓库，请手动处理",
             "hint": f"备份后删除 {TODO_DIR}，或将其初始化为 git 仓库",
         }
 
-    if not _same_remote(TODO_DIR):
+    if not same_remote(TODO_DIR, REPO_URL):
         return {
             "success": False, "action": "none",
             "error": f"{TODO_DIR} 的 remote origin 不是 {REPO_URL}",
@@ -537,7 +516,7 @@ def cmd_migrate() -> dict:
     _tidy_todo_md()
 
     # 提交
-    git_result = _git_sync("migrate: 合并每日日志到 TODO.md + 添加任务 ID")
+    git_result = _git_sync(TODO_DIR, "migrate: 合并每日日志到 TODO.md + 添加任务 ID", files=TODO_MD)
 
     return {
         "success": True,
@@ -565,28 +544,6 @@ def _add_to_done_section(content: str, priority: str) -> None:
         text = text.rstrip() + "\n" + task_line + "\n"
 
     filepath.write_text(text, encoding="utf-8")
-
-
-def _git_sync(commit_msg: str) -> dict:
-    """简单 git sync（migrate 专用，不走 atomic 重试）。"""
-    r_add = _run_git(["add", TODO_MD])
-    if r_add.returncode != 0:
-        return {"success": False, "step": "add", "error": r_add.stderr.strip()[:300]}
-
-    r_commit = _run_git(["commit", "-m", commit_msg])
-    if r_commit.returncode != 0 and "nothing to commit" not in r_commit.stdout:
-        return {"success": False, "step": "commit", "error": r_commit.stderr.strip()[:300]}
-
-    r_push = _run_git(["push"], timeout=30)
-    if r_push.returncode != 0:
-        return {
-            "success": True,
-            "push_failed": True,
-            "hint": "push 失败，本地已保存。稍后手动: git -C ~/.todo push",
-            "push_error": r_push.stderr.strip()[:300],
-        }
-
-    return {"success": True, "push_failed": False}
 
 
 # ─── main ─────────────────────────────────────────────────
