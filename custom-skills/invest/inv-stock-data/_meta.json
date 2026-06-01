@@ -7,6 +7,8 @@
     "/cs_stock_profile - 全量键值",
     "/cs_stock_daily - 最近日线",
     "/cs_stock_financial - 财务摘要",
+    "/cs_stock_all - 一次获取 snapshot+financial+financials（推荐首选）",
+    "/cs_stock_financials - 财务三表（利润表/资产负债表/现金流量表）",
     "/cs_stock_description - 公司简介",
     "/cs_stock_announcements - 近期公告（仅A股）",
     "/cs_stock_relations - 调研记录（仅A股）",

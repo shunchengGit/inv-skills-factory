@@ -28,7 +28,7 @@ commands:
 
 ## 快速命令
 
-估值脚本统一走 `inv-valuation-engine`，路径中 `{valuationDir}` = `{baseDir}/../inv-valuation-engine`。
+估值脚本统一走 `inv-valuation-engine`，路径中 `{valuationDir}` = `{baseDir}/../inv-valuation-engine`，`{researchDir}` = `{baseDir}/../inv-research-analyzer`。
 
 ```bash
 # 代理设置（美股/港股需要）

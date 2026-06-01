@@ -16,6 +16,8 @@ commands:
 
 ## 快速命令（新增）
 
+路径中 `{baseDir}` = 本技能目录，`{stockDir}` = `{baseDir}/../inv-stock-data`，`{researchDir}` = `{baseDir}/../inv-research-analyzer`。
+
 ```bash
 # ===== 代理设置说明 =====
 # 美股/港股数据依赖 Yahoo Finance，国内网络需要代理
