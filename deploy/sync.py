@@ -117,6 +117,35 @@ def _collect_expected_skills(categories: list[str]) -> set[str]:
     return expected
 
 
+def _remove_stale_dirs(dest_root: Path, expected: set[str], dry_run: bool = False, force: bool = False) -> int:
+    """清理目标目录中非软链接的过期目录，返回删除/警告数量"""
+    count = 0
+    if not dest_root.exists():
+        return count
+    for item in dest_root.iterdir():
+        if item.is_symlink():
+            continue
+        if not item.is_dir():
+            continue
+        if item.name.startswith("."):
+            continue
+        if item.name in expected:
+            continue
+        if force:
+            if dry_run:
+                print(f"  [dry-run] 强制删除过期目录: {item.name}")
+            else:
+                print(f"  强制删除过期目录: {item.name} (非软链接)")
+                shutil.rmtree(item)
+            count += 1
+        else:
+            print(f"  ⚠ 发现过期目录: {item.name} (非软链接，非预期技能)")
+            print(f"    手动删除: rm -rf {item}")
+            print(f"    或使用 --force 自动清理")
+            count += 1
+    return count
+
+
 def _remove_stale_links(dest_root: Path, expected: set[str], dry_run: bool = False) -> int:
     """删除目标目录中不再需要的软链接，返回删除数量"""
     removed = 0
@@ -176,9 +205,11 @@ def sync_skills(categories: list[str], skills_dir: str, force: bool = False, dry
             else:
                 skipped += 1
 
-    # 清理旧链接
+    # 清理旧链接和过期目录
     expected = _collect_expected_skills(categories)
     removed = _remove_stale_links(dest_root, expected, dry_run=dry_run)
+    stale_dir_count = _remove_stale_dirs(dest_root, expected, dry_run=dry_run, force=force)
+    removed += stale_dir_count
 
     return created, skipped, failed, removed
 

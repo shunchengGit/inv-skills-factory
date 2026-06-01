@@ -23,6 +23,11 @@ commands:
 export HTTP_PROXY=http://127.0.0.1:7890
 export HTTPS_PROXY=http://127.0.0.1:7890
 
+# ===== 首选：一次获取全量数据 =====
+# cs_stock_all 合并 snapshot + financial + financials，减少跨进程调用和限流风险
+uv run {stockDir}/scripts/cs_stock_info.py all AAPL --output json
+uv run {stockDir}/scripts/cs_stock_info.py all 600519 --output json
+
 # ===== 具体命令 =====
 # 1) 抓取估值快照（文本）
 uv run {baseDir}/scripts/valuation_snapshot.py AAPL
@@ -54,10 +59,11 @@ uv run {baseDir}/scripts/valuation_manual_compute.py \
 ```
 
 ## 脚本优先级（新增）
-1. 用户给了代码但没给完整数据：先运行 `scripts/valuation_snapshot.py`。
-2. 用户要直接结论：优先运行 `scripts/valuation_report.py`。
-3. 用户要比较几家公司谁更便宜/更贵：优先运行 `scripts/valuation_compare.py`。
-4. **脚本超时降级**：若 `uv run` 因依赖下载超时（常见于首次运行或网络慢），降级为 inv-stock-data `financials` 子命令获取财务三表数据，再按本技能框架手动计算。不得因脚本超时而放弃数据获取。
+1. **首选 `cs_stock_all`**：一次调用获取 snapshot + financial + financials，避免分开调用触发限流或超时。这是所有估值分析的默认第一步。
+2. 用户给了代码但没给完整数据：先运行 `scripts/valuation_snapshot.py`。
+3. 用户要直接结论：优先运行 `scripts/valuation_report.py`。
+4. 用户要比较几家公司谁更便宜/更贵：优先运行 `scripts/valuation_compare.py`。
+5. **脚本超时降级**：若 `uv run` 因依赖下载超时（常见于首次运行或网络慢），降级为 inv-stock-data `financials` 子命令获取财务三表数据，再按本技能框架手动计算。不得因脚本超时而放弃数据获取。
 5. 脚本返回后，先检查 `data_gaps`，明确缺口和置信度影响。
 6. 定量判断只按 `references/scoring-rules.md` 执行，定性解释再用 `references/master-frameworks.md`。
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点。
@@ -148,7 +154,7 @@ uv run {baseDir}/scripts/valuation_manual_compute.py \
 ## 执行流程
 1. 确认标的类型和适用估值口径。
 2. **若存在本地券商 PDF**：按 `inv-research-analyzer` 抽取并归纳近半年卖方观点（可与下一步并行，但须在终稿中体现对照）。
-3. 优先运行脚本抓取数据（若可用），并标注数据时点。
+3. 优先用 `cs_stock_all` 一次获取全量数据（snapshot + financial + financials），避免多次跨进程调用触发限流。然后标注数据时点。
 4. 检查关键数据是否齐全；缺失、过旧或无法更新时先列出缺口。
 5. 按公司类型选择框架，不强行套用全部方法。
 6. 读取 `references/scoring-rules.md` 对照阈值完成定量判断。

@@ -35,7 +35,13 @@ commands:
 #   3. 都未检测到 → stderr 输出明确警告，payload._proxy_ok=false，notes 注入修复提示
 #   4. 可手动指定：--proxy http://127.0.0.1:7890
 #   5. Yahoo 全空时自动诊断：代理缺失 vs 代理已设但节点限流，分别提示
-# A 股 / ETF 自动清除代理环境变量，避免国内源绕远路。
+# A 股 / ETF **必须清除代理**，每次调用前先执行 unset：
+#   unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy
+#   脚本虽内置自动清除，但跨 subprocess 调用时代理可能从上一轮泄漏，
+#   导致 eastmoney.com ProxyError。手工 unset 比依赖自动检测更可靠。
+#
+# ⚠️ 不要在同一批调用中混用 A 股和美股——代理状态反复切换必然出错。
+#   先跑完一种市场，确认清除/设置代理，再跑另一种。
 
 # 手动设置代理（推荐，确保可用）：
 export HTTPS_PROXY=http://127.0.0.1:7890
@@ -84,6 +90,8 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 9. 美港股遇 `YFRateLimitError` / `Too Many Requests`：设置 **`HTTPS_PROXY`** 环境变量后再执行。
 10. **命中率**：脚本对 AkShare 与 Yahoo 请求均带**有限次退避重试**；美港股 `snapshot` **先拉日线再拉 info**，并在报价缺失时用日线收盘回填；同花顺财务在「按报告期」失败时会尝试 **「按单季度」**。
 11. 脚本返回的 `notes` / `error` 必须原样关注；缺数据时说明缺口，不要编造。
+12. **禁止管道执行**：**绝不**使用 `uv run ... --output json | python3 -c "..."` 模式。管道传递的 JSON 可能因截断、换行或转义导致解析错误，且触发安全审批。正确做法：`uv run ... --output json > /tmp/stock_data.json`，再 `python3 -c "import json; d=json.load(open('/tmp/stock_data.json')); ..."`。
+13. **Yahoo 限流**：连续 Yahoo 请求（snapshot + financials + daily）必须间隔 ≥3 秒。脚本内置退避重试，但连续快速调用仍会触发 `YFRateLimitError`。优先用 `cs_stock_all` 合并调用。
 
 ## 代码与市场识别
 
@@ -169,3 +177,5 @@ uv pip install --python .venv/bin/python akshare pandas yfinance
 4. 网络失败时根据 `notes`/`error` 重试、切换代理或检查本机网络。
 5. 韩股/日股不支持，用搜索替代。
 6. 遇数据异常或脚本失败（PE 缺失、日线空、Yahoo 限流、同花顺远古数据等），查阅 `references/known-issues.md` 中的降级策略。
+7. **不要在同一对话中混用 A 股和美股调用**：代理状态反复切换必然出错。同一批次只处理一种市场。
+8. **禁用 `uv run | python3 -c`**：管道传递 JSON 易出错且触发审批。用 `--output json > /tmp/xxx.json` 再读取。

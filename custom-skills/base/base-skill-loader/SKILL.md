@@ -62,6 +62,16 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | **inv-tencent-indicators** | 追踪腾讯前置指标 |
 | **inv-fuyao-indicators** | 追踪福耀玻璃前置指标 |
 
+## 已废弃技能名映射
+
+以下旧名称已不再使用，若匹配到请自动转换为当前名称：
+
+| 旧名称（不要使用） | 当前名称 |
+|-------------------|---------|
+| `quality-growth-qarp` | `inv-qarp-strategy` |
+| `cs-stock` | `inv-stock-data` |
+| `value-investing-valuation` | `inv-valuation-engine` |
+
 ## 本地数据优先
 
 涉及公司、行业、主题等领域的查询或分析时，**先通过相关技能检查本地已有的数据**（`inv-research-analyzer`、`gen-knowledge-curator`），确认是否已存在相关资料，再决定是否需要外部搜索。不要跳过本地直接查外部。
@@ -85,6 +95,7 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | "我直接做更快" | 无序行动浪费时间，技能保证质量 |
 | "我记得这个技能怎么用" | 技能会演进，读当前版本 |
 | "这个不需要技能" | 如果技能存在且场景匹配，就用它 |
+| "我记得技能叫 quality-growth-qarp" | 技能名已更新，查看「已废弃技能名映射」 |
 
 ## 技能调用规范
 
