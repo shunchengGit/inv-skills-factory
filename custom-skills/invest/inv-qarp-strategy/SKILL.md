@@ -257,17 +257,18 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 #### 阶段一：数据采集（并行）
 
-以下三项互不依赖，**应尽可能并行执行**。有子代理能力的 Agent 应同时派发三个子任务；无子代理能力的 Agent 按顺序执行即可。
+以下四项互不依赖，**应尽可能并行执行**。有子代理能力的 Agent 应同时派发四个子任务；无子代理能力的 Agent 按顺序执行即可。
 
-**注意**：这三项是真正的独立数据源（不同脚本/文件），并行不会重复劳动。后续阶段二、三依赖共享数据，不应派给子代理。
+**注意**：这四项是真正的独立数据源（不同脚本/文件），并行不会重复劳动。后续阶段二、三依赖共享数据，不应派给子代理。
 
 | 并行任务 | 脚本 | 预计耗时 |
 |---------|------|---------|
 | **A. 估值快照** | `uv run {valuationDir}/scripts/valuation_snapshot.py <代码> --output json` | 10-30s |
 | **B. 研报提取** | `python3 {researchDir}/scripts/research_pdf.py extract --contains <公司简称>` | 5-15s |
 | **C. 前置指标** | 若有对应技能（`inv-tencent-indicators`/`inv-fuyao-indicators`），运行其快照脚本 | 10-20s |
+| **D. 知识库检索** | 检索 `gen-knowledge-curator` 知识库，查找已有行业分析/公司笔记/投资主题研究 | 5-10s |
 
-- A 是必须的；B 若无本地研报则跳过；C 若无对应前置指标则跳过
+- A 是必须的；B 若无本地研报则跳过；C 若无对应前置指标则跳过；D 始终执行
 - 估值定量判断以 `inv-valuation-engine` 的 `references/scoring-rules.md` 为准
 - 研报重点关注：一致评级、目标价区间、核心看多/看空论据、风险提示
 
@@ -277,6 +278,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 - yfinance 覆盖了什么？缺什么？
 - 研报覆盖了什么？时效性够吗？
+- 知识库检索到了什么？已有分析是否可直接复用？
 - 前置指标覆盖了什么？
 - **若仍有关键缺口**（如反垄断进展、CapEx指引、行业政策变化、竞争格局最新变化），必须用 inv-web-crawler 补充后再出结论
 
@@ -304,15 +306,15 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 ```
 阶段一：数据采集（并行）
-┌─────────────────────┐ ┌─────────────────────┐ ┌─────────────────────┐
-│ A. 估值快照          │ │ B. 研报提取          │ │ C. 前置指标          │
-│ valuation_snapshot   │ │ research_pdf extract │ │ leading indicators   │
-│ (必须)               │ │ (有则执行)           │ │ (有则执行)           │
-└────────┬────────────┘ └────────┬────────────┘ └────────┬────────────┘
-         └──────────────────────┼──────────────────────┘
-                                ↓
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│ A. 估值快照       │ │ B. 研报提取       │ │ C. 前置指标       │ │ D. 知识库检索      │
+│ valuation_snapshot│ │ research_pdf     │ │ leading indicators│ │ gen-knowledge    │
+│ (必须)            │ │ (有则执行)        │ │ (有则执行)        │ │ (始终执行)        │
+└────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘ └────────┬─────────┘
+         └───────────────────┼───────────────────┼───────────────────┘
+                             ↓
 阶段二：增量信息检查
-  yfinance → 研报 → 前置指标 → 缺口 → inv-web-crawler 补充
+  yfinance → 研报 → 知识库 → 前置指标 → 缺口 → inv-web-crawler 补充
                                 ↓
 阶段三：分析与决策（顺序）
   五档结论 → 选股闸门 → 估值纪律 → 买入必答 → 组合检查 → 结论 → 机会成本
@@ -341,6 +343,13 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 - 主要共识：{1-2 条}
 - 关键分歧：{1-2 条}
 - 数据时点：{研报日期窗口}
+
+### 知识库已有资料
+（gen-knowledge-curator 检索结果）
+
+- 相关行业分析：{有/无，简述}
+- 相关公司笔记：{有/无，简述}
+- 相关投资主题研究：{有/无，简述}
 
 ### 增量信息缺口检查
 （逐级确认，缺哪级补哪级，全部覆盖才能出结论）
@@ -470,14 +479,16 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 增量信息获取优先级：
 1. yfinance info + financials + history（已覆盖 90% 需求）
 2. 前置指标脚本（inv-tencent-indicators 等）
-3. 本地券商研报 PDF（inv-research-analyzer）
-4. inv-web-crawler 直抓特定页面（仅当上述不够时）
-5. 搜索（最后手段，预期低效）
+3. 知识库（gen-knowledge-curator）：已有行业分析、公司笔记、投资主题研究
+4. 本地券商研报 PDF（inv-research-analyzer）
+5. inv-web-crawler 直抓特定页面（仅当上述不够时）
+6. 搜索（最后手段，预期低效）
 
 ## 与其他技能配合
 
 - **`inv-stock-data`**：数据层，所有行情与财务数据统一入口
 - **`inv-valuation-engine`**：估值引擎，提供脚本 + 定量评分框架 + 大师框架
+- **`gen-knowledge-curator`**：知识库，提供已有行业分析、公司笔记、投资主题研究，避免重复劳动
 - **`inv-research-analyzer`**：本地券商研报 PDF，提供卖方叙事与一致预期
 - **`inv-porter-five-forces`**：五力竞争格局，用于第一道闸门的竞争结构判断
 - **`inv-tencent-indicators` / `inv-fuyao-indicators`**：前置指标，作为估值判断的辅助信号
