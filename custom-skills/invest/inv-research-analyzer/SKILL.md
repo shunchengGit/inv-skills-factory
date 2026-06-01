@@ -17,23 +17,58 @@ commands:
 
 基于本地券商 PDF，输出结构化综合观点（共识、分歧、盈利预测区间、隐含假设）。**不做**买卖建议、五档估值或目标价结论（交由 `inv-valuation-engine` + `inv-stock-data`）。
 
+## 环境准备（必须）
+
+每次 extract 前必须先确保 pymupdf 可用。**不要用 `&&` 链式创建 venv**——venv 已存在时 `python3 -m venv` 会失败，导致 pymupdf 未安装。
+
+```bash
+# 正确做法：先检查再按需创建
+if [ ! -d /tmp/research-pdf-venv ]; then python3 -m venv /tmp/research-pdf-venv; fi
+/tmp/research-pdf-venv/bin/pip install -q -r "{baseDir}/requirements.txt"
+PY=/tmp/research-pdf-venv/bin/python
+```
+
+或者更简单——用 `python3 -m venv --clear` 强制重建（每次重建约 2s，但最稳定）：
+
+```bash
+python3 -m venv --clear /tmp/research-pdf-venv && /tmp/research-pdf-venv/bin/pip install -q -r "{baseDir}/requirements.txt"
+PY=/tmp/research-pdf-venv/bin/python
+```
+
+**scan 子命令不需要 pymupdf**，可以直接用系统 Python 执行。
+
 ## 查找研报（硬规则）
 
-**不要用 `list --code` 查找研报**——脚本对非 A 股代码的字符串匹配不可靠。
+**第一步永远是读 `~/股票研报/Index.md`**，任何情况下不得跳过。
+
+禁止操作：
+- ❌ 直接用 `list --code` 查找（对非 A 股不可靠）
+- ❌ 直接用 `extract --contains` 提取（绕过了 Index.md 子文件夹确认）
+- ❌ 凭记忆猜测子文件夹名
 
 **正确流程**：
 
-1. **读取 `~/股票研报/Index.md`**（Read 工具）
+1. **读取 `~/股票研报/Index.md`**（必做，不可跳过）
 2. 在目录表中按**代码列**匹配标的（支持 `0700.HK` / `MSFT` / `PDD` / `2330.TW` 等任意格式）
 3. 确定目标**子文件夹名**（如「微软」「腾讯控股」）和报告份数
 4. `extract --folder <子文件夹名>` 提取文本
 5. 若 Index.md 无匹配 → 走 Web 降级（`references/web-fallback-for-non-a-share.md`）
 
+## 归档研报（organize）
+
+将 Downloads 等目录的散落研报 PDF 归档到研报库：
+
+1. `scan --source ~/Downloads` → 获取待归档清单 JSON
+2. 读 `~/股票研报/Index.md`，判断每个文件应归档到哪个子文件夹
+3. 构造归档方案 JSON，调用 `archive --plan '<JSON>'` 执行移动、建索引、git push
+
+这是完整闭环——不要只提取不归档。新下载的研报应先 scan → archive 入库，再从库中 extract。
+
 ## 快速命令
 
 ```bash
-# 安装依赖
-python3 -m venv /tmp/research-pdf-venv && /tmp/research-pdf-venv/bin/pip install -r "{baseDir}/requirements.txt"
+# 安装依赖（--clear 强制重建，最稳定；scan 不需要此步）
+python3 -m venv --clear /tmp/research-pdf-venv && /tmp/research-pdf-venv/bin/pip install -q -r "{baseDir}/requirements.txt"
 PY=/tmp/research-pdf-venv/bin/python
 SK="{baseDir}/scripts/research_pdf.py"
 
@@ -162,62 +197,23 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 6. **若用户直接提供 PDF 路径**：用 PyMuPDF 直接提取（勿用 read_file 读二进制 PDF）。批量提取到 `/tmp/` 后分批读取。
 7. 若用户问「是否低估/值得买」：引导 `inv-stock-data` + `inv-valuation-engine`。
 
-## 研报管理（organize）
+## 归档技术细节
 
-将 Downloads 等目录中散落的研报 PDF **归档到研报库子文件夹 → 清理过期 → git 提交推送**。
-
-标的识别由 LLM 完成：读 `Index.md` 目录表，理解代码→文件夹名映射，判断归档目标。
-
-### 研报库结构
-
-```
-~/股票研报/
-├── 腾讯控股/          # 个股研报
-├── 行业研究-互联网/   # 行业研报
-├── 策略研究/          # 策略/宏观研报
-├── Index.md           # 索引
-└── .git/
-```
-
-### scan 子命令（输出待归档清单）
-
-```bash
-$PY "$SK" scan --source ~/Downloads
-```
-
-输出 JSON：每份 PDF 的文件名、提取的代码、日期、券商猜测，以及研报库已有子文件夹列表。LLM 据此 + Index.md 判断每个文件应归档到哪个子文件夹。
-
-### archive 子命令（执行归档方案）
-
-LLM 判断完毕后，构造归档方案 JSON 并调用：
-
-```bash
-$PY "$SK" archive --plan '<JSON>'
-# 或从 stdin 传入：
-echo '<JSON>' | $PY "$SK" archive
-```
+- **scan 不需要 pymupdf**，用系统 Python 即可：`python3 "$SK" scan --source ~/Downloads`
+- **archive 也不需要 pymupdf**（重建索引除外，失败时会跳过索引继续 git push）
+- macOS 沙盒下 `pathlib` 可能无法访问 `~/Downloads/`，脚本内部自动回退 AppleScript
 
 归档方案 JSON 格式：
 
 ```json
 {
   "actions": [
-    {"source_path": "~/Downloads/2026-05-20-2057.HK-JPMorgan-中通快递.pdf", "target_folder": "中通快递"},
-    {"source_path": "~/Downloads/行业-半导体深度.pdf", "target_folder": "行业研究-半导体"}
+    {"source_path": "~/Downloads/研报文件.pdf", "target_folder": "目标子文件夹名"}
   ]
 }
 ```
 
-**执行流程**：
-1. 读取归档方案，逐个移动文件到目标子文件夹
-2. 同名文件：MD5 相同则删除源文件，不同则加后缀 `_2`
-3. 输出研报库全部文件清单（JSON），供 Agent 判断过期
-4. Agent 删除过期文件（个股 6 个月，行业/策略 12 个月）
-5. 重建索引 + `git add -A && git commit && git push`
-
-### macOS Downloads 访问
-
-macOS 沙盒下 `pathlib` 可能无法访问 `~/Downloads/`，脚本内部自动回退 AppleScript。
+过期清理规则：个股研报 6 个月，行业/策略 12 个月。
 
 ## 与其他技能配合
 
