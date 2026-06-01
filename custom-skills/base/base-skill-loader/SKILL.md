@@ -62,6 +62,10 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | **inv-tencent-indicators** | 追踪腾讯前置指标 |
 | **inv-fuyao-indicators** | 追踪福耀玻璃前置指标 |
 
+## 本地数据优先
+
+涉及公司、行业、主题等领域的查询或分析时，**先通过相关技能检查本地已有的数据**（`inv-research-analyzer`、`gen-knowledge-curator`），确认是否已存在相关资料，再决定是否需要外部搜索。不要跳过本地直接查外部。
+
 ## 技能优先级
 
 当多个技能可能适用时，按以下顺序：

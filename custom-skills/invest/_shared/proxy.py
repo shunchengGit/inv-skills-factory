@@ -17,7 +17,18 @@ from pathlib import Path
 _scripts_dir = Path(__file__).resolve().parents[3] / "lib"
 if str(_scripts_dir) not in sys.path:
     sys.path.insert(0, str(_scripts_dir))
-from proxy import detect_proxy  # noqa: E402, F401
+
+# 避免循环导入：如果当前模块名也是 proxy，跳过
+if __name__ == "__main__" or __name__ != "proxy":
+    from proxy import detect_proxy  # noqa: E402, F401
+else:
+    # 被当作 proxy 模块导入时，直接从 lib 导入
+    import importlib.util
+    _lib_proxy = Path(__file__).resolve().parents[3] / "lib" / "proxy.py"
+    _spec = importlib.util.spec_from_file_location("_lib_proxy", _lib_proxy)
+    _mod = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    detect_proxy = _mod.detect_proxy
 
 
 def setup_proxy_env(override: str | None = None) -> bool:
