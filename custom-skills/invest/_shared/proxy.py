@@ -9,6 +9,8 @@
   from proxy import apply_proxy_to_session
 """
 
+from __future__ import annotations
+
 import os
 import sys
 from pathlib import Path

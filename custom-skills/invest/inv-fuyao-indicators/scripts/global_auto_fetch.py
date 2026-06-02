@@ -6,6 +6,8 @@ EU：搜索 ACEA 月度新闻稿（无稳定免费 API，标记 search_required�
 FRED 系列：TOTALSA = Total Vehicle Sales (millions, SAAR)
 """
 
+from __future__ import annotations
+
 import datetime
 import re
 

@@ -7,8 +7,11 @@
   from git import run, is_repo, same_remote, clone, pull, sync
 """
 
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
+from typing import Optional, Dict, Any, List
 
 
 def run(args: list[str], cwd: Path | None = None, timeout: int = 60) -> subprocess.CompletedProcess:

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """投资主题研究自动化：搜索 → 去重 → 抓取。
 
 将搜索结果中未入库的 URL 逐个抓取为 Markdown，Agent 负责分析分类和存储。

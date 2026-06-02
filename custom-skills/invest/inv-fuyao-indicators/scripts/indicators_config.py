@@ -15,6 +15,8 @@
 - search_hint: Agent 搜索建议（仅 agent_search 指标）
 """
 
+from __future__ import annotations
+
 INDICATORS: dict[str, dict] = {
     # ── Tier 1：成本端 ──────────────────────────────────────────────
     "soda_ash": {
