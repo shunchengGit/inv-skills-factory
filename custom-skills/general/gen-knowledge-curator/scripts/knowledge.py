@@ -1,10 +1,10 @@
-"""知识库共享工具：Index 解析、迁移、条目格式。
+"""知识库共享工具：Index 解析、迁移、条目格式、搜索。
 
 用法:
   import sys
   from pathlib import Path
   sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
-  from knowledge import parse_index, migrate_index, build_entry, slugify
+  from knowledge import parse_index, migrate_index, build_entry, slugify, search_entries
 """
 
 from __future__ import annotations
@@ -81,15 +81,53 @@ def slugify(title: str, max_len: int = 80) -> str:
     return s or "untitled"
 
 
-def build_entry(title: str, url: str, category: str, content: str) -> str:
+def build_entry(title: str, url: str, category: str, content: str, tags: list[str] | None = None) -> str:
     """构建知识条目 markdown 内容。"""
     today = date.today().isoformat()
+    tags_line = f"tags: [{', '.join(tags)}]" if tags else ""
+    frontmatter = f"---\nurl: {url}\nimported: {today}\ncategory: {category}\n"
+    if tags_line:
+        frontmatter += f"{tags_line}\n"
+    frontmatter += "---"
     return (
-        f"---\n"
-        f"url: {url}\n"
-        f"imported: {today}\n"
-        f"category: {category}\n"
-        f"---\n\n"
+        f"{frontmatter}\n\n"
         f"# {title}\n\n"
         f"{content}\n"
     )
+
+
+def search_entries(knowledge_dir: Path, query: str, index_dir_name: str = "index") -> list[dict]:
+    """搜索知识库条目，支持标题和内容匹配。
+
+    返回匹配条目列表，按相关性排序（标题匹配优先）。
+    """
+    query_lower = query.lower()
+    categories, _ = parse_index(knowledge_dir, index_dir_name)
+    results = []
+
+    for cat, entries in categories.items():
+        for entry in entries:
+            title_match = query_lower in entry["title"].lower()
+            # 读取文件内容检查
+            file_path = knowledge_dir / entry["path"]
+            content_match = False
+            if file_path.exists():
+                try:
+                    content = file_path.read_text(encoding="utf-8").lower()
+                    content_match = query_lower in content
+                except Exception:
+                    pass
+
+            if title_match or content_match:
+                results.append({
+                    "title": entry["title"],
+                    "path": entry["path"],
+                    "url": entry["url"],
+                    "category": cat,
+                    "title_match": title_match,
+                    "content_match": content_match,
+                })
+
+    # 排序：标题匹配优先
+    results.sort(key=lambda x: (not x["title_match"], x["title"]))
+    return results

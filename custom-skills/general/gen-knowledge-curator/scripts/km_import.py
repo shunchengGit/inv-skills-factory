@@ -8,11 +8,12 @@ from __future__ import annotations
 #   "html2text>=2024.2.26",
 # ]
 # ///
-"""知识导入：URL 抓取 + 知识条目存储。
+"""知识导入：URL 抓取 + 知识条目存储 + 分类管理。
 
-两个子命令：
+子命令：
   fetch  - 抓取 URL 内容（Firecrawl → pwright 兜底）
   store  - 存储知识条目到 ~/.knowledge + 更新 index/{category}.md + git 同步
+  categories - 列出所有可用分类
 
 用法:
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py fetch <url>
@@ -20,6 +21,7 @@ from __future__ import annotations
   # 从文件导入（推荐，避免管道截断问题）：
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py store --title "标题" --category investing --url https://... --content-file /tmp/article.md
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py store --title "标题" --url https://... --content <md>  # 无 category → _unsorted
+  uv run custom-skills/general/gen-knowledge-curator/scripts/km_import.py categories
 """
 
 import argparse
@@ -34,12 +36,24 @@ from pwright import scrape_url as pwright_scrape_url
 from git import sync as _git_sync
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import slugify, build_entry
+from knowledge import slugify, build_entry, parse_index
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 REPO_BRANCH = "master"
 INDEX_DIR = "index"
 FIRECRAWL_URL = "http://localhost:3672/v1/scrape"
+
+# 预定义分类体系
+DEFAULT_CATEGORIES = {
+    "investing": "投资分析与估值",
+    "programming": "编程与工程",
+    "ai-ml": "AI 与机器学习",
+    "product": "产品与运营",
+    "career": "职业与成长",
+    "reading": "阅读与笔记",
+    "tools": "工具与效率",
+    "life": "生活与其他",
+}
 
 
 # ─── fetch 子命令 ─────────────────────────────────────────
@@ -110,6 +124,31 @@ def cmd_fetch(url: str) -> dict:
     }
 
 
+# ─── categories 子命令 ────────────────────────────────────
+
+
+def cmd_categories() -> dict:
+    """列出所有可用分类，包括预定义和已存在的。"""
+    existing = set()
+    if KNOWLEDGE_DIR.exists():
+        index_dir = KNOWLEDGE_DIR / INDEX_DIR
+        if index_dir.exists():
+            for f in index_dir.glob("*.md"):
+                existing.add(f.stem)
+
+    # 合并预定义和已有分类
+    all_categories = {**DEFAULT_CATEGORIES}
+    for cat in existing:
+        if cat not in all_categories and not cat.startswith("_"):
+            all_categories[cat] = cat  # 使用分类名作为描述
+
+    return {
+        "success": True,
+        "categories": all_categories,
+        "total": len(all_categories),
+    }
+
+
 # ─── store 子命令 ─────────────────────────────────────────
 
 
@@ -123,7 +162,7 @@ def _update_index(category: str, title: str, rel_path: str, url: str) -> None:
         f.write(entry_line)
 
 
-def cmd_store(title: str, category: str, url: str, content: str, min_content_length: int = 100) -> dict:
+def cmd_store(title: str, category: str, url: str, content: str, min_content_length: int = 100, tags: list[str] | None = None) -> dict:
     """存储知识条目到 ~/.knowledge，更新 index，git 同步。"""
     if not KNOWLEDGE_DIR.exists():
         return {
@@ -138,7 +177,7 @@ def cmd_store(title: str, category: str, url: str, content: str, min_content_len
             "success": False,
             "error": "content 为空，请检查输入内容",
         }
-    
+
     if len(content) < min_content_length:
         return {
             "success": False,
@@ -158,7 +197,7 @@ def cmd_store(title: str, category: str, url: str, content: str, min_content_len
         file_path = KNOWLEDGE_DIR / rel_path
 
     file_path.parent.mkdir(parents=True, exist_ok=True)
-    entry_md = build_entry(title, url, category, content)
+    entry_md = build_entry(title, url, category, content, tags=tags)
     file_path.write_text(entry_md, encoding="utf-8")
 
     _update_index(category, title, rel_path, url)
@@ -191,6 +230,9 @@ def main():
     p_store.add_argument("--content", default="", help="Markdown 正文内容。直接传入内容，或使用 '-' 从 stdin 读取")
     p_store.add_argument("--content-file", help="从文件读取 Markdown 内容（与 --content 互斥）。示例: --content-file /tmp/article.md")
     p_store.add_argument("--min-content-length", type=int, default=100, help="内容最小长度校验（默认 100 字符）")
+    p_store.add_argument("--tags", default="", help="标签列表，逗号分隔。示例: python,async,performance")
+
+    sub.add_parser("categories", help="列出所有可用分类")
 
     args = parser.parse_args()
 
@@ -205,11 +247,18 @@ def main():
             # 从 stdin 读取
             import sys
             content = sys.stdin.read()
-        
+
         # 获取最小长度校验值
         min_length = getattr(args, 'min_content_length', 100)
-        
-        result = cmd_store(args.title, args.category, args.url, content, min_content_length=min_length)
+
+        # 解析标签
+        tags = None
+        if hasattr(args, 'tags') and args.tags:
+            tags = [t.strip() for t in args.tags.split(",") if t.strip()]
+
+        result = cmd_store(args.title, args.category, args.url, content, min_content_length=min_length, tags=tags)
+    elif args.command == "categories":
+        result = cmd_categories()
     else:
         parser.print_help()
         sys.exit(1)

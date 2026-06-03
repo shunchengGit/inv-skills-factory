@@ -8,14 +8,17 @@ from __future__ import annotations
 #   "PyYAML>=6.0",
 # ]
 # ///
-"""知识库完整性检查：死链、孤立文件、URL 可达性。
+"""知识库完整性检查：死链、孤立文件、URL 可达性、重复检测、内容质量。
 
 用法:
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py
   uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py --skip-url-check  # 跳过 URL 可达性检查
+  uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py --fix            # 自动修复问题
+  uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py --check-duplicates  # 检查重复条目
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -59,7 +62,7 @@ def check_url_reachable(url: str, proxies: dict | None) -> dict | None:
     return None
 
 
-def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> list[dict]:
+def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> tuple[list[dict], list[dict]]:
     """检查所有知识条目 frontmatter 中的 URL 可达性。"""
     if skip:
         return [], []
@@ -137,7 +140,78 @@ def check_orphans(indexed_paths: set[str]) -> list[dict]:
     return orphans
 
 
-def cmd_lint(skip_url_check: bool = False) -> dict:
+def check_duplicates(categories: dict[str, list[dict]]) -> list[dict]:
+    """检查重复条目（基于 URL 或标题相似度）。"""
+    seen_urls: dict[str, list[dict]] = {}
+    seen_titles: dict[str, list[dict]] = {}
+    duplicates = []
+
+    for cat, entries in categories.items():
+        for entry in entries:
+            url = entry.get("url", "")
+            title = entry.get("title", "").lower()
+
+            # URL 重复
+            if url and url != "local":
+                if url in seen_urls:
+                    duplicates.append({
+                        "type": "url_duplicate",
+                        "url": url,
+                        "entries": seen_urls[url] + [entry],
+                    })
+                else:
+                    seen_urls[url] = [entry]
+
+            # 标题相似（简单包含关系）
+            if title:
+                for existing_title, existing_entries in seen_titles.items():
+                    if title in existing_title or existing_title in title:
+                        if title != existing_title:  # 避免完全相同的
+                            duplicates.append({
+                                "type": "title_similar",
+                                "title1": title,
+                                "title2": existing_title,
+                                "entries": existing_entries + [entry],
+                            })
+                if title not in seen_titles:
+                    seen_titles[title] = [entry]
+
+    return duplicates
+
+
+def check_content_quality() -> list[dict]:
+    """检查内容质量问题（空文件、过短内容等）。"""
+    issues = []
+    if not KNOWLEDGE_DIR.exists():
+        return issues
+
+    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
+        if md_file.parent.name == INDEX_DIR:
+            continue
+
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            rel = str(md_file.relative_to(KNOWLEDGE_DIR))
+
+            # 检查空内容
+            if len(content.strip()) < 200:
+                issues.append({"path": rel, "issue": "content_too_short", "chars": len(content.strip())})
+                continue
+
+            # 检查缺少关键章节
+            if "## 摘要" not in content and "## Summary" not in content:
+                issues.append({"path": rel, "issue": "missing_summary"})
+
+            if "## 关键要点" not in content and "## Key Points" not in content:
+                issues.append({"path": rel, "issue": "missing_key_points"})
+
+        except Exception:
+            pass
+
+    return issues
+
+
+def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) -> dict:
     """执行完整 lint 检查。"""
     if not KNOWLEDGE_DIR.exists():
         return {
@@ -145,6 +219,8 @@ def cmd_lint(skip_url_check: bool = False) -> dict:
             "dead_urls": [],
             "missing_urls": [],
             "orphans": [],
+            "duplicates": [],
+            "quality_issues": [],
             "total_entries": 0,
             "total_issues": 1,
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
@@ -157,13 +233,21 @@ def cmd_lint(skip_url_check: bool = False) -> dict:
     dead_urls, missing_urls = check_urls(categories, skip=skip_url_check)
     orphans = check_orphans(indexed_paths)
 
-    total_issues = len(dead_links) + len(dead_urls) + len(missing_urls) + len(orphans)
+    duplicates = []
+    if check_duplicates_flag:
+        duplicates = check_duplicates(categories)
+
+    quality_issues = check_content_quality()
+
+    total_issues = len(dead_links) + len(dead_urls) + len(missing_urls) + len(orphans) + len(duplicates) + len(quality_issues)
 
     return {
         "dead_links": dead_links,
         "dead_urls": dead_urls,
         "missing_urls": missing_urls,
         "orphans": orphans,
+        "duplicates": duplicates,
+        "quality_issues": quality_issues,
         "total_entries": total,
         "total_issues": total_issues,
     }
@@ -250,9 +334,10 @@ def main():
     parser = argparse.ArgumentParser(description="知识库完整性检查")
     parser.add_argument("--skip-url-check", action="store_true", help="跳过 URL 可达性检查")
     parser.add_argument("--fix", action="store_true", help="自动修复发现的问题（死链、孤立文件、缺失 URL）")
+    parser.add_argument("--check-duplicates", action="store_true", help="检查重复条目")
     args = parser.parse_args()
 
-    result = cmd_lint(skip_url_check=args.skip_url_check)
+    result = cmd_lint(skip_url_check=args.skip_url_check, check_duplicates_flag=args.check_duplicates)
 
     if args.fix:
         fix_actions = {}
@@ -265,7 +350,7 @@ def main():
 
         # 重新 lint 确认修复结果
         if fix_actions:
-            result = cmd_lint(skip_url_check=args.skip_url_check)
+            result = cmd_lint(skip_url_check=args.skip_url_check, check_duplicates_flag=args.check_duplicates)
             result["fix_actions"] = fix_actions
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
