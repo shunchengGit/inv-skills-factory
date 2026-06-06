@@ -401,11 +401,47 @@ dws schema <path> --jq '.tool.flag_overlay'
 - [references/products/](./references/products/)：各产品命令参考
 - [scripts/](./scripts/)：官方批量工作流脚本和 WorkBuddy setup 脚本
 
+## 复合工作流
+
+以下工作流基于本 Skill 的底层 `dws` 能力，封装了特定的钉钉业务场景。每个工作流的详细步骤和代码模板见 `references/workflows/` 下的对应文件。
+
+### 群聊月度消息分析
+
+触发：月度群消息分析、群消息月报、客服群月度分析、月度消息拉取。
+
+按月维度拉取指定群聊历史消息到本地 JSON，然后多维度分析生成可视化 HTML 报告。核心策略：按周分批拉取（`dws chat message list --group <convId> --forward=false`），避免 API 超时；按 `openMessageId` 去重。
+
+详见 `references/workflows/group-monthly-report.md`。脚本：`scripts/group_monthly_analysis.py`。
+
+### 个人周总结更新
+
+触发：更新周总结、周报加工作、今日加上、周总结加条目。
+
+在个人空间的周总结文档中追加今日工作内容到当天表格行和对应分类章节。定位路径：周总结 → `{year}年Q{quarter}` → `{M.D-M.D}` 文档。更新使用 `dws doc update --content-file` 全文覆写（避免 block insert/update 中文丢失 bug）。
+
+详见 `references/workflows/personal-daily-update.md`。
+
+### 个人周报生成与邮件草稿
+
+触发：写周报、生成周报、个人周报、发周报邮件、周报整理。
+
+从周总结文档读取每日工作，按类别（技术研究/产品研究/协作推进）整理到"个人工作"部分，生成格式优化的邮件草稿存入企业微信邮箱草稿箱。exmail 只能发送不能存草稿，需用 IMAP APPEND 方式。亮点数据用 `<span class="g">` 绿色高亮。
+
+详见 `references/workflows/personal-weekly-mail.md`。脚本：`scripts/save_draft.py`。
+
+### 团队周报总结
+
+触发：总结客户端周报、客户端周报总结、周报总结、最新周报。
+
+从"客户端"知识库 → "周会周报"文件夹找到最新周报，按固定格式总结业务迭代和技术专项（仅保留有重大进展的项目）。需检查空模板并回退到上一期。输出纯文本，不要 HTML/Markdown 表格。
+
+详见 `references/workflows/team-weekly-review.md`。
+
 ## 相关技能
 
-以下技能基于本 Skill 的底层能力，封装了特定的钉钉业务工作流：
+以下工作流已合并为本 Skill 的"复合工作流"部分，不再作为独立技能存在：
 
-- `gen-dingtalk-share-to-group`：群消息发送（搜索群 → 发送文本/Markdown）
-- `gen-dingtalk-team-weekly-review ：知识库周报读取与总结
-- `gen-dingtalk-personal-daily`：个人周总结文档更新
-- `gen-dingtalk-group-report`：群聊月度消息分析与报告生成
+- ~~`gen-dingtalk-group-report`~~ → 复合工作流 > 群聊月度消息分析
+- ~~`gen-dingtalk-personal-daily`~~ → 复合工作流 > 个人周总结更新
+- ~~`gen-dingtalk-personal-weekly-mail`~~ → 复合工作流 > 个人周报生成与邮件草稿
+- ~~`gen-dingtalk-team-weekly-review`~~ → 复合工作流 > 团队周报总结

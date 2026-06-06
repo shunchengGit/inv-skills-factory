@@ -44,11 +44,7 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | 技能 | 触发场景 |
 |------|---------|
 | **gen-daily-planner** | 安排日程、整合日历和待办、每日/每周计划 |
-| **gen-dingtalk** | 操作钉钉（消息、日历、待办、审批、考勤、文档等） |
-| **gen-dingtalk-personal-daily** | 在个人钉钉文档中更新每日工作日志 |
-| **gen-dingtalk-group-report** | 按月分析钉钉群聊消息并生成报告 |
-| **gen-dingtalk-personal-weekly-mail** | 从钉钉周报生成邮件草稿存入企业微信邮箱 |
-| **gen-dingtalk-team-weekly-review** | 从钉钉知识库读取并总结团队周报 |
+| **gen-dingtalk** | 操作钉钉（消息、日历、待办、审批、考勤、文档等）及复合工作流（群聊月报、个人周总结、周报邮件、团队周报总结） |
 | **gen-interviewer** | 生成面试题、管理候选人、记录面试反馈 |
 | **gen-knowledge-curator** | 收集/整理/检索知识、网页采集、LLM总结 |
 | **gen-mail-agent** | 发送/查看/管理邮件、SMTP/IMAP操作 |
@@ -134,12 +130,7 @@ inv-stock-data（数据层）─────────────────
 inv-tencent-indicators / inv-fuyao-indicators（前置指标，独立脚本）
 inv-research-analyzer（研报分析，独立脚本）
 
-gen-dingtalk（钉钉底层能力）────────────────────────┐
-  ↑                                                │
-  ├── gen-dingtalk-personal-daily（个人工作日志）    │
-  ├── gen-dingtalk-group-report（群聊分析报告）     │
-  ├── gen-dingtalk-personal-weekly-mail（周报邮件） │
-  └── gen-dingtalk-team-weekly-review（周报总结）   │
+gen-dingtalk（钉钉底层能力 + 复合工作流：群聊月报/个人周总结/周报邮件/团队周报总结）
 ```
 
 ## 用户指令

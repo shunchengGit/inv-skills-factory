@@ -234,6 +234,24 @@ uv run {baseDir}/scripts/valuation_manual_compute.py \
 
 当用户要求将分析结论整理为**公众号文章、研报或任何可发表格式**时，详见 `references/report-formatting-guide.md`，包含：先规划结构再动笔、突出时效性、去除个人化表述、估值与操作分离、精简冗余、数据来源透明 6 条规范。
 
+## 行业特化指南
+
+### CDMO / CRDMO 行业
+
+详见 `references/cdmo-industry-valuation.md`，核心要点：
+
+- **管线驱动收入**：收入预测需基于项目数+转化率，关注综合项目数、Win-the-Molecule 胜率、商业化阶段项目占比
+- **产能扩张周期**：FCF/净利润波动大（实测 -7%~53%），CapEx/净利润比率是关键质量指标
+- **客户粘性极高**：商业化阶段切换成本极高 → LTV 长
+- **地缘/监管风险**：常为 thesis breaker，关注北美收入占比、生物安全法案进展
+- **毛利率=护城河代理**：高毛利→技术平台优势+定价权（药明46% vs 三星35% vs Lonza28%）
+- **订单储备=前瞻指标**：Backlog 转化节奏决定收入增速
+- **优先估值指标**：PE（盈利稳定后）、DCF（需假设 FCF 转化率随产能周期改善）；次要：PS（早期/亏损）、EV/EBITDA（重资产+杠杆）、PEG（增速明确时）；行业特有：订单/Backlog 倍数
+- **CapEx 质量判断**：>80%NI 警惕扩张过激进；50-80% 扩张期正常；<50% 产能成熟期 FCF 释放加速
+- **QARP 三闸门特别关注**：商业模式闸门重点看北美收入占比+地缘风险；财务质量闸门重点看 FCF 转化率趋势+CapEx/NI+ROE 能否随产能成熟回到 15%+；管理层闸门重点看回购 vs CapEx 平衡
+- **典型 thesis breaker**：生物安全法案通过→北美收入腰斩；毛利率从 40%+跌至 30%以下；产能利用率持续低于 50%
+- **可比公司数据限制**：三星生物(207940.KS) yfinance 返回空需 web_search；Catalent 已退市
+
 ## 参考文件
 - `references/scoring-rules.md`：定量阈值、行业口径、五档结论映射
 - `references/master-frameworks.md`：各大师框架的适用范围、判断逻辑和注意事项
@@ -241,3 +259,4 @@ uv run {baseDir}/scripts/valuation_manual_compute.py \
 - `references/us-hk-data-workaround.md`：美股/港股 `inv-stock-data snapshot` 返回大量 data_gaps 时的 inv-stock-data financials 补全流程、关键字段映射表、一致性校验清单
 - `references/valuation-traps.md`：常见陷阱（数据层/估值层/脚本输出），含运行后必做检查清单
 - `references/report-formatting-guide.md`：公众号/可发表格式报告输出规范
+- `references/cdmo-industry-valuation.md`：CDMO/CRDMO 行业 QARP 估值指南——管线驱动收入、FCF 随产能周期波动、CapEx 质量判断、可比公司数据获取限制

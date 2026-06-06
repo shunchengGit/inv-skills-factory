@@ -6,6 +6,15 @@
 - **Forward PE口径不一致**：Yahoo Finance 对港股互联网公司的 `forwardPE` 可能基于 Non-GAAP 口径，与 TTM PE（GAAP）不可直接比较。必须做增速常识校验。
 - **A+H 双上市 Forward PE 失真**：福耀玻璃等 A+H 双上市公司的 Yahoo Forward PE 可能基于 Non-GAAP/调整后 EPS（剔除汇兑损失等一次性项），而 Trailing PE 基于 GAAP（含汇兑损失），导致隐含增速虚高（实测福耀出现过隐含33%增速，实际一致预期增速仅4-5%）。校验方法：用一致预期 EPS 手算 Forward PE = 当前价/一致预期EPS，与 Yahoo Forward PE 对比；若差异大，以手算为准并标注口径差异。
 - **inv-stock-data snapshot 对美股/港股可能返回空**：`cs_stock_info.py snapshot` 对部分美股/港股可能返回"所有数据源均不可用"，但 `financial` 子命令仍可工作。降级方案：用 inv-stock-data `financials` 子命令获取财务三表数据，再按本技能框架手动计算。
+- **财务数据年份排序陷阱**：`cs_stock_info.py all` 返回的 `financials` 子命令数据（利润表/资产负债表/现金流量表）按**最新年份在前**排列（如 2025→2024→2023→2022）。在用循环计算 YoY 增速时，若误按返回顺序遍历，可能出现负增长假象。实测案例：药明生物(02269.HK)首次计算时因排序错误输出了"2024营收同比-14.3%"（实际应为+9.6%）。**正确做法**：先按日期正序排列再计算 YoY，或在代码中显式标注年份标签，计算完成后做常识校验。修复代码模板：
+  ```python
+  years = sorted(data['financials']['income_stmt'].keys())  # 正序
+  for i in range(1, len(years)):
+      curr = data['financials']['income_stmt'][years[i]]
+      prev = data['financials']['income_stmt'][years[i-1]]
+      yoy = (curr - prev) / abs(prev) * 100
+      print(f"{years[i]} vs {years[i-1]}: {yoy:+.1f}%")
+  ```
 
 ## 估值层陷阱（本技能负责）
 
