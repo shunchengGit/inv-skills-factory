@@ -1,0 +1,12 @@
+{
+  "name": "base-image-recognizer",
+  "version": "0.1.0",
+  "description": "通过讯飞星火大模型识别图片内容",
+  "commands": [],
+  "scripts": {
+    "recognize": "scripts/recognize.py"
+  },
+  "references": {},
+  "dependencies": [],
+  "derivedFrom": null
+}
