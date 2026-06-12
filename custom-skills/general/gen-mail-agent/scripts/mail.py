@@ -247,7 +247,7 @@ def cmd_send(args):
             "cc": parse_recipients(msg["Cc"]),
             "bcc": parse_recipients(msg["Bcc"]),
             "subject": msg["Subject"],
-            "attachments": [p.get_filename() for p in msg.iter_attachments() if p.get_filename()],
+            "attachments": [p.get_filename() for p in msg.walk() if p.get_filename()],
         },
     }, ensure_ascii=False, indent=2))
 

@@ -13,3 +13,6 @@ __pycache__/
 
 # Generated cache
 research-index.json
+
+# SkillOpt framework (separate repo)
+SkillOpt/
