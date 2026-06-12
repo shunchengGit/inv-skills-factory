@@ -1,0 +1,3 @@
+[submodule "SkillOpt"]
+	path = SkillOpt
+	url = git@github.com:microsoft/SkillOpt.git
