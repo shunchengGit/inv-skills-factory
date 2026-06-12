@@ -1,0 +1,75 @@
+[
+  {
+    "id": "default-046",
+    "task_type": "default",
+    "question": "产品经理提了一个小优化需求，优化登录页面的加载速度，不算特别紧急但需要记录下来安排时间做。",
+    "expected_commands": [
+      "python3 scripts/todo.py add \"优化登录页面加载速度\""
+    ],
+    "ground_truth": "不带 --priority 参数的 add 命令使用默认中优级别，任务写入重要不紧急 section"
+  },
+  {
+    "id": "default-056",
+    "task_type": "default",
+    "question": "你上周添加了一个关于「续费企业微信许可证」的任务，今天终于完成了续费操作，想通过关键词把这个任务标记为已完成。",
+    "expected_commands": [
+      "python3 scripts/todo.py done \"企业微信\""
+    ],
+    "ground_truth": "done 通过关键词在非已完成 section 中模糊匹配，找到唯一匹配时将任务行移到 已完成 section 并自动 commit+push"
+  },
+  {
+    "id": "default-003",
+    "task_type": "default",
+    "question": "上周加了个日志平台迁移的任务，我手头有它的 ID（从之前的 init 输出里抄下来了），直接按 ID 精确完成它，不想误伤其他名称相近的任务。",
+    "expected_commands": [
+      "python3 scripts/todo.py done --id def5678"
+    ],
+    "ground_truth": "done --id 按精确 ID 匹配任务，避免关键词模糊匹配可能误匹配多个任务的问题，移入已完成 section 后自动 push"
+  },
+  {
+    "id": "default-028",
+    "task_type": "default",
+    "question": "团队之前用的是每日日志文件记录任务，现在准备迁到统一的 TODO.md 单文件模式。我需要跑一下迁移命令，把那些分散的日志合并进来并给每条补上 ID，然后看看迁移后的完整任务列表。",
+    "expected_commands": [
+      "python3 scripts/todo.py migrate",
+      "python3 scripts/todo.py init"
+    ],
+    "ground_truth": "migrate 先将每日日志中的任务合并到 TODO.md 并为每条生成 sha1 ID，完成后 init 查看迁移后的全量任务列表。两步串联完成从旧格式到新格式的完整迁移验证。"
+  },
+  {
+    "id": "default-038",
+    "task_type": "default",
+    "question": "你之前一直用旧版的每日日志文件来记录待办，现在想迁移到新的 TODO.md 单文件模式，把所有分散的日志合并进来并自动补上 ID。",
+    "expected_commands": [
+      "python3 scripts/todo.py migrate"
+    ],
+    "ground_truth": "migrate 命令将旧的每日日志合并到 TODO.md 并自动生成 ID，覆盖数据迁移场景，验证从旧格式到新单文件架构的兼容路径。"
+  },
+  {
+    "id": "default-006",
+    "task_type": "default",
+    "question": "产品经理让我下午三点前把用户反馈分析报告写完。这是一项重要但不紧急的任务，我直接用默认优先级加到待办里就行，不用特别标记高优。",
+    "expected_commands": [
+      "python3 scripts/todo.py add \"完成用户反馈分析报告，下午三点前交付\""
+    ],
+    "ground_truth": "add 不带 --priority 时默认为中优（important_not_urgent），符合该任务的紧急程度描述"
+  },
+  {
+    "id": "default-035",
+    "task_type": "default",
+    "question": "你在终端里匆忙敲了一条待办，但只打了 python3 scripts/todo.py add 就回车了，忘了写具体内容。",
+    "expected_commands": [
+      "python3 scripts/todo.py add"
+    ],
+    "ground_truth": "缺少必填参数 content 的边界情况，add 命令在没有内容时会因参数不足而失败，验证命令对必填参数的校验行为。"
+  },
+  {
+    "id": "default-044",
+    "task_type": "default",
+    "question": "刚换了新电脑，想用同事推荐的 gen-todo-tracker 来管理自己的开发任务，需要先初始化一下待办系统，看看当前有哪些任务在列表里。",
+    "expected_commands": [
+      "python3 scripts/todo.py init"
+    ],
+    "ground_truth": "init 命令拉取远程仓库并输出完整任务 JSON，首次使用时 clone 仓库，后续使用时 pull --rebase 同步"
+  }
+]

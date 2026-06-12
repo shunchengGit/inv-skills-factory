@@ -8,5 +8,8 @@
   },
   "references": {},
   "dependencies": [],
-  "derivedFrom": "assist"
+  "derivedFrom": "assist",
+  "optimization": {
+    "enabled": true
+  }
 }

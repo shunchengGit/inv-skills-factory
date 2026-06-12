@@ -1,0 +1,95 @@
+[
+  {
+    "id": "default-007",
+    "task_type": "default",
+    "question": "线上支付接口突然挂了，需要立刻排查修复。这是紧急故障，必须标记为高优。修好之后用任务 ID 精确标记完成，避免误操作其他任务。",
+    "expected_commands": [
+      "python3 scripts/todo.py add \"排查修复线上支付接口故障\" --priority high"
+    ],
+    "ground_truth": "--priority high 将任务标记为高优，配合 done --id 可精确完成指定任务，适用于紧急故障场景的单条操作"
+  },
+  {
+    "id": "default-055",
+    "task_type": "default",
+    "question": "老板突然通知明天上午要演示 Q2 产品路线图，你需要在待办里加一个最高优先级的任务，提醒自己今晚必须准备好演示文稿。",
+    "expected_commands": [
+      "python3 scripts/todo.py add \"准备Q2产品路线图演示文稿\" --priority high"
+    ],
+    "ground_truth": "--priority high 将任务写入 TODO.md 的 高优 section，带 🔴 标记，与默认 medium 写入 重要不紧急 section 的行为不同"
+  },
+  {
+    "id": "default-009",
+    "task_type": "default",
+    "question": "早上刚到公司，想先看看这周还有哪些待办没完成，然后记一个今天要做的事情：和产品经理对齐 Q3 需求优先级。",
+    "expected_commands": [
+      "python3 scripts/todo.py init",
+      "python3 scripts/todo.py add \"和产品经理对齐 Q3 需求优先级\""
+    ],
+    "ground_truth": "init 拉取最新任务全量 JSON 供用户感知当前任务池，然后 add 将新任务写入 TODO.md 并自动 push。"
+  },
+  {
+    "id": "default-015",
+    "task_type": "default",
+    "question": "刚换了新电脑，之前一直用手机记待办。现在想在电脑上同步所有待办任务，需要先拉取仓库数据看看当前有哪些任务。",
+    "expected_commands": [
+      "python3 scripts/todo.py init"
+    ],
+    "ground_truth": "首次使用时 init 命令会 clone 仓库并输出全量任务 JSON，后续调用则 pull --rebase 同步"
+  },
+  {
+    "id": "default-016",
+    "task_type": "default",
+    "question": "之前加了一个任务'编写周报邮件模版'，现在做完了，想把它标记为已完成。用关键词'周报邮件'来匹配并完成它。",
+    "expected_commands": [
+      "python3 scripts/todo.py done \"周报邮件\""
+    ],
+    "ground_truth": "done 支持关键词模糊匹配任务内容，匹配到唯一任务后将其从当前 section 移除并追加到 # 已完成 section"
+  },
+  {
+    "id": "default-018",
+    "task_type": "default",
+    "question": "想看看有没有关于'团建'的待办任务，但搜索后发现没有匹配的，系统应该返回未找到的提示而不是报错。",
+    "expected_commands": [
+      "python3 scripts/todo.py done \"团建\""
+    ],
+    "ground_truth": "done 搜索无匹配时返回 success=true, matched=0 及 hint，不会报错退出"
+  },
+  {
+    "id": "default-048",
+    "task_type": "default",
+    "question": "早上先拉取最新任务列表看一下今天的安排，然后加一个 review 同事 PR 的任务，等 review 完之后再用之前返回的任务 ID 精确标记完成。",
+    "expected_commands": [
+      "python3 scripts/todo.py init",
+      "python3 scripts/todo.py add \"review 同事的 PR #458\"",
+      "python3 scripts/todo.py done --id 7a8b9c0"
+    ],
+    "ground_truth": "典型的多步骤工作流：init 拉取最新数据 → add 添加新任务 → done --id 按 ID 精确完成，避免模糊匹配的歧义"
+  },
+  {
+    "id": "default-002",
+    "task_type": "default",
+    "question": "产品经理刚在群里说周五之前必须把用户画像模块的性能优化做完，这个很重要，我要立刻记下来并标记为高优先级。",
+    "expected_commands": [
+      "python3 scripts/todo.py add \"用户画像模块性能优化\" --priority high"
+    ],
+    "ground_truth": "add 命令带 --priority high 会将任务写入 TODO.md 的高优 section，并自动 pull --rebase、commit、push 到远程仓库"
+  },
+  {
+    "id": "default-008",
+    "task_type": "default",
+    "question": "之前用旧版 todo 工具时任务分散在每日日志文件里，现在需要统一迁移到 TODO.md 中，同时给每条任务自动生成 sha1 前 7 位作为唯一 ID，方便后续用 --id 精确操作。",
+    "expected_commands": [
+      "python3 scripts/todo.py migrate"
+    ],
+    "ground_truth": "migrate 命令将历史每日日志中的任务合并到 TODO.md 并自动添加 sha1 前 7 位的 ID 注释，是从旧格式迁移到新格式的标准操作"
+  },
+  {
+    "id": "default-041",
+    "task_type": "default",
+    "question": "把刚才加的竞品分析报告任务完成了，先用关键词搜一下确认是哪个再标记完成。但这个词比较通用可能有多个匹配，试试看返回候选列表我再选。",
+    "expected_commands": [
+      "python3 scripts/todo.py done \"竞品分析\""
+    ],
+    "ground_truth": "done 支持关键词模糊匹配，多个匹配时会返回候选列表让用户进一步选择"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "name": "harness-skillopt",
+  "version": "1.0.0",
+  "description": "SkillOpt 技能优化评估（训练/评估/替换 SKILL.md）",
+  "platforms": ["ios", "android"],
+  "type": "flexible",
+  "scripts": {
+    "optimize_skill.py": "技能优化运行器（桥接 SkillOpt 框架）",
+    "generate_eval.py": "技能评估环境生成器（脚手架）",
+    "auto_generate_dataset.py": "LLM 驱动的训练数据自动生成器"
+  },
+  "references": {},
+  "dependencies": []
+}
