@@ -73,8 +73,8 @@ dws doc block list --node <NODE_ID> --format json > /tmp/dingtalk_blocks.json 2>
 
 ```bash
 # 1. 构建完整 Markdown 内容（包含表格+个人工作+团队工作），写入临时文件
-# 2. 用 doc update 更新
-dws doc update --node <NODE_ID> --content-file /tmp/dingtalk_doc_update.md --format json
+# 2. 用 doc update 更新（必须用 --mode overwrite 全文覆写；添加 -y 跳过确认提示）
+dws doc update --node <NODE_ID> --content-file /tmp/dingtalk_doc_update.md --mode overwrite --format json -y
 ```
 
 **PAT 授权**：doc update 需要 `doc:update` scope 授权，首次使用会弹出授权 URL，需用户在浏览器确认。
@@ -261,3 +261,6 @@ doc update / block insert / block update 都需要 PAT 授权。首次使用会�
 
 ### 邮箱格式不统一
 公司邮箱不能按"姓全拼+名首字母"规则推测（如何宏辉是 hhh@tuwan.com 而非 hehhonghui），必须从 .env 或邮件记录确认。
+
+### 邮箱授权码过期
+TL_MAIL_PASS（企业邮箱授权码）可能过期，导致 IMAP/SMTP 登录失败。需用户在腾讯企业邮箱后台重新生成授权码并更新 .env 文件。
