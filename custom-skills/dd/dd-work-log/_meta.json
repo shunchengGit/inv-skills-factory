@@ -1,0 +1,15 @@
+---
+name: dd-work-log
+version: 0.1.0
+description: 工作记录管理技能：底层存储委托给 dd-skills-memory，技能本身无执行代码，纯声明式
+commands:
+  - /wl_init - 初始化/拉取工作记录文档，输出全量记录 JSON
+  - /wl_add - 添加工作记录
+  - /wl_list - 列出指定月份的工作记录
+  - /wl_search - 搜索工作记录
+  - /wl_report - 生成日报/周报/月报
+scripts: {}
+references: {}
+dependencies:
+  - dd-skills-memory
+derivedFrom: null

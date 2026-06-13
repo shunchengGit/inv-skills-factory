@@ -1,0 +1,14 @@
+---
+name: dd-todo-tracker
+version: 0.1.0
+description: TODO 管理技能：底层存储委托给 dd-skills-memory，技能本身无执行代码，纯声明式
+commands:
+  - /td_init - 初始化/拉取 TODO 文档，输出全量任务 JSON
+  - /td_add - 添加任务到知识库
+  - /td_done - 完成任务（移到已完成 section）
+  - /td_list - 列出当前未完成任务
+scripts: {}
+references: {}
+dependencies:
+  - dd-skills-memory
+derivedFrom: null

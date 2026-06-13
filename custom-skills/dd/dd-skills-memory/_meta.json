@@ -1,0 +1,21 @@
+---
+name: dd-skills-memory
+version: 0.1.0
+description: 技能统一存储服务：纯通用存储，与技能无关，提供原子 CRUD 操作
+commands:
+  - /sm_find - 查找文档
+  - /sm_create - 创建文档
+  - /sm_read - 读取文档内容
+  - /sm_write - 写入文档内容
+  - /sm_delete - 删除文档
+  - /sm_list - 列出技能的所有文档
+scripts:
+  sm_find: scripts/skills_memory.py find
+  sm_create: scripts/skills_memory.py create
+  sm_read: scripts/skills_memory.py read
+  sm_write: scripts/skills_memory.py write
+  sm_delete: scripts/skills_memory.py delete
+  sm_list: scripts/skills_memory.py list
+references: {}
+dependencies: []
+derivedFrom: null
