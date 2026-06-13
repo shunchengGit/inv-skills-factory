@@ -4,9 +4,9 @@ description: 当需要查看、添加、完成或管理待办任务时使用，�
 version: 0.1.0
 commands:
   - /td_init - 初始化/拉取 TODO 和当月 DONE 文档，输出全量任务 JSON
-  - /td_add - 添加任务到知识库
-  - /td_done - 完成任务（移到已完成 section）
-  - /td_list - 列出当前未完成任务
+  - /td_add <任务内容> [--priority high/medium/low] - 添加任务到 TODO 文档
+  - /td_done <关键词> [--id xxx] - 从 TODO 移除任务（按关键词或 ID 匹配），追加到 DONE 文档
+  - /td_list - 列出 TODO 文档中所有未完成任务
 ---
 
 # dd-todo-tracker：TODO 管理
@@ -20,60 +20,34 @@ commands:
 | `/td_init` | 初始化/读取 TODO 和当月 DONE 文档，输出全量任务 JSON | `sm.get_or_create_doc("dd-todo-tracker", "TODO")` + `sm.get_or_create_doc("dd-todo-tracker", "DONE-YYYY-MM")` |
 | `/td_add <任务内容> [--priority high/medium/low]` | 添加任务到 TODO 文档 | `sm.read_doc` → 解析 → 追加 → `sm.update_doc` |
 | `/td_done <关键词> [--id xxx]` | 从 TODO 中移除任务，追加到 DONE 文档 | `sm.read_doc(TODO)` → 查找移除 → `sm.update_doc(TODO)` + `sm.read_doc(DONE)` → 追加 → `sm.update_doc(DONE)` |
-| `/td_list` | 列出 TODO 文档中所有未完成任务 | `sm.read_doc(TODO)` → 按 section 解析 |
+| `/td_list` | 列出 TODO 文档中所有未完成任务 | `sm.read_doc(TODO)` → 按标签过滤 |
 
 ## 记录格式
 
-每个任务行包含 ID，用 section 区分优先级和完成状态（无 `[x]`/`[ ]` checkbox）:
+每个任务行包含 ID 和优先级标签：
 
 ```markdown
-# 高优
-- [#abc1234] 任务内容
-
-# 重要不紧急
-- [#def5678] 任务内容
-
-# 暂缓
-- [#ghi9012] 任务内容
-
-# 已完成
-- [#jkl3456] 任务内容
+- [#abc1234] 完成需求评审 [高优]
+- [#def5678] 编写技术方案 [重要不紧急]
+- [#ghi9012] 整理文档 [暂缓]
 ```
+
+| `--priority` | 标签 | 说明 |
+|-------------|------|------|
+| `high` | `[高优]` | 紧急且重要 |
+| `medium` | `[重要不紧急]` | 重要但不紧急 |
+| `low` | `[暂缓]` | 可延后处理 |
 
 - ID 格式：`[#xxx]`，放在任务内容前面
 - ID 生成算法：任务内容的 sha1 哈希取前 7 位
-- 完成状态由 section 决定，不需要 checkbox 标记
-- `done` 支持关键词匹配（模糊）和 `--id`（精确），多个关键词匹配时返回候选列表
-
-## 优先级映射
-
-| `--priority` 参数 | 对应 section | 说明 |
-|------------------|------------|------|
-| `high` | `# 高优` | 紧急且重要 |
-| `medium` | `# 重要不紧急` | 重要但不紧急 |
-| `low` | `# 暂缓` | 可延后处理 |
+- 优先级用标签表示，格式 `[标签名]`，放在任务内容后面- `done` 支持关键词匹配（模糊）和 `--id`（精确），多个关键词匹配时返回候选列表
 
 ## 文档命名约定
 
 | 文档 | 命名格式 | 用途 | 内容格式 |
 |------|---------|------|---------|
-| TODO | `TODO` | 待办任务（高优/重要不紧急/暂缓） | 按 section 区分优先级 |
+| TODO | `TODO` | 待办任务（高优/重要不紧急/暂缓） | 按标签区分优先级 |
 | DONE-YYYY-MM | `DONE-2026-06` | 按月存放已完成任务 | 平铺列表，无 section |
-
-### TODO 文档格式
-
-按 section 组织，每个 section 对应一个优先级：
-
-```markdown
-# 高优
-- [#abc1234] 完成需求评审
-
-# 重要不紧急
-- [#def5678] 编写技术方案
-
-# 暂缓
-- [#ghi9012] 整理文档
-```
 
 ### DONE 文档格式
 
