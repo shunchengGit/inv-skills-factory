@@ -21,8 +21,19 @@ trigger:
 
 ## 前置条件
 
-1. `dws` 已安装且已登录（详见 `gen-dingtalk` 前置条件）
+1. `dws` CLI 已安装且已登录
 2. 已授权 `doc:read` 权限（如未授权，执行 `dws pat chmod doc:read --agentCode workbuddy --grant-type permanent --format json`）
+
+**检查 dws 可用性**：
+
+```bash
+dws version --format json
+dws auth status --format json
+```
+
+- 版本不满足或未安装 → 安装 `npm install -g dingtalk-workspace-cli`
+- 未登录 → 执行 `dws auth login`
+- 未授权 → 执行 `dws pat chmod doc:read --agentCode workbuddy --grant-type permanent --format json`
 
 ## 中文编码注意事项
 
