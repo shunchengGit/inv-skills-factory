@@ -37,7 +37,6 @@ custom-skills/                  # 技能源码（按分类隔离）
     inv-valuation-engine/       #   估值引擎
     inv-qarp-strategy/          #   操作决策
     inv-porter-five-forces/     #   五力分析
-    inv-tencent-indicators/     #   前置指标（腾讯）
     inv-research-analyzer/      #   研报分析
     inv-topic-researcher/       #   投资主题研究
 
@@ -107,7 +106,6 @@ inv-topic-researcher ─┐
   ├── inv-web-crawler（搜索+抓取）
   └── gen-knowledge-curator（存储）  ↑ 串联两个技能的编排层
 
-inv-tencent-indicators（前置指标，独立脚本）
 inv-research-analyzer（研报分析，独立脚本）
 ```
 

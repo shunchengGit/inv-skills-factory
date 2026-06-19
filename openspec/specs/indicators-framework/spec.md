@@ -102,6 +102,3 @@
 - `config.py` — `IndicatorConfig` dataclass, handler 注册表
 - `handlers.py` — 各 handler 类型的处理逻辑（kline, macro, ranking, agent_search）
 
-#### Scenario: 从 tencent 技能导入
-- **WHEN** `inv-tencent-indicators/scripts/tencent_indicators.py` 需要框架
-- **THEN** 通过 `from indicators.builder import build_snapshot, render_text_snapshot` 导入
