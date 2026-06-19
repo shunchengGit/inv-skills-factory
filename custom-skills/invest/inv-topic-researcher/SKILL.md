@@ -1,12 +1,12 @@
 ---
 name: inv-topic-researcher
-description: 对投资主题持续搜索研究，结果存入知识库。串联 inv-web-crawler 和 gen-knowledge-curator
+description: 对投资主题持续采集研究，结果存入知识库。串联 inv-web-crawler 和 gen-knowledge-curator
 version: 1.0.0
 trigger:
   - 研究主题
   - 主题研究
   - 调研
-  - 搜索并整理
+  - 采集并整理
   - research
 dependencies:
   - inv-web-crawler
@@ -15,7 +15,7 @@ dependencies:
 
 # inv-topic-researcher：投资主题持续研究
 
-串联 `inv-web-crawler`（搜索+抓取）和 `gen-knowledge-curator`（存储），
+串联 `inv-web-crawler`（网页抓取）和 `gen-knowledge-curator`（存储），
 对某个投资主题持续采集、整理、入库。
 
 ## 命令

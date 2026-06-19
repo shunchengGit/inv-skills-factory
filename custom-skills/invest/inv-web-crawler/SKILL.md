@@ -1,6 +1,6 @@
 ---
 name: inv-web-crawler
-description: 当需要抓取指定 URL 的网页内容时使用，基于 Playwright 无头浏览器。仅支持抓取（需提供 URL），不支持搜索
+description: 当需要抓取指定 URL 的网页内容时使用，基于 Playwright 无头浏览器，支持 JS 渲染页面
 version: 5.0.0
 commands:
   - /pwright_scrape - Playwright JS 渲染抓取 → Markdown
@@ -9,16 +9,7 @@ commands:
 
 # inv-web-crawler：Playwright 网页抓取
 
-> **定位**：纯抓取工具，输入 URL → 输出 Markdown/纯文本。**不支持搜索**（原因见下方）。
-
-## 为什么没有搜索
-
-| 方案 | 问题 |
-|------|------|
-| SearXNG（原方案） | 对金融术语（"10年期国债"）、英文缩写（CPI/FOMC）、中英混合查询经常返回空结果 |
-| 无头浏览器搜 Google/Bing/DuckDuckGo | 全部触发 CAPTCHA，无法使用 |
-
-**替代方式**：浏览器手动搜索 → 找到目标 URL → 用本技能抓取。或直接访问已知站点（CNBC/Investopedia/Yahoo Finance 等）。
+> **定位**：纯抓取工具，输入 URL → 输出 Markdown/纯文本。
 
 ## 快速命令
 
@@ -63,7 +54,7 @@ uv run --with playwright --with html2text \
 |--------|----------|
 | CNBC（实时行情+新闻） | Reuters / Barrons（DataDome 反爬） |
 | Investopedia（JS 渲染） | Macrotrends（Cloudflare 拦截） |
-| Yahoo Finance（JS 渲染，含实时数据） | 所有搜索引擎（CAPTCHA） |
+| Yahoo Finance（JS 渲染，含实时数据） | Google/Bing/DuckDuckGo（CAPTCHA） |
 | BBC / Wikipedia / CFI | — |
 
 ## 降级策略
