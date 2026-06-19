@@ -1,103 +1,99 @@
 ---
 name: inv-web-crawler
-description: 当需要搜索网页或抓取页面数据时使用，支持搜索引擎和浏览器模拟抓取
-version: 4.0.0
+description: 当需要抓取网页数据时使用，基于 Playwright 无头浏览器，支持 JS 渲染页面
+version: 5.0.0
 commands:
-  - /cs_crawl_search - Web search via SearXNG
-  - /cs_crawl_scrape - Full-page scrape → markdown
-  - /cs_crawl_crawl - Async multi-page crawl
-  - /cs_crawl_extract - Batch URL extraction → markdown
-  - /cs_crawl_pwright - Playwright JS-rendered scrape → markdown
+  - /pwright_scrape - Playwright JS 渲染抓取 → Markdown
+  - /pwright_text - Playwright JS 渲染抓取 → 纯文本
 ---
 
-# inv-web-crawler：搜索与抓取工具箱
+# inv-web-crawler：Playwright 网页抓取
 
-## 命令
+## 快速命令
 
-| 命令 | 用途 |
-|------|------|
-| `/cs_crawl_search <query>` | Web 搜索（SearXNG） |
-| `/cs_crawl_scrape <url>` | 全页抓取 → Markdown（Firecrawl，无 JS） |
-| `/cs_crawl_crawl <url>` | 异步多页爬取 |
-| `/cs_crawl_extract <url1> <url2> ...` | 批量 URL 抓取 |
-| `/cs_crawl_pwright <url>` | Playwright 抓取 → Markdown（有 JS 渲染） |
-
-## 脚本
-
-| 脚本 | 用途 |
-|------|------|
-| `scripts/pwright_scrape.py scrape <url>` | Playwright 抓取 → Markdown |
-| `scripts/pwright_scrape.py scrape <url> --selector article` | 指定 CSS 选择器提取 |
-| `scripts/pwright_scrape.py scrape <url> --wait 5000` | 延长 JS 等待时间 |
-| `scripts/pwright_scrape.py text <url>` | Playwright 抓取 → 纯文本（更快） |
-
-## 接口
-
-本地 Firecrawl adapter：
-
-```
-POST http://localhost:3672/v1/search    — 搜索
-POST http://localhost:3672/v1/scrape    — 抓取
-POST http://localhost:3672/v1/crawl     — 爬取
-POST http://localhost:3672/v1/extract   — 批量提取
-```
-
-## SearXNG 限制
-
-对含数字的专业术语（"10年期国债"、"S&P 500"）、金融缩写（"CPI"、"FOMC"）、中英混合查询经常失效。换英文关键词或直接抓已知URL。
-
-## 搜索引擎可用性（2026-05 实测）
-
-所有主流搜索引擎在无头浏览器下都触发 CAPTCHA（Google/Bing/DuckDuckGo/Brave/Ecosia/Yandex），不能用来做搜索。
-
-## 网站抓取可用性（2026-05 实测）
-
-### Firecrawl scrape
-
-| 可抓取 | 不可抓取 |
-|--------|----------|
-| CNBC 行情页（实时数据+新闻） | Yahoo Finance（JS渲染） |
-| BBC Business / Guardian Markets | Investopedia（JS渲染） |
-| CFI（金融教育，完整） | MarketWatch（JS+反爬） |
-| Wikipedia（完整） | NerdWallet/Forbes/Fidelity/Schwab |
-
-### browser → pwright_scrape（有JS渲染）
-
-| 可抓取 | 不可抓取 |
-|--------|----------|
-| CNBC | Reuters/Barrons（DataDome） |
-| Investopedia | Macrotrends（Cloudflare） |
-| BBC / Wikipedia / CFI | 所有搜索引擎（CAPTCHA） |
-
-## 抓取工具选择
-
-| 工具 | JS渲染 | 速度 | 适用 |
-|------|--------|------|------|
-| Firecrawl scrape | 无 | 快 | 静态页面 |
-| web_extract | 无 | 中 | 需LLM摘要 |
-| pwright_scrape | 有 | 中 | SPA/JS渲染页面（Investopedia等） |
-| pwright_scrape text | 有 | 中 | 只需纯文本时更快 |
-
-## 代理配置
-
-部分境外网站直连不可达，需走代理。代理地址 `http://127.0.0.1:7890`。
-
-**Firecrawl 请求走代理**：
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
+# Markdown 输出（推荐，保留链接和结构）
+uv run --with playwright --with html2text \
+  {baseDir}/scripts/pwright_scrape.py scrape <url>
+
+# 纯文本输出（更快，适合只需文字内容的场景）
+uv run --with playwright --with html2text \
+  {baseDir}/scripts/pwright_scrape.py text <url>
+
+# 指定 CSS 选择器（只提取匹配元素）
+uv run --with playwright --with html2text \
+  {baseDir}/scripts/pwright_scrape.py scrape <url> --selector "article"
+
+# 延长 JS 等待时间（SPA / 慢页面）
+uv run --with playwright --with html2text \
+  {baseDir}/scripts/pwright_scrape.py scrape <url> --wait 5000
+
+# 指定加载等待策略
+uv run --with playwright --with html2text \
+  {baseDir}/scripts/pwright_scrape.py scrape <url> --wait-until networkidle
 ```
 
-**pwright_scrape 走代理**：自动检测本地 Clash 代理，无需手动配置。
+## 脚本参数
 
-**降级链路**：直连失败 → 走代理 → 回退 Tinybird 代理
+| 子命令 | 参数 | 说明 |
+|--------|------|------|
+| `scrape <url>` | `--selector <css>` | CSS 选择器，只提取匹配元素 |
+| | `--wait <ms>` | 页面加载后额外等待毫秒数（默认 3000） |
+| | `--wait-until <strategy>` | 加载等待策略：`domcontentloaded`（默认）/ `load` / `networkidle` |
+| | `--proxy <url>` | 代理地址（默认自动检测本地 Clash） |
+| `text <url>` | `--wait <ms>` | 同 scrape |
+| | `--proxy <url>` | 同 scrape |
+
+## 抓取可用性
+
+以下为 2026-05 Playwright 实测：
+
+| 可抓取 | 不可抓取 |
+|--------|----------|
+| CNBC（实时行情+新闻） | Reuters / Barrons（DataDome 反爬） |
+| Investopedia（JS 渲染） | Macrotrends（Cloudflare 拦截） |
+| Yahoo Finance（JS 渲染，含实时数据） | 所有搜索引擎（CAPTCHA） |
+| BBC / Wikipedia / CFI | — |
+
+## 降级策略
+
+无法抓取的页面按以下优先级降级：
+
+1. **代理重试**：直连超时 → 走 Clash 代理（`--proxy http://127.0.0.1:7890`，脚本自动检测）
+2. **延长等待**：SPA 页面内容为空 → `--wait 8000 --wait-until networkidle`
+3. **换子页面**：首页被拦截 → 尝试 `/about/`、`/contact/` 等子路径（Cloudflare 常对首页严格但内页宽松）
+4. **放弃**：DataDome / Cloudflare 无解，标注"无法抓取，需人工查看"
+
+## 正文提取逻辑
+
+`lib/pwright.py` 内置智能正文提取：按顺序遍历语义选择器，首个 >200 字符命中即为正文：
+
+```
+main → article → [role='main'] → .post-content → .article-content
+  → .content → #content → #main → .markdown-body → 回退 body 全页
+```
+
+- `scrape` 子命令先提取 HTML → `html2text` 转 Markdown（保留链接、忽略图片）
+- `text` 子命令直接提取 `inner_text()`，跳过 html2text，速度更快
+- 输出截断 60,000 字符
+
+## 代理
+
+脚本启动时自动调用 `lib/proxy.py` 的 `detect_proxy()`，按以下顺序检测：
+
+1. 环境变量 `HTTPS_PROXY` / `HTTP_PROXY`
+2. 本地 Clash 端口扫描（7890 → 7891 → 7897）
+3. 无可用代理时直连
+
+也可手动指定：`--proxy http://127.0.0.1:7890`。
 
 ## 常见问题
 
 | 问题 | 解决 |
 |------|------|
-| `Connection refused` | 本地 Firecrawl 未启动，用 pwright_scrape 替代 |
-| `Connection reset` / SSL 错误 | 代理不稳定，检查代理是否正常 |
-| 境外网站超时 | 检查代理是否启动，设置 HTTP_PROXY/HTTPS_PROXY |
-| 返回空内容 | 页面可能是 SPA，用 pwright_scrape 代替 |
-| 中文搜索结果差 | 换英文关键词重试 |
+| `playwright not installed` | 需要浏览器引擎，先跑一次 `uv run playwright install chromium` |
+| 返回空内容 / markdown 为 `\n` | 可能是 SPA 页面，延长等待 `--wait 8000 --wait-until networkidle` |
+| `Connection reset` / SSL 错误 | 代理不稳定，检查 Clash 是否正常运行 |
+| 境外网站超时 | 确保代理已启动（Clash 7890 端口），脚本应自动检测 |
+| 被 Cloudflare/DataDome 拦截 | 无解，标注"无法抓取"，走降级策略 |
+| `uv run` 每次下载依赖 | 可在项目级 pyproject.toml 预声明依赖避免重复下载 |

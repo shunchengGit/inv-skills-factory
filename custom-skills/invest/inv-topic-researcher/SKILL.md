@@ -178,7 +178,7 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py
 
 ## 依赖
 
-- `inv-web-crawler` — 搜索 + Firecrawl/pwright 抓取
+- `inv-web-crawler` — Playwright 抓取
 - `gen-knowledge-curator` — 知识库存储 + git 同步
 - `lib/pwright.py` — JS 渲染页面兜底
 - `lib/git.py` — git 操作

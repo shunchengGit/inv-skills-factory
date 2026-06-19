@@ -101,6 +101,6 @@ tags: [python, async]
 
 ## 依赖
 
-- `inv-web-crawler`：Firecrawl adapter + pwright_scrape
+- `inv-web-crawler`：Playwright 无头浏览器抓取
 - `_shared/proxy.py`：代理检测
 - 远程仓库：`git@github.com:shunchengGit/knowledge.git`

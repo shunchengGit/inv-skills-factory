@@ -10,10 +10,10 @@ from __future__ import annotations
 # ///
 """Playwright 无头浏览器抓取 CLI。
 
-Firecrawl adapter 用 requests.get 无法渲染 JS，导致 Investopedia、Yahoo Finance 等
-SPA/JS 重度页面返回空内容或 Cloudflare 拦截页。本脚本用 Playwright chromium 解决。
+用 Playwright chromium 解决 requests.get 无法渲染 JS 的问题，
+适用于 Investopedia、Yahoo Finance 等 SPA/JS 重度页面。
 
-核心逻辑由 base-pwright 提供，本脚本仅为 CLI 适配层。
+核心逻辑由 lib/pwright.py 提供，本脚本仅为 CLI 适配层。
 
 用法:
   uv run custom-skills/invest/inv-web-crawler/scripts/pwright_scrape.py scrape <url>
