@@ -17,6 +17,6 @@
     "km_lint": "scripts/km_lint.py"
   },
   "references": {},
-  "dependencies": ["inv-web-crawler"],
+  "dependencies": [],
   "derivedFrom": null
 }

@@ -104,48 +104,9 @@ uv run {valuationDir}/../inv-stock-data/scripts/cs_stock_info.py financials 0700
 
 **注意**：Yahoo financials 单位通常为**人民币**（PDD 等中概股），市值计算需统一为美元或人民币。
 
-**若 inv-stock-data financials 也失败**（info SSL + financials 同时不可用），才降级到 Step B（inv-web-crawler）或手动计算。
+**若 inv-stock-data financials 也失败**（info SSL + financials 同时不可用），才降级到手动计算。
 
-### B. 通过 inv-web-crawler 抓取 Yahoo Finance Analysis 页面
-
-当所有 yfinance 端点均不可用，或需要分析师一致预期时，调用 inv-web-crawler 技能：
-
-```bash
-# 1. 用 inv-web-crawler 抓取 Yahoo Analysis 页面
-/cs_crawl_scrape https://finance.yahoo.com/quote/PDD/analysis
-```
-
-若页面需要 JS 渲染，Firecrawl scrape 会失败，此时用 pwright_scrape：
-
-```bash
-# 2. Firecrawl 失败时，用 pwright_scrape 抓取
-uv run custom-skills/inv-web-crawler/scripts/pwright_scrape.py text "https://finance.yahoo.com/quote/PDD/analysis"
-```
-```
-
-**典型输出字段**（从 innerText 提取）：
-- `No. of Analysts`：覆盖分析师数量
-- `Avg. Estimate`：营收/EPS 平均预期
-- `Low Estimate` / `High Estimate`：预期区间
-- `Year Ago EPS`：去年同期 EPS
-
-**提取后解析模板**（从 pwright_scrape 返回的 markdown/纯文本提取）：
-
-```python
-# 将 pwright_scrape 返回的文本解析
-raw_lines = text.split('\n')  # pwright_scrape text 输出
-estimates = {}
-for i, line in enumerate(raw_lines):
-    if 'Revenue Estimate' in line:
-        # 下一行通常是 No. of Analysts\t13\t9\t34\t30
-        parts = raw_lines[i+1].split('\t')
-        estimates['revenue_analysts_q1'] = parts[1]
-    if 'Avg. Estimate' in line and 'Revenue' in raw_lines[i-1]:
-        parts = raw_lines[i+1].split('\t')  # 109.4B\t119.45B\t493.86B\t554.46B
-        estimates['revenue_avg_fy1'] = parts[2]
-```
-
-### C. 手动计算校验脚本
+### B. 手动计算校验脚本
 
 当脚本和自动化均不可用时，用以下内联 Python 完成核心估值计算：
 
@@ -324,7 +285,7 @@ for scenario, profit, pe_mult in [
 
 - **ModuleNotFoundError**: yfinance 未安装。用系统 Python 的 pip 安装，或复用之前的 venv。
 - **YFRateLimitError**: 代理不稳定。切换代理端口（7890/7891/7897）或等待几分钟重试。
-- **SSL / Connection reset**: `info()` 和 `recommendations()` 端点因 SSL 握手失败时，优先降级到 `financials` 端点 + inv-web-crawler 抓取（见 Step B）。
+- **SSL / Connection reset**: `info()` 和 `recommendations()` 端点因 SSL 握手失败时，优先降级到 `financials` 端点。
 - **全端点 blackout（SSL + 限流 + consent 循环）**: 按本文件「D. 全端点 blackout」链路执行：snapshot 锚定 → PDF 提取 → 手动计算。
 - **字段为 None**: Yahoo 对该标的某些字段未提供。标注缺口，不能用 None 填充结论。
 

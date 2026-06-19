@@ -50,7 +50,6 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | **gen-mail-agent** | 发送/查看/管理邮件、SMTP/IMAP操作 |
 | **gen-todo-tracker** | 查看/添加/完成待办任务、任务列表管理 |
 | **inv-stock-data** | 查询股票/ETF数据（A股、港股、美股） |
-| **inv-web-crawler** | JS 渲染网页抓取 → Markdown/文本 |
 | **inv-valuation-engine** | 评估股票估值、判断低估/高估 |
 | **inv-qarp-strategy** | QARP策略选股、买卖决策 |
 | **inv-porter-five-forces** | 行业竞争格局分析、企业护城河评估 |
@@ -75,7 +74,7 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 当多个技能可能适用时，按以下顺序：
 
 1. **流程技能优先**（gen-daily-planner、gen-todo-tracker）— 决定 HOW
-2. **数据技能其次**（inv-stock-data、inv-web-crawler）— 获取信息
+2. **数据技能其次**（inv-stock-data）— 获取信息
 3. **分析技能最后**（inv-valuation-engine、inv-porter-five-forces）— 分析决策
 
 "查一下腾讯股票" → inv-stock-data 先获取数据，再分析

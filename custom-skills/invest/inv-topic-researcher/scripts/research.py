@@ -25,7 +25,7 @@ from proxy import detect_proxy
 
 SEARXNG_URL = "http://127.0.0.1:3671/search"
 FIRECRAWL_URL = "http://localhost:3672/v1/scrape"
-PWIGHT_SCRIPT = str(Path(__file__).resolve().parents[3] / "inv-web-crawler" / "scripts" / "pwright_scrape.py")
+# pwright 抓取已移除，URL 抓取失败时由 Agent 使用 WebFetch 能力自行处理
 KM_INIT_SCRIPT = str(Path(__file__).resolve().parents[3] / "general" / "gen-knowledge-curator" / "scripts" / "km_init.py")
 
 UA = "inv-topic-researcher/1.0"
@@ -130,24 +130,8 @@ def scrape_firecrawl_batch(urls: list[str]) -> list[dict | None]:
 
 
 def scrape_pwright(url: str) -> dict | None:
-    """Playwright 兜底抓取，返回 {title, content, source} 或 None。"""
-    import subprocess
-    try:
-        r = subprocess.run(
-            ["uv", "run", PWIGHT_SCRIPT, "scrape", url, "--wait", "3000"],
-            capture_output=True, text=True, timeout=60,
-        )
-        if r.returncode != 0:
-            return None
-        data = json.loads(r.stdout)
-        if not data.get("success"):
-            return None
-        md = data.get("markdown", "")
-        if not md or len(md.strip()) < 100:
-            return None
-        return {"title": data.get("title", ""), "content": md.strip(), "source": "pwright"}
-    except Exception:
-        return None
+    """Playwright 兜底抓取已移除，由 Agent 使用 WebFetch 能力自行处理。"""
+    return None
 
 
 def scrape_url(url: str) -> dict | None:

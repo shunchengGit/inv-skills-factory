@@ -317,7 +317,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 - yfinance 覆盖了什么？缺什么？
 - 研报覆盖了什么？时效性够吗？
-- **若仍有关键缺口**（如反垄断进展、CapEx指引、行业政策变化、竞争格局最新变化），必须用 inv-web-crawler 补充后再出结论
+- **若仍有关键缺口**（如反垄断进展、CapEx指引、行业政策变化、竞争格局最新变化），必须用 Agent WebFetch 补充后再出结论
 
 #### 阶段三：分析与决策（依赖阶段二）
 
@@ -351,7 +351,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
          └───────────────────┘
                    ↓
 阶段二：增量信息检查
-  yfinance → 研报（时效性/覆盖面） → 缺口 → inv-web-crawler 补充
+  yfinance → 研报（时效性/覆盖面） → 缺口 → Agent WebFetch 补充
                                 ↓
 阶段三：分析与决策（顺序，研报结构化输出流入各环节）
   五档结论 ──┬── 选股闸门 ──┬── 估值纪律 ──┬── 买入必答 ──┬── 组合检查 → 结论 → 机会成本
@@ -397,7 +397,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 - [ ] yfinance 已覆盖：{列出已获取的关键字段}
 - [ ] 研报已覆盖：{已覆盖的观点/数据，或"无本地研报"}
 - [ ] 关键缺口：{列出 yfinance+研报均未覆盖的信息，如"反垄断进展""CapEx指引""政策变化"等}
-- [ ] inv-web-crawler 补充结果：{已补充的内容，或"无需补充"}
+- [ ] Agent WebFetch 补充结果：{已补充的内容，或"无需补充"}
 
 ### 选股闸门
 - 第一道（行业与商业模式）：通过 / 不通过 — [理由]
@@ -514,7 +514,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 ### 美股/港股 data_gaps 降级
 
-当 `valuation_snapshot.py` 对美股/港股返回超过5项 data_gaps 时，按 `inv-valuation-engine` 的 `references/us-hk-data-workaround.md` 执行手动补全，含 inv-stock-data financials 子命令、inv-web-crawler 抓取、`valuation_manual_compute.py` 三条补全链路。
+当 `valuation_snapshot.py` 对美股/港股返回超过5项 data_gaps 时，按 `inv-valuation-engine` 的 `references/us-hk-data-workaround.md` 执行手动补全，含 inv-stock-data financials 子命令、`valuation_manual_compute.py` 两条补全链路。
 
 **港股 snapshot 全空降级**（实测 0700.HK 返回 41 项 data_gaps，所有字段 null）：当 snapshot 对港股返回全部 null 时，跳过 snapshot 降级流程，直接用 inv-stock-data `financials` 子命令获取财务三表数据：
 1. `inv-stock-data financials 0700.HK --output json` 获取利润表/资产负债表/现金流量表
@@ -526,7 +526,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 增量信息获取优先级：
 1. yfinance info + financials + history（已覆盖 90% 需求）
 2. 本地券商研报 PDF（inv-research-analyzer）
-3. inv-web-crawler 直抓特定页面（仅当上述不够时）
+3. Agent WebFetch 直抓特定页面（仅当上述不够时）
 4. 搜索（最后手段，预期低效）
 
 ## 与其他技能配合

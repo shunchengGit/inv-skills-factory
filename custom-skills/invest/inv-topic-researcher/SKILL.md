@@ -1,6 +1,6 @@
 ---
 name: inv-topic-researcher
-description: 对投资主题持续采集研究，结果存入知识库。串联 inv-web-crawler 和 gen-knowledge-curator
+description: 对投资主题持续采集研究，结果存入知识库。串联 gen-knowledge-curator
 version: 1.0.0
 trigger:
   - 研究主题
@@ -9,13 +9,12 @@ trigger:
   - 采集并整理
   - research
 dependencies:
-  - inv-web-crawler
   - gen-knowledge-curator
 ---
 
 # inv-topic-researcher：投资主题持续研究
 
-串联 `inv-web-crawler`（网页抓取）和 `gen-knowledge-curator`（存储），
+串联 Agent 工具（网页抓取）和 `gen-knowledge-curator`（存储），
 对某个投资主题持续采集、整理、入库。
 
 ## 命令
@@ -87,8 +86,8 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 │ 1. Firecrawl POST :3672/v1/scrape              │
 │    → 成功（≥500字符且非拦截页）→ 跳到分析      │
 │    → 失败 → 步骤 2                             │
-│ 2. pwright 兜底                                │
-│    uv run .../pwright_scrape.py scrape "<url>"  │
+│ 2. Agent WebFetch 兜底                         │
+│    Agent 使用 WebFetch 工具直接抓取页面内容      │
 │    → 成功（≥100字符）→ 跳到分析                │
 │    → 失败 → 记录失败原因，继续下一个 URL        │
 ├─ 分析 ─────────────────────────────────────────┤
@@ -114,7 +113,7 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_init.py
 | 优先级 | 工具 | 适用站点 |
 |--------|------|---------|
 | 1 | Firecrawl (`:3672/v1/scrape`) | CNBC、BBC、Wikipedia、CFI |
-| 2 | pwright (`pwright_scrape.py scrape`) | Investopedia、Yahoo Finance 等 JS 渲染页面 |
+| 2 | Agent WebFetch | Investopedia、Yahoo Finance 等 JS 渲染页面 |
 
 内容质量检查：
 - 正文 ≥ 500 字符（Firecrawl）或 ≥ 100 字符（pwright）
@@ -178,7 +177,6 @@ uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py
 
 ## 依赖
 
-- `inv-web-crawler` — Playwright 抓取
 - `gen-knowledge-curator` — 知识库存储 + git 同步
-- `lib/pwright.py` — JS 渲染页面兜底
 - `lib/git.py` — git 操作
+- Agent WebFetch — JS 渲染页面兜底

@@ -20,6 +20,6 @@
     "internet-platform-valuation.md": "互联网平台公司估值注意事项",
     "us-hk-data-workaround.md": "美股/港股data_gaps手动补全流程"
   },
-  "dependencies": ["inv-stock-data", "inv-web-crawler", "inv-research-analyzer"],
+  "dependencies": ["inv-stock-data", "inv-research-analyzer"],
   "derivedFrom": null
 }

@@ -18,6 +18,6 @@
     "foreign-stock-research-workflow.md": "外资研报分析工作流",
     "research-integration-notes.md": "研报整合实战笔记"
   },
-  "dependencies": ["inv-stock-data", "inv-web-crawler"],
+  "dependencies": ["inv-stock-data"],
   "derivedFrom": null
 }

@@ -33,7 +33,6 @@ custom-skills/                  # 技能源码（按分类隔离）
   invest/                       # 投资分析技能
     _shared/                    #   共享工具模块
     inv-stock-data/             #   数据层
-    inv-web-crawler/            #   爬虫
     inv-valuation-engine/       #   估值引擎
     inv-qarp-strategy/          #   操作决策
     inv-porter-five-forces/     #   五力分析
@@ -103,8 +102,7 @@ inv-stock-data（数据层）─────────────────
   └── (其他技能通过 CLI 子进程调用)                  │
 
 inv-topic-researcher ─┐
-  ├── inv-web-crawler（搜索+抓取）
-  └── gen-knowledge-curator（存储）  ↑ 串联两个技能的编排层
+  └── gen-knowledge-curator（存储）
 
 inv-research-analyzer（研报分析，独立脚本）
 ```
