@@ -66,6 +66,3 @@
 - **WHEN** `inv-stock-data/scripts/cs_stock_info.py` 需要 `setup_proxy_env` 和 `clear_proxy_env`
 - **THEN** 通过 `from proxy import setup_proxy_env, clear_proxy_env, restore_proxy_env` 导入，无需 pip install
 
-#### Scenario: 从 fuyao 脚本导入
-- **WHEN** `inv-fuyao-indicators/scripts/eastmoney_fetch.py` 需要 `apply_proxy_to_session`
-- **THEN** 通过 `from proxy import detect_proxy, apply_proxy_to_session` 导入

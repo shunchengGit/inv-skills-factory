@@ -28,7 +28,7 @@ context: |
   - `inv-valuation-engine` — 估值引擎，依赖 inv-stock-data
   - `inv-qarp-strategy` — 操作决策层，依赖 inv-stock-data + inv-valuation-engine
   - `inv-porter-five-forces` — 五力分析，依赖 inv-stock-data
-  - `inv-tencent-indicators` / `inv-fuyao-indicators` — 前置指标（独立脚本）
+  - `inv-tencent-indicators` — 前置指标（独立脚本）
   - `inv-research-analyzer` — 研报分析（独立脚本）
 
   ## 命名约定

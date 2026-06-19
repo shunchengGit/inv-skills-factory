@@ -56,7 +56,6 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | **inv-porter-five-forces** | 行业竞争格局分析、企业护城河评估 |
 | **inv-research-analyzer** | 分析券商研报PDF |
 | **inv-tencent-indicators** | 追踪腾讯前置指标 |
-| **inv-fuyao-indicators** | 追踪福耀玻璃前置指标 |
 
 ## 已废弃技能名映射
 
@@ -127,7 +126,7 @@ inv-stock-data（数据层）─────────────────
   ├── inv-porter-five-forces（五力分析）            │
   └── (其他技能通过 CLI 子进程调用)                  │
 
-inv-tencent-indicators / inv-fuyao-indicators（前置指标，独立脚本）
+inv-tencent-indicators（前置指标，独立脚本）
 inv-research-analyzer（研报分析，独立脚本）
 
 gen-dingtalk（钉钉底层能力 + 复合工作流：群聊月报/个人周总结/周报邮件/团队周报总结）

@@ -306,7 +306,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 |---------|------|---------|
 | **A. 估值快照** | `uv run {valuationDir}/scripts/valuation_snapshot.py <代码> --output json` | 10-30s |
 | **B. 研报提取** | 1) 读 `~/股票研报/Index.md` 匹配子文件夹 → 2) `python3 {researchDir}/scripts/research_pdf.py extract --folder <子文件夹>` → 3) 按结构化模板整理（共识/分歧/盈利预测/风险/隐含假设/交叉验证点） | 10-30s |
-| **C. 前置指标** | 若有对应技能（`inv-tencent-indicators`/`inv-fuyao-indicators`），运行其快照脚本 | 10-20s |
+| **C. 前置指标** | 若有对应技能（如 `inv-tencent-indicators`），运行其快照脚本 | 10-20s |
 
 - A 是必须的；B 若无本地研报则走 Web 降级（`inv-research-analyzer` 的 `references/web-fallback-for-non-a-share.md`）；C 若无对应前置指标则跳过
 - 估值定量判断以 `inv-valuation-engine` 的 `references/scoring-rules.md` 为准
@@ -540,7 +540,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 - **`inv-valuation-engine`**：估值引擎，提供脚本 + 定量评分框架 + 大师框架
 - **`inv-research-analyzer`**：本地券商研报 PDF，提供卖方叙事、一致预期、盈利预测区间、风险与隐含假设。其结构化输出流入三道闸门（行业/财务/管理层）、估值纪律（增速校验、分歧度信号）、买入必答（打脸条件制定）和机会成本比较。详见第十三节「研报与决策框架的交叉验证」
 - **`inv-porter-five-forces`**：五力竞争格局，用于第一道闸门的竞争结构判断
-- **`inv-tencent-indicators` / `inv-fuyao-indicators`**：前置指标，作为估值判断的辅助信号
+- **`inv-tencent-indicators`**：前置指标，作为估值判断的辅助信号
 
 ## 十三、研报与决策框架的交叉验证
 

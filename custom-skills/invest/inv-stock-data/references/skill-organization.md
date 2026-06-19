@@ -2,7 +2,7 @@
 
 ## 技能目录结构
 
-- 投资相关技能（inv-stock-data、inv-valuation-engine、inv-fuyao-indicators 等）放在 `{skillDir}` **顶层目录**
+- 投资相关技能（inv-stock-data、inv-valuation-engine 等）放在 `{skillDir}` **顶层目录**
 - **不要**放在子目录（如 `investment/` 等）
 - 这些技能迁移后，应放在顶层目录
 
