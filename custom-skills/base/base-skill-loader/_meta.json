@@ -1,0 +1,10 @@
+{
+  "name": "base-skill-loader",
+  "version": "2.0.0",
+  "description": "会话启动时加载技能发现规则与索引导航，是所有 Agent 的入口技能",
+  "commands": [],
+  "scripts": {},
+  "references": {},
+  "dependencies": [],
+  "derivedFrom": null
+}

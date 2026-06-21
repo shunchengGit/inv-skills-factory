@@ -7,8 +7,6 @@
     "group_monthly_analysis": "scripts/group_monthly_analysis.py"
   },
   "references": {},
-  "dependencies": [
-    "gen-dingtalk"
-  ],
+  "dependencies": [],
   "derivedFrom": "dingtalk-group-monthly-analysis"
 }

@@ -8,6 +8,6 @@
     "preferences.md": "工作时段、休息、日历过滤规则、任务时长预估",
     "routines.md": "每日/每周固定例程（事项+时长+推荐时间）"
   },
-  "dependencies": ["gen-dingtalk", "gen-todo-tracker"],
+  "dependencies": [],
   "derivedFrom": null
 }

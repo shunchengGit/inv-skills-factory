@@ -7,9 +7,6 @@
     "save_draft": "scripts/save_draft.py"
   },
   "references": {},
-  "dependencies": [
-    "gen-dingtalk",
-    "gen-mail-agent"
-  ],
+  "dependencies": [],
   "derivedFrom": "personal-weekly-report"
 }

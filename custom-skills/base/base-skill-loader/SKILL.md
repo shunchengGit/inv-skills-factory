@@ -44,16 +44,18 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | 技能 | 触发场景 |
 |------|---------|
 | **gen-daily-planner** | 安排日程、整合日历和待办、每日/每周计划 |
-| **gen-dingtalk** | 操作钉钉（消息、日历、待办、审批、考勤、文档等）及复合工作流（群聊月报、个人周总结、周报邮件、团队周报总结） |
+| **gen-dingtalk-group-report** | 按月拉取钉钉群聊消息，生成多维度数据分析报告 |
+| **gen-dingtalk-personal-daily** | 在钉钉个人周总结文档中添加/更新每日工作内容 |
+| **gen-dingtalk-personal-weekly-mail** | 从钉钉周报模板生成邮件草稿，存入企业微信邮箱 |
+| **gen-dingtalk-team-weekly-review** | 审阅钉钉知识库最新团队周报，总结业务迭代和技术专项 |
 | **gen-interviewer** | 生成面试题、管理候选人、记录面试反馈 |
 | **gen-knowledge-curator** | 收集/整理/检索知识、网页采集、LLM总结 |
-| **gen-mail-agent** | 发送/查看/管理邮件、SMTP/IMAP操作 |
-| **gen-todo-tracker** | 查看/添加/完成待办任务、任务列表管理 |
 | **inv-stock-data** | 查询股票/ETF数据（A股、港股、美股） |
 | **inv-valuation-engine** | 评估股票估值、判断低估/高估 |
 | **inv-qarp-strategy** | QARP策略选股、买卖决策 |
 | **inv-porter-five-forces** | 行业竞争格局分析、企业护城河评估 |
 | **inv-research-analyzer** | 分析券商研报PDF |
+| **inv-topic-researcher** | 投资主题信息采集：多源采集 → 交叉验证 → 综合摘要 → 分层入库 |
 
 ## 已废弃技能名映射
 
@@ -73,7 +75,7 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 
 当多个技能可能适用时，按以下顺序：
 
-1. **流程技能优先**（gen-daily-planner、gen-todo-tracker）— 决定 HOW
+1. **流程技能优先**（gen-daily-planner）— 决定 HOW
 2. **数据技能其次**（inv-stock-data）— 获取信息
 3. **分析技能最后**（inv-valuation-engine、inv-porter-five-forces）— 分析决策
 
@@ -124,9 +126,9 @@ inv-stock-data（数据层）─────────────────
   ├── inv-porter-five-forces（五力分析）            │
   └── (其他技能通过 CLI 子进程调用)                  │
 
-inv-research-analyzer（研报分析，独立脚本）
-
-gen-dingtalk（钉钉底层能力 + 复合工作流：群聊月报/个人周总结/周报邮件/团队周报总结）
+inv-topic-researcher（信息采集框架）─┐
+  ├── inv-research-analyzer（本地研报）
+  └── gen-knowledge-curator（存储）
 ```
 
 ## 用户指令

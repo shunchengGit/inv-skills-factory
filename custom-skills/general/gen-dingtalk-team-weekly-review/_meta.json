@@ -5,8 +5,6 @@
   "commands": [],
   "scripts": {},
   "references": {},
-  "dependencies": [
-    "gen-dingtalk"
-  ],
+  "dependencies": [],
   "derivedFrom": "dingtalk-weekly-summary"
 }
