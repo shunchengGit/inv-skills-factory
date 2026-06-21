@@ -38,6 +38,9 @@ custom-skills/                  # 技能源码（按分类隔离）
     inv-porter-five-forces/     #   五力分析
     inv-research-analyzer/      #   研报分析
     inv-topic-researcher/       #   投资主题研究
+    inv-hk-ipo-analysis/       #   港股IPO打新分析
+
+    inv-portfolio-tracker/     #   持仓管理
 
 custom-hooks/                   # Hooks 源码（按 agent 隔离）
   hermes/                       # Hermes 专属 hooks
@@ -99,11 +102,12 @@ inv-stock-data（数据层）─────────────────
   │     ↑                                          │
   │     └── inv-qarp-strategy（操作决策）           │
   ├── inv-porter-five-forces（五力分析）            │
-  └── (其他技能通过 CLI 子进程调用)                  │
+  └── inv-portfolio-tracker（持仓管理）             │
 
 inv-topic-researcher（信息采集框架）─┐
   ├── inv-research-analyzer（本地研报）
-  └── gen-knowledge-curator（存储）
+  ├── gen-knowledge-curator（存储）
+  └── inv-portfolio-tracker（持仓管理）
 ```
 
 ## 技术栈

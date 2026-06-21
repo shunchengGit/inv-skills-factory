@@ -3,16 +3,16 @@
   "version": "1.6.0",
   "description": "从价值投资视角评估个股估值，结合巴菲特/芒格、段永平、彼得·林奇、邓普顿等框架给出买卖参考",
   "commands": [
-    "/valuation - 价值估值判断",
+    "/valuation - 价值估值判断（先抓数据再结论）",
     "/valuation_data - 仅抓取估值数据快照",
     "/valuation_report - 直接输出五档估值报告",
     "/valuation_compare - 多股票相对估值比较"
   ],
   "scripts": {
-    "valuation_snapshot.py": "估值快照数据抓取",
-    "valuation_report.py": "五档估值报告生成",
-    "valuation_compare.py": "多股相对估值比较",
-    "valuation_manual_compute.py": "手动估值计算（脚本失败降级方案）"
+    "valuation_snapshot": "scripts/valuation_snapshot.py",
+    "valuation_report": "scripts/valuation_report.py",
+    "valuation_compare": "scripts/valuation_compare.py",
+    "valuation_manual_compute": "scripts/valuation_manual_compute.py"
   },
   "references": {
     "scoring-rules.md": "定量阈值、行业口径、五档结论映射",

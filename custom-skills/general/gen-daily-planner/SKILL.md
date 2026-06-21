@@ -2,7 +2,7 @@
 name: gen-daily-planner
 description: 当需要安排每日或每周日程，整合日历事件和待办任务时使用
 version: 0.2.0
-metadata:
+---
 
 # 每日安排 (Daily Arrange)
 

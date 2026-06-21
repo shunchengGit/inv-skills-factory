@@ -11,6 +11,7 @@ trigger:
 dependencies:
   - gen-knowledge-curator
   - inv-research-analyzer
+  - inv-portfolio-tracker
 ---
 
 # inv-topic-researcher：投资主题信息采集框架
@@ -24,6 +25,7 @@ dependencies:
 | `/research <主题>` | 全流程：编排 → 采集 → 验证 → 综合 → 入库 |
 | `/research <主题> --quick` | 快速模式：跳过本地检查，仅 Web 搜索 |
 | `/research <主题> --refresh` | 刷新模式：针对已研究过的主题，增量更新 |
+| `/research <主题> --landscape` | 行业全景模式：web-first 广度扫描，多标的对比+持仓交叉 |
 
 ## 来源优先级
 
@@ -316,9 +318,21 @@ Agent 用 WebFetch 抓取，每个来源控制在 **1-3 个页面**（只抓最�
 | 低质量（跳过） | fool.com, investorplace.com, benzinga.com, simplywall.st, gurufocus.com | 直接标记 `unreliable_source` |
 | 不可抓（跳过） | bloomberg.com, wsj.com, ft.com, seekingalpha.com, barrons.com, reuters.com | 直接标记 `blocked` |
 
+## `--landscape` 行业全景扫描模式
+
+web-first 广度优先的行业/产业链扫描，适用于"还能买什么/行业筛选/板块对比"。详细工作流、输出模板、顺序钻取模式、分析师降级方案见 `references/landscape-scan-workflow.md`。
+
+| 维度 | deep-dive | landscape |
+|------|:---------:|:---------:|
+| 信息源顺序 | 本地→一手→二手 | Web-first 广度优先 |
+| 标的数量 | 1-2 个 | 3-10 个 |
+| 入库 | 分层入库 | 不入库，一次性报告 |
+| 产出 | 综合报告+知识条目 | 对比表+优先级排序 |
+
 ## 依赖
 
 - `inv-research-analyzer` — 本地券商研报 PDF 提取
 - `gen-knowledge-curator` — 知识库搜索、存储、git 同步
+- `inv-portfolio-tracker` — 持仓数据（landscape 模式交叉分析用）
 - Agent WebSearch — 多角度搜索
 - Agent WebFetch — 网页抓取（一手源 + 二手分析）

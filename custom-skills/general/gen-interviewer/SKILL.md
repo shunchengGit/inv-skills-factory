@@ -1,7 +1,8 @@
 ---
 name: gen-interviewer
 description: 当需要生成面试题、管理候选人或记录面试反馈时使用
-metadata:
+version: 0.1.0
+---
 
 # Interview Manager
 

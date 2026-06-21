@@ -1,6 +1,6 @@
 ---
 name: inv-valuation-engine
-description: 当需要评估股票估值水平、判断低估或高估时使用，结合价值投资框架给出买卖参考
+description: 从价值投资视角评估个股估值，结合巴菲特/芒格、段永平、彼得·林奇、邓普顿等框架给出买卖参考
 version: 1.6.0
 commands:
   - /valuation - 价值估值判断（先抓数据再结论）

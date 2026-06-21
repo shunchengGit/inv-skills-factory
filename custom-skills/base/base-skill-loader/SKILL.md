@@ -56,6 +56,9 @@ description: 当开始任何对话时加载，建立如何发现和调用自定�
 | **inv-porter-five-forces** | 行业竞争格局分析、企业护城河评估 |
 | **inv-research-analyzer** | 分析券商研报PDF |
 | **inv-topic-researcher** | 投资主题信息采集：多源采集 → 交叉验证 → 综合摘要 → 分层入库 |
+| **inv-hk-ipo-analysis** | 分析港股IPO招股书PDF，提取财务/基石/行业/风险，判断打新价值 |
+
+| **inv-portfolio-tracker** | 管理投资组合持仓数据，更新持仓/现金，自动化日报周报 |
 
 ## 已废弃技能名映射
 
@@ -124,11 +127,12 @@ inv-stock-data（数据层）─────────────────
   │     ↑                                          │
   │     └── inv-qarp-strategy（操作决策）           │
   ├── inv-porter-five-forces（五力分析）            │
-  └── (其他技能通过 CLI 子进程调用)                  │
+  └── inv-portfolio-tracker（持仓管理）             │
 
 inv-topic-researcher（信息采集框架）─┐
   ├── inv-research-analyzer（本地研报）
-  └── gen-knowledge-curator（存储）
+  ├── gen-knowledge-curator（存储）
+  └── inv-portfolio-tracker（持仓管理）
 ```
 
 ## 用户指令

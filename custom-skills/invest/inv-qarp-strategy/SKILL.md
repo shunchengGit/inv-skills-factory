@@ -1,6 +1,6 @@
 ---
 name: inv-qarp-strategy
-description: 当需要基于QARP策略选股或做买卖决策时使用，覆盖选股闸门、估值纪律和组合约束
+description: 价值成长(QARP)选股与操作决策：叠加选股闸门、估值纪律、买入/卖出条件与组合约束
 version: 2.3.0
 commands:
   - /qarp - 对标的做完整 QARP 分析（估值快照 → 选股闸门 → 估值纪律 → 买入/持有/卖出结论）
@@ -521,13 +521,22 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 2. 结合 `inv-stock-data snapshot 0700.HK` 中可用的估值指标（若 info 端点部分可用）
 3. 按 `inv-valuation-engine` 的 `references/us-hk-data-workaround.md` 中的字段映射表补全
 
-### 搜索与增量信息策略
+### 12.1 搜索与增量信息策略
 
 增量信息获取优先级：
 1. yfinance info + financials + history（已覆盖 90% 需求）
 2. 本地券商研报 PDF（inv-research-analyzer）
-3. Agent WebFetch 直抓特定页面（仅当上述不够时）
-4. 搜索（最后手段，预期低效）
+3. Agent WebFetch / browser_navigate 直抓特定页面（仅当上述不够时）
+4. web_search（最后手段，预期低效）
+
+**何时触发搜索补充**（任一满足即可）：
+- 本地研报时效性 > 1 个月，需最新行业数据
+- 政策/地缘风险：关税、制裁、监管变化等实时事件
+- 管理层/公司动态：股东会发言、重大公告、媒体报道
+- 用户明确要求搜索补充或二次验证
+- 持仓检查需要交叉验证：官方财报 vs 脚本数据、分析师共识 vs 自建估值
+
+详细的工具选择规则、搜索流程、数据源映射和实践案例见 `references/web-search-supplement.md`。
 
 ## 与其他技能配合
 

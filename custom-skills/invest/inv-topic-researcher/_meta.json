@@ -7,7 +7,8 @@
   "references": {},
   "dependencies": [
     "gen-knowledge-curator",
-    "inv-research-analyzer"
+    "inv-research-analyzer",
+    "inv-portfolio-tracker"
   ],
   "derivedFrom": null
 }

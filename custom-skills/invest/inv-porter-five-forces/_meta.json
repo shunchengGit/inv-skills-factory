@@ -1,12 +1,12 @@
 {
   "name": "inv-porter-five-forces",
   "version": "1.3.0",
-  "description": "当需要分析行业竞争格局、评估企业护城河或判断行业吸引力时使用，基于Porter五力模型进行系统化竞争分析",
+  "description": "基于Porter五力模型分析行业竞争格局，评估企业护城河与行业吸引力",
   "commands": [
-    "/porter_five_forces - 对指定行业或公司进行Porter五力竞争格局分析"
+    "/porter_five_forces - 对指定行业或公司进行 Porter 五力竞争格局分析"
   ],
   "scripts": {
-    "five_forces_snapshot.py": "五力数据快照（公司画像、财务、行业基准、预评分）"
+    "five_forces_snapshot": "scripts/five_forces_snapshot.py"
   },
   "references": {
     "porter-framework.md": "五力分析框架",

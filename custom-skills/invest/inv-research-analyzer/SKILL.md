@@ -1,9 +1,9 @@
 ---
 name: inv-research-analyzer
-description: 当需要分析本地券商研报PDF时使用，支持提取结构化观点和综合判断
+description: 本地券商研报PDF分析：LLM查找Index.md → extract提取 → 结构化综合观点
 version: 2.0.2
 commands:
-  - /research_pdf extract - 抽取正文到 stdout（edges / first-n / all / folder）
+  - /research_pdf extract - 抽取正文到 stdout（edges / first-n / all / --folder）
   - /research_pdf list - 列出匹配 PDF（调试用）
   - /research_pdf scan - 扫描来源目录，输出待归档清单 JSON
   - /research_pdf archive - 接收归档方案 JSON，执行移动、建索引、push

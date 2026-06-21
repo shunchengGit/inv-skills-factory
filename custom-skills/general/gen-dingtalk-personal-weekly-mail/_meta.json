@@ -1,6 +1,6 @@
 {
   "name": "gen-dingtalk-personal-weekly-mail",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "从钉钉文档读取周报模板，按类别整理内容并生成邮件草稿存入企业微信邮箱",
   "commands": [],
   "scripts": {

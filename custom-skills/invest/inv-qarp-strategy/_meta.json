@@ -1,11 +1,11 @@
 {
   "name": "inv-qarp-strategy",
   "version": "2.3.0",
-  "description": "价值成长(QARP)选股与操作技能。估值引擎依赖inv-valuation-engine，本技能叠加选股闸门、估值纪律、买入/持有/卖出条件与组合约束",
+  "description": "价值成长(QARP)选股与操作决策：叠加选股闸门、估值纪律、买入/卖出条件与组合约束",
   "commands": [
-    "/qarp - 完整QARP分析",
-    "/qarp_screen - 选股闸门快速筛选",
-    "/qarp_check - 持仓检查"
+    "/qarp - 对标的做完整 QARP 分析（估值快照 → 选股闸门 → 估值纪律 → 买入/持有/卖出结论）",
+    "/qarp_screen - 用 QARP 选股闸门快速筛选标的是否值得深入",
+    "/qarp_check - 对已有持仓做持有/加仓/减仓检查"
   ],
   "scripts": {},
   "references": {},
