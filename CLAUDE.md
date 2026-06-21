@@ -101,16 +101,15 @@ inv-stock-data（数据层）─────────────────
   ├── inv-porter-five-forces（五力分析）            │
   └── (其他技能通过 CLI 子进程调用)                  │
 
-inv-topic-researcher ─┐
+inv-topic-researcher（信息采集框架）─┐
+  ├── inv-research-analyzer（本地研报）
   └── gen-knowledge-curator（存储）
-
-inv-research-analyzer（研报分析，独立脚本）
 ```
 
 ## 技术栈
 
 - Python 3.10+，uv 包管理
-- 数据源：akshare（A股）、yfinance（美港股）、pymupdf（PDF）、playwright（浏览器抓取）
+- 数据源：akshare（A股）、yfinance（美港股）、pymupdf（PDF）
 
 ## 新建 Skill
 
