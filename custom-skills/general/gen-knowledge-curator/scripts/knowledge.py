@@ -386,3 +386,108 @@ def regenerate_indexes(knowledge_dir: Path) -> dict:
         }
 
     return result
+
+
+# ── 交叉关联发现 ─────────────────────────────────────────────────────────
+
+def find_cross_references(knowledge_dir: Path, min_score: float = 2.0) -> list[dict]:
+    """扫描知识库，自动发现可建立交叉引用的条目对。"""
+    from collections import Counter
+
+    entries: list[dict] = []
+    for md_file in sorted(knowledge_dir.rglob("*.md")):
+        if md_file.name in ("index.md", "log.md"):
+            continue
+        if md_file.name.startswith("."):
+            continue
+        fm = _read_frontmatter(md_file)
+        if not fm.get("type"):
+            continue
+        try:
+            body = md_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        m = FRONTMATTER_RE.match(body)
+        body_text = body[m.end():].strip() if m else body
+
+        entries.append({
+            "path": str(md_file.relative_to(knowledge_dir)),
+            "title": fm.get("title", ""),
+            "description": fm.get("description", ""),
+            "tags": _parse_tags(fm.get("tags", "")),
+            "body": body_text,
+        })
+
+    def _keywords(entry: dict) -> set[str]:
+        kw = set()
+        text = f"{entry['title']} {entry.get('description', '')}"
+        for i in range(len(entry['title']) - 1):
+            bigram = entry["title"][i:i+2]
+            if not re.search(r"[^\w一-鿿]", bigram):
+                kw.add(bigram.lower())
+        for w in re.findall(r"[A-Za-z]{3,}", text):
+            kw.add(w.lower())
+        for code in re.findall(r"\b\d{4,6}\b", text):
+            kw.add(code)
+        # 从正文提取显著词
+        body_words = re.findall(r"[\w一-鿿]{2,}", entry.get("body", "")[:2000])
+        word_counts = Counter(w.lower() for w in body_words if len(w) >= 2)
+        for w, c in word_counts.most_common(30):
+            if c >= 3:
+                kw.add(w)
+        return kw
+
+    # 排除太通用的词
+    stopwords = {"的","了","是","在","和","也","就","都","而","及","与","或","但","不","这","那","有","个","为",
+                 "the","and","for","with","this","that","from","are","has","its","will","can","all","not","but"}
+
+    results = []
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            a, b = entries[i], entries[j]
+            score = 0.0
+            reasons = []
+
+            # 共享 tag
+            shared_tags = set(a["tags"]) & set(b["tags"])
+            if shared_tags:
+                score += len(shared_tags) * 2.0
+                reasons.append(f"共享标签: {', '.join(list(shared_tags)[:3])}")
+
+            # 标题/描述关键词重叠
+            kw_a = _keywords(a) - stopwords
+            kw_b = _keywords(b) - stopwords
+            shared = kw_a & kw_b
+            if shared:
+                score += len(shared) * 0.5
+                if len(shared) >= 4:
+                    reasons.append(f"共同关键词({len(shared)}): {', '.join(list(shared)[:5])}")
+
+            # 同一分类
+            if Path(a["path"]).parent.name == Path(b["path"]).parent.name:
+                score += 0.3
+
+            if score >= min_score:
+                results.append({
+                    "source": a["path"],
+                    "target": b["path"],
+                    "source_title": a["title"],
+                    "target_title": b["title"],
+                    "score": round(score, 1),
+                    "reason": "; ".join(reasons) if reasons else "内容相似",
+                })
+
+    results.sort(key=lambda x: -x["score"])
+    return results
+
+
+def _parse_tags(tags_val) -> list[str]:
+    """解析 tags 字段（兼容字符串和列表）。"""
+    if isinstance(tags_val, list):
+        return [str(t).strip() for t in tags_val if t]
+    if isinstance(tags_val, str):
+        s = tags_val.strip().strip("[]")
+        if not s:
+            return []
+        return [t.strip().strip("\"'") for t in s.split(",") if t.strip()]
+    return []

@@ -8,12 +8,12 @@ from __future__ import annotations
 #   "PyYAML>=6.0",
 # ]
 # ///
-"""知识库完整性检查：死链、孤立文件、URL 可达性、重复检测、OKF合规、路径校验。
+"""知识库完整性检查：死链、孤立文件、URL 可达性、重复检测、OKF合规、路径校验、交叉关联。
 
 用法:
-  uv run km_lint.py                           # 全量检查
+  uv run km_lint.py                           # 全量检查（含交叉关联建议）
   uv run km_lint.py --skip-url-check          # 跳过 URL 可达性
-  uv run km_lint.py --fix                     # 自动修复 + 重建所有 index.md
+  uv run km_lint.py --fix                     # 修复死链/孤立 + 重建索引 + 自动建立交叉关联
   uv run km_lint.py --check-duplicates        # 含重复检测
 """
 
@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from proxy import detect_proxy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import parse_index, validate_okf, validate_bundle_paths, regenerate_indexes
+from knowledge import parse_index, validate_okf, validate_bundle_paths, regenerate_indexes, find_cross_references
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 
@@ -302,6 +302,7 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
     quality_issues = check_content_quality()
     path_issues = validate_bundle_paths(KNOWLEDGE_DIR)
     graph_issues = check_graph_staleness()
+    cross_refs = find_cross_references(KNOWLEDGE_DIR)
 
     total_issues = (
         len(dead_links) + len(dead_urls) + len(missing_urls) +
@@ -318,6 +319,7 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
         "quality_issues": quality_issues,
         "path_issues": path_issues,
         "graph_issues": graph_issues,
+        "cross_references": cross_refs,
         "total_entries": total,
         "total_issues": total_issues,
     }
@@ -389,8 +391,49 @@ def fix_missing_urls(missing_urls: list[dict]) -> list[dict]:
     return fixed
 
 
+def _write_cross_references(refs: list[dict], top_n: int = 5) -> list[dict]:
+    """将 Top-N 交叉关联写入 markdown 文件。
+
+    在正文末尾添加或更新「## 关联」节，避免重复写入已存在的关联。
+    返回 [{source, target, score, action}, ...]
+    """
+    applied = []
+    for ref in refs[:top_n]:
+        src_path = KNOWLEDGE_DIR / ref["source"]
+        tgt_path = KNOWLEDGE_DIR / ref["target"]
+        if not src_path.exists() or not tgt_path.exists():
+            continue
+
+        try:
+            text = src_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        # 检查是否已有该关联
+        link_md = f"[{ref['target_title']}]({ref['target']})"
+        if link_md in text:
+            continue
+
+        # 在正文末尾追加关联
+        if "## 关联" not in text:
+            text = text.rstrip() + f"\n\n## 关联\n- {link_md}\n"
+        else:
+            # 追加到已有关联节
+            text = text.rstrip() + f"\n- {link_md}\n"
+
+        src_path.write_text(text, encoding="utf-8")
+        applied.append({
+            "source": ref["source"],
+            "target": ref["target"],
+            "score": ref["score"],
+            "action": "linked",
+        })
+
+    return applied
+
+
 def main():
-    parser = argparse.ArgumentParser(description="知识库完整性检查")
+    parser = argparse.ArgumentParser(description="知识库完整性检查（含交叉关联发现）")
     parser.add_argument("--skip-url-check", action="store_true", help="跳过 URL 可达性检查")
     parser.add_argument("--fix", action="store_true", help="自动修复发现的问题（死链、孤立文件、缺失 URL）")
     parser.add_argument("--check-duplicates", action="store_true", help="检查重复条目")
@@ -410,6 +453,12 @@ def main():
         # 重建所有 index.md（修死链+孤立后）
         index_result = regenerate_indexes(KNOWLEDGE_DIR)
         fix_actions["indexes_rebuilt"] = index_result
+
+        # 自动建立交叉关联
+        cross_refs = find_cross_references(KNOWLEDGE_DIR)
+        linked = _write_cross_references(cross_refs)
+        if linked:
+            fix_actions["cross_references_added"] = linked
 
         # 重新 lint 确认修复结果
         if fix_actions:
