@@ -4,7 +4,9 @@
   "description": "从钉钉客户端知识库的\"周会周报\"文件夹中查找最新周报，按指定格式总结业务迭代和技术专项（仅重大进展）。基于 dws CLI 实现。",
   "commands": [],
   "scripts": {},
-  "references": {},
+  "references": {
+    "constants.md": "已知常量、dws命令清单与数据源结构"
+  },
   "dependencies": [],
   "derivedFrom": "dingtalk-weekly-summary"
 }

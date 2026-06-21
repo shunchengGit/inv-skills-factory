@@ -483,13 +483,29 @@ def check_scripts(skills: dict[str, Path]) -> None:
 # ── 9. 跨技能路径解析验证 ──────────────────────────────────────────────
 
 def check_path_resolution() -> None:
-    """验证脚本中 __file__ 路径解析是否正确。
-    扫描所有脚本中的 sys.path.insert(Path(__file__)... 模式，
-    通过 symlink resolve 后验证目标路径真实存在。"""
+    """验证脚本中 __file__ 路径解析是否正确。"""
     print("\n── 9. 跨技能路径解析验证 ──")
 
-    # 匹配: Path(__file__).resolve().parents[N] / "dir"
-    # 匹配: Path(__file__).resolve().parent.parent... / "dir"
+    # 先检查：所有用 __file__ 的脚本是否做了 resolve
+    unresolved = 0
+    for py_file in sorted(SKILLS_DIR.rglob("scripts/*.py")):
+        if py_file.name.startswith("__"):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if "__file__" in text and ".resolve()" not in text and "abspath(__file__)" not in text:
+            unresolved += 1
+            skill_name = py_file.parent.parent.name
+            err(f"{skill_name}/{py_file.name}: __file__ 未调用 .resolve()，软链接下可能路径错误")
+
+    if unresolved:
+        err(f"共 {unresolved} 个脚本 __file__ 未 resolve")
+    else:
+        ok("所有 __file__ 调用均使用 .resolve() 或 abspath")
+
+    # 然后：验证所有 Path(__file__).resolve() 引用的目标存在
     parents_re = re.compile(
         r"Path\(__file__\)\.resolve\(\)\.(?:parents\[(\d+)\]|((?:parent\.)*parent))\s*/\s*['\"]([^'\"]+)['\"]"
     )

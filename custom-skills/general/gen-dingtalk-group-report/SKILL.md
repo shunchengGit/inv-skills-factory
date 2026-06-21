@@ -1,6 +1,6 @@
 ---
 name: gen-dingtalk-group-report
-description: 按月维度拉取指定钉钉群聊消息到本地，并生成数据分析报告。基于 dws CLI 实现。
+description: 按月拉取钉钉群聊消息并生成数据分析HTML报告，支持多维度统计与可视化
 version: 1.0.0
 trigger:
   - 月度群消息分析
@@ -246,17 +246,6 @@ print(f"Saved {len(unique)} messages to {output_file}")
 5. **安全页数上限**：每批最多翻 200 页（约 10,000 条），超出应停止并报告
 6. **数据只追加不覆盖**：如果已有同月数据文件，应合并而非覆盖
 
-## 已知常量
+## 已知常量与命令清单
 
-| 名称 | 值 | 说明 |
-|------|----|------|
-| 客服问题反馈群 convId | `cidGu2NRRnnLvzO014c19vtVg==` | 客服问题反馈群 |
-
-## dws 命令清单
-
-| 用途 | 命令 |
-|------|------|
-| 拉取单群消息 | `dws chat message list --group <convId> --time <cursor> --forward=false --limit 50 --format json` |
-| 拉取全量消息(短期) | `dws chat message list-all --start <start> --end <end> --cursor <cursor> --limit 50 --format json` |
-| 检查 dws 版本 | `dws version --format json` |
-| 检查登录状态 | `dws auth status --format json` |
+见 `references/constants.md`。

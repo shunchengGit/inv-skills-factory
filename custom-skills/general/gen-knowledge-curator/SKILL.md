@@ -1,6 +1,6 @@
 ---
 name: gen-knowledge-curator
-description: 当需要收集、整理、检索或管理知识资料时使用，支持从网页采集、LLM总结分类、存储到Git仓库、搜索和统计分析
+description: 个人知识管理：URL采集 → LLM总结分类 → Git仓库存储 + 索引 + 搜索 + Lint
 version: 0.2.0
 commands:
   - /km_init - 拉取知识库并输出 Index 结构化数据

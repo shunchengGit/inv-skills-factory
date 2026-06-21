@@ -1,6 +1,6 @@
 ---
 name: gen-daily-planner
-description: 当需要安排每日或每周日程，整合日历事件和待办任务时使用
+description: 每日安排：整合钉钉日历日程 + TODO 待办 + 固定例程 + 偏好设置，输出结构化每日/每周时间计划
 version: 0.2.0
 ---
 

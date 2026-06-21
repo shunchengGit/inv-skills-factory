@@ -1,6 +1,6 @@
 ---
 name: gen-interviewer
-description: 当需要生成面试题、管理候选人或记录面试反馈时使用
+description: 面试辅助：生成面试题、管理候选人、记录面试反馈
 version: 0.1.0
 ---
 

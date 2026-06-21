@@ -1,7 +1,7 @@
 {
   "name": "gen-interviewer",
   "version": "0.1.0",
-  "description": "面试管理技能：候选人列表、出题模板、面试反馈",
+  "description": "面试辅助：生成面试题、管理候选人、记录面试反馈",
   "commands": [],
   "scripts": {
     "interview": "scripts/interview.py"

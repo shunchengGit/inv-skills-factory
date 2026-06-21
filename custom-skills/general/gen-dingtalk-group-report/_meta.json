@@ -6,7 +6,9 @@
   "scripts": {
     "group_monthly_analysis": "scripts/group_monthly_analysis.py"
   },
-  "references": {},
+  "references": {
+    "constants.md": "已知常量与dws命令清单"
+  },
   "dependencies": [],
   "derivedFrom": "dingtalk-group-monthly-analysis"
 }
