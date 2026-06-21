@@ -1,20 +1,23 @@
 {
   "name": "gen-knowledge-curator",
-  "version": "0.2.0",
-  "description": "个人知识管理：URL采集 → LLM总结分类 → Git仓库存储 + 索引 + 搜索 + Lint",
+  "version": "1.3.0",
+  "description": "个人知识管理（OKF v0.1）：URL采集 → LLM总结分类 → 交叉关联 → Git仓库存储 + 索引 + 搜索 + Lint + 可视化",
   "commands": [
     "/km_init - 拉取知识库并输出 Index 结构化数据",
-    "/km_import - 从 URL 抓取知识（Firecrawl + pwright 兜底）",
-    "/km_search - 搜索知识库条目（标题/内容/标签）",
+    "/km_import - 从 URL 抓取知识，总结分类，建立交叉关联，存入 OKF 知识库",
+    "/km_search - 搜索知识库条目（标题/描述/内容）",
     "/km_stats - 查看知识库统计信息",
-    "/km_lint - 检查知识库完整性（死链、孤立文件、URL可达性、重复检测、内容质量）"
+    "/km_lint - 检查知识库完整性（死链/孤立/URL可达性/重复/OKF合规/旧格式/图谱过期）",
+    "/km_visualize - 生成知识图谱（Cytoscape.js 交互式 HTML）"
   ],
   "scripts": {
     "km_init": "scripts/km_init.py",
     "km_import": "scripts/km_import.py",
     "km_search": "scripts/km_search.py",
     "km_stats": "scripts/km_stats.py",
-    "km_lint": "scripts/km_lint.py"
+    "km_lint": "scripts/km_lint.py",
+    "km_visualize": "scripts/km_visualize.py",
+    "km_migrate_to_okf": "scripts/km_migrate_to_okf.py"
   },
   "references": {},
   "dependencies": [],

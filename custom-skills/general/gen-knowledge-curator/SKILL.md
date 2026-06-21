@@ -1,13 +1,14 @@
 ---
 name: gen-knowledge-curator
-description: 个人知识管理：URL采集 → LLM总结分类 → Git仓库存储 + 索引 + 搜索 + Lint
-version: 0.2.0
+description: 个人知识管理（OKF v0.1）：URL采集 → LLM总结分类 → 交叉关联 → Git仓库存储 + 索引 + 搜索 + Lint + 可视化
+version: 1.3.0
 commands:
   - /km_init - 拉取知识库并输出 Index 结构化数据
-  - /km_import - 从 URL 抓取知识（Firecrawl + pwright 兜底）
-  - /km_search - 搜索知识库条目（标题/内容/标签）
+  - /km_import - 从 URL 抓取知识，总结分类，建立交叉关联，存入 OKF 知识库
+  - /km_search - 搜索知识库条目（标题/描述/内容）
   - /km_stats - 查看知识库统计信息
-  - /km_lint - 检查知识库完整性（死链、孤立文件、URL可达性、重复检测、内容质量）
+  - /km_lint - 检查知识库完整性（死链/孤立/URL可达性/重复/OKF合规/旧格式/图谱过期）
+  - /km_visualize - 生成知识图谱（Cytoscape.js 交互式 HTML）
 ---
 
 # gen-knowledge-curator：个人知识管理
@@ -16,90 +17,119 @@ commands:
 
 | 命令 | 用途 |
 |------|------|
-| `/km_init` | 从远程仓库拉取知识库到 `~/.knowledge`，输出 Index 结构化数据 |
-| `/km_import <url>` | 抓取 URL 内容 → Agent 总结分类 → 存储到知识库 |
-| `/km_search <query>` | 搜索知识库条目，支持按分类过滤 |
-| `/km_stats` | 查看知识库统计信息（分类分布、最近导入等） |
-| `/km_lint` | 检查知识库完整性（支持 `--fix` 自动修复） |
+| `/km_init` | 拉取知识库到 `~/.knowledge`，输出 Index |
+| `/km_import <url>` | 抓取 → 总结 → 分类 → **交叉关联** → 存储（含图谱 + log 自动更新） |
+| `/km_search <query>` | 搜索，支持按分类过滤 |
+| `/km_stats` | 统计（分类/类型分布、标签、时间范围） |
+| `/km_lint` | 完整性检查（`--fix` 自动修复） |
+| `/km_visualize` | 生成交互式知识图谱 |
 
-## 脚本
-
-| 脚本 | 用途 |
-|------|------|
-| `scripts/km_init.py` | 拉取仓库 + 输出 Index JSON |
-| `scripts/km_import.py fetch <url>` | 抓取 URL 内容（Firecrawl → pwright 兜底） |
-| `scripts/km_import.py store --title T --category C --url U --content MD` | 存储知识条目 + 更新 Index + git 同步 |
-| `scripts/km_import.py store --title T --category C --url U --content-file F` | 从文件读取内容并存储（推荐，避免管道截断） |
-| `scripts/km_import.py categories` | 列出所有可用分类 |
-| `scripts/km_search.py <query>` | 搜索知识库条目 |
-| `scripts/km_stats.py` | 输出知识库统计信息 |
-| `scripts/km_lint.py` | 检查知识库完整性（支持 `--fix` 自动修复） |
-
-## 典型工作流
+## 导入流程（关键：必须建交叉关联）
 
 ```
-1. /km_init                              ← 拉取知识库，感知所有条目
-2. /km_import https://example.com/article ← 抓取内容
-3. Agent 总结 + 选分类（对话中完成）
-4. km_import.py store --title ... --category ... ← 存储并同步
-   # 推荐用法：先 write_file 写入 /tmp/xxx.md，再用 --content-file 参数导入
-   # 备选：直接传入 --content 参数（注意管道截断风险）
-5. /km_search "关键词"                      ← 检索已有知识
-6. /km_stats                             ← 查看知识库概况
-7. /km_lint                              ← 定期检查完整性
+1. km_search 搜索已有条目                           ← 找相关条目
+2. km_import.py fetch <url>                         ← 抓取内容
+3. Agent 阅读内容 → 确定 type → 选分类 → 加 tags
+4. Agent 写摘要（3-5句）＋ 提取关键要点（3-7条）
+5. 🔗 在正文中引用相关条目：[条目名](relative/path.md) ← 建交叉关联
+6. km_import.py store --title ... --content-file /tmp/xxx.md ← 存储
+   → 自动更新 index.md + log.md + knowledge-graph.html + git push
 ```
 
-## 知识库结构
+> ⚠ **建关联是必须步骤，不是可选项。** 没有交叉引用 = 知识图谱只有孤立节点。
 
-```
-~/.knowledge/                    ← git 仓库
-├── index/                       ← 分类索引（每分类一个文件，减少 git 冲突）
-│   ├── investing.md
-│   ├── programming.md
-│   └── ...
-├── investing/                   ← 分类目录（自动创建）
-│   └── dcf-valuation.md
-├── programming/
-│   └── python-async.md
-└── _unsorted/                   ← 未归类兜底
-    └── random-article.md
-```
-
-## 预定义分类体系
-
-| 分类 | 说明 |
-|------|------|
-| `investing` | 投资分析与估值 |
-| `programming` | 编程与工程 |
-| `ai-ml` | AI 与机器学习 |
-| `product` | 产品与运营 |
-| `career` | 职业与成长 |
-| `reading` | 阅读与笔记 |
-| `tools` | 工具与效率 |
-| `life` | 生活与其他 |
-| `_unsorted` | 未归类兜底 |
-
-## 知识条目格式
+## 知识条目格式（OKF v0.1）
 
 ```markdown
 ---
-url: https://example.com/article
-imported: 2026-05-26
-category: investing
-tags: [python, async]
+type: Article          # Article | Analysis | Reference | Note | Synthesis
+title: 文章标题
+description: 一句话描述
+timestamp: 2026-06-22T00:00:00+08:00
+resource: https://example.com/article
+tags: [tag1, tag2]
 ---
 
 # 文章标题
 
 ## 摘要
-3-5 句总结
+3-5 句总结，不要留空。说清核心观点/数据/结论。
 
 ## 关键要点
 - 要点1
 - 要点2
+- 要点3
+
+## 关联
+- [相关条目1](investing/related-article.md) — 为什么相关
+- [相关条目2](ai-engineering/another.md) — 为什么相关
+
+> **摘要和关键要点不能留空或填"AI 待填充"。**
+
+## 引用
+[1] [来源标题](https://source.url)
+```
+
+### 文件命名
+
+- `km_import store` 自动用 `slugify()` 生成 kebab-case 文件名
+- 避免 `：` `空格` `+` `"` `'` 等特殊字符（导致路径问题）
+- 时效性内容可选日期前缀：`2026-06-22-文章标题.md`
+- 使用中文标题：方便直接浏览文件系统
+
+### type 取值指南
+
+| type | 适用场景 |
+|------|---------|
+| `Article` | 采集的外部文章/新闻 |
+| `Analysis` | 自己的分析、研判、推理 |
+| `Reference` | 数据、API 文档、常量表（纯参考） |
+| `Synthesis` | 多源综合报告（`inv-topic-researcher` 产出） |
+| `Note` | 随手记、片段、想法 |
+
+## 交叉引用规范
+
+OKF 用标准 markdown 链接建立关联：
+
+```markdown
+福耀玻璃的商业模式与[台积电](investing/tsmc-analysis.md)有本质区别——
+前者是制造壁垒，后者是技术壁垒。
+```
+
+**规则**：
+- 导入时 `km_search` 搜标题/描述，找出 ≥2 个相关条目
+- 在「关联」节列出来，并在正文自然处加链接
+- 链接用**相对路径**：`[标题](category/slug.md)`
+- 可以在 `引用` 节列外部来源 URL
+
+## 脚本
+
+| 脚本 | 用途 |
+|------|------|
+| `km_init.py` | 拉取仓库 + 输出 Index |
+| `km_import.py fetch <url>` | 抓取 URL（Firecrawl → pwright 兜底） |
+| `km_import.py store --title ... --content-file F` | 存储（推荐用文件导入） |
+| `km_search.py <query>` | 搜索 |
+| `km_stats.py [--json]` | 统计 |
+| `km_lint.py [--fix] [--skip-url-check]` | 完整性检查 |
+| `km_visualize.py [-o path]` | 生成图谱 |
+| `km_migrate_to_okf.py [--apply]` | 旧格式迁移 |
+
+## 知识库结构（OKF bundle）
+
+```
+~/.knowledge/
+├── log.md                   ← 变更日志（km_import 自动追加）
+├── investing/
+│   ├── index.md             ← 分类索引
+│   └── article.md
+├── ai-engineering/
+│   └── index.md
+└── _unsorted/
 ```
 
 ## 依赖
 
-- `_shared/proxy.py`：代理检测
+- `lib/pwright.py`：Playwright 网页抓取
+- `lib/git.py`：git 同步
 - 远程仓库：`git@github.com:shunchengGit/knowledge.git`

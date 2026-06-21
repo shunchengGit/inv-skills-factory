@@ -8,13 +8,13 @@ from __future__ import annotations
 #   "PyYAML>=6.0",
 # ]
 # ///
-"""知识库完整性检查：死链、孤立文件、URL 可达性、重复检测、内容质量。
+"""知识库完整性检查：死链、孤立文件、URL 可达性、重复检测、OKF合规、路径校验。
 
 用法:
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py --skip-url-check  # 跳过 URL 可达性检查
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py --fix            # 自动修复问题
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_lint.py --check-duplicates  # 检查重复条目
+  uv run km_lint.py                           # 全量检查
+  uv run km_lint.py --skip-url-check          # 跳过 URL 可达性
+  uv run km_lint.py --fix                     # 自动修复 + 重建所有 index.md
+  uv run km_lint.py --check-duplicates        # 含重复检测
 """
 
 import argparse
@@ -30,10 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "lib"))
 from proxy import detect_proxy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import parse_index
+from knowledge import parse_index, validate_okf, validate_bundle_paths, regenerate_indexes
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
-INDEX_DIR = "index"
 
 
 def check_dead_links(categories: dict[str, list[dict]]) -> list[dict]:
@@ -105,24 +104,17 @@ def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> tuple[l
 
 
 def _read_frontmatter_url(file_path: Path) -> str | None:
-    """从 md 文件的 YAML frontmatter 读取 url 字段。"""
-    try:
-        content = file_path.read_text(encoding="utf-8")
-        m = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
-        if m:
-            for line in m.group(1).splitlines():
-                if line.startswith("url:"):
-                    return line.split(":", 1)[1].strip()
-    except Exception:
-        pass
-    return None
+    """从 md 文件的 YAML frontmatter 读取 url/resource 字段（兼容新旧格式）。"""
+    from knowledge import _read_frontmatter
+    fm = _read_frontmatter(file_path)
+    return fm.get("resource") or fm.get("url") or None
 
 
 def check_orphans(indexed_paths: set[str]) -> list[dict]:
     """检查存在但未被 Index.md 引用的 md 文件。"""
     orphans = []
     for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.parent.name == INDEX_DIR:
+        if md_file.name in ("index.md", "log.md"):
             continue
         rel = str(md_file.relative_to(KNOWLEDGE_DIR))
         if rel not in indexed_paths:
@@ -179,19 +171,89 @@ def check_duplicates(categories: dict[str, list[dict]]) -> list[dict]:
     return duplicates
 
 
-def check_content_quality() -> list[dict]:
-    """检查内容质量问题（空文件、过短内容等）。"""
+def check_old_format() -> list[dict]:
+    """检查是否还有旧格式条目（url/imported/category frontmatter）。"""
     issues = []
     if not KNOWLEDGE_DIR.exists():
         return issues
 
     for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.parent.name == INDEX_DIR:
+        if md_file.name in ("index.md", "log.md"):
+            continue
+        if md_file.name in ("index.md", "log.md", "knowledge-graph.html"):
+            continue
+
+        try:
+            fm = _read_frontmatter(md_file)
+            rel = str(md_file.relative_to(KNOWLEDGE_DIR))
+
+            # 旧格式标志：有 imported 或 category 字段，且没有 type 字段
+            has_old = ("imported" in fm or "category" in fm)
+            has_type = "type" in fm
+            if has_old and not has_type:
+                issues.append({
+                    "path": rel,
+                    "issue": "old_format",
+                    "hint": "运行 km_migrate_to_okf.py --apply 迁移",
+                })
+        except Exception:
+            pass
+
+    return issues
+
+
+def check_graph_staleness() -> list[dict]:
+    """检查知识图谱是否过期（比最新条目旧）。"""
+    graph_file = KNOWLEDGE_DIR / "knowledge-graph.html"
+    if not graph_file.exists():
+        return [{"path": "knowledge-graph.html", "issue": "graph_missing", "hint": "运行 km_visualize.py"}]
+
+    graph_mtime = graph_file.stat().st_mtime
+    stale = []
+    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
+        if md_file.name in ("index.md", "log.md"):
+            continue
+        if md_file.name in ("index.md", "log.md"):
+            continue
+        if md_file.stat().st_mtime > graph_mtime:
+            stale.append(str(md_file.relative_to(KNOWLEDGE_DIR)))
+
+    if stale:
+        return [{
+            "path": "knowledge-graph.html",
+            "issue": "graph_stale",
+            "newer_entries": len(stale),
+            "hint": "运行 km_visualize.py 或 km_import store 自动更新",
+        }]
+    return []
+
+
+def check_content_quality() -> list[dict]:
+    """检查内容质量问题（空文件、过短内容、OKF 合规性等）。"""
+    issues = []
+    if not KNOWLEDGE_DIR.exists():
+        return issues
+
+    # 旧格式检测
+    issues.extend(check_old_format())
+
+    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
+        if md_file.name in ("index.md", "log.md"):
+            continue
+        if md_file.name in ("index.md", "log.md"):
             continue
 
         try:
             content = md_file.read_text(encoding="utf-8")
             rel = str(md_file.relative_to(KNOWLEDGE_DIR))
+
+            # OKF 合规检查
+            okf_result = validate_okf(md_file)
+            if not okf_result["valid"]:
+                for e in okf_result["errors"]:
+                    issues.append({"path": rel, "issue": f"okf:{e}"})
+            for w in okf_result.get("warnings", []):
+                issues.append({"path": rel, "issue": f"okf_warn:{w}"})
 
             # 检查空内容
             if len(content.strip()) < 200:
@@ -226,7 +288,7 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
         }
 
-    categories, indexed_paths = parse_index(KNOWLEDGE_DIR, INDEX_DIR)
+    categories, indexed_paths = parse_index(KNOWLEDGE_DIR)
     total = sum(len(e) for e in categories.values())
 
     dead_links = check_dead_links(categories)
@@ -238,8 +300,14 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
         duplicates = check_duplicates(categories)
 
     quality_issues = check_content_quality()
+    path_issues = validate_bundle_paths(KNOWLEDGE_DIR)
+    graph_issues = check_graph_staleness()
 
-    total_issues = len(dead_links) + len(dead_urls) + len(missing_urls) + len(orphans) + len(duplicates) + len(quality_issues)
+    total_issues = (
+        len(dead_links) + len(dead_urls) + len(missing_urls) +
+        len(orphans) + len(duplicates) + len(quality_issues) +
+        len(path_issues) + len(graph_issues)
+    )
 
     return {
         "dead_links": dead_links,
@@ -248,58 +316,49 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
         "orphans": orphans,
         "duplicates": duplicates,
         "quality_issues": quality_issues,
+        "path_issues": path_issues,
+        "graph_issues": graph_issues,
         "total_entries": total,
         "total_issues": total_issues,
     }
 
 
 def fix_dead_links(dead_links: list[dict]) -> list[dict]:
-    """自动修复死链：从 Index 中移除引用但文件不存在的条目。"""
+    """自动修复死链：从各分类的 index.md 中移除引用不存在的条目。"""
     fixed = []
-    index_dir = KNOWLEDGE_DIR / INDEX_DIR
-    if not index_dir.exists():
-        return fixed
-
     for item in dead_links:
         path = item["path"]
         title = item["title"]
-        for idx_file in index_dir.glob("*.md"):
+        for idx_file in KNOWLEDGE_DIR.rglob("index.md"):
             content = idx_file.read_text(encoding="utf-8")
+            if path not in content:
+                continue
             new_lines = []
-            removed = False
             for line in content.splitlines():
                 if path in line and f"[{title}]" in line:
-                    removed = True
                     continue
                 new_lines.append(line)
-            if removed:
-                idx_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-                fixed.append({"path": path, "title": title, "action": "removed_from_index"})
+            idx_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+            fixed.append({"path": path, "title": title, "action": "removed_from_index"})
     return fixed
 
 
 def fix_orphans(orphans: list[dict]) -> list[dict]:
-    """自动修复孤立文件：将未被 Index 引用的文件自动加入对应分类的 Index。"""
+    """自动修复孤立文件：将未被索引引用的文件加入对应分类的 index.md。"""
     fixed = []
-    index_dir = KNOWLEDGE_DIR / INDEX_DIR
-    if not index_dir.exists():
-        return fixed
-
     for item in orphans:
         path = item["path"]
         title = item["title"]
-        # 从路径推断分类（如 investing/xxx.md → investing）
         category = path.split("/")[0] if "/" in path else "_unsorted"
-        idx_file = index_dir / f"{category}.md"
-        if not idx_file.exists():
-            idx_file.write_text(f"## {category}\n", encoding="utf-8")
+        cat_dir = KNOWLEDGE_DIR / category
+        cat_dir.mkdir(parents=True, exist_ok=True)
+        idx_file = cat_dir / "index.md"
 
-        # 读取现有内容，避免重复添加
-        content = idx_file.read_text(encoding="utf-8")
-        if path in content:
-            continue
+        if idx_file.exists():
+            content = idx_file.read_text(encoding="utf-8")
+            if path in content:
+                continue
 
-        # 追加到 Index
         with open(idx_file, "a", encoding="utf-8") as f:
             f.write(f"- [{title}]({path}) — local\n")
         fixed.append({"path": path, "title": title, "action": "added_to_index", "category": category})
@@ -347,6 +406,10 @@ def main():
             fix_actions["orphans_fixed"] = fix_orphans(result["orphans"])
         if result["missing_urls"]:
             fix_actions["missing_urls_fixed"] = fix_missing_urls(result["missing_urls"])
+
+        # 重建所有 index.md（修死链+孤立后）
+        index_result = regenerate_indexes(KNOWLEDGE_DIR)
+        fix_actions["indexes_rebuilt"] = index_result
 
         # 重新 lint 确认修复结果
         if fix_actions:

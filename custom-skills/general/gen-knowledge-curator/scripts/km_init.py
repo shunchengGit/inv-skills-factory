@@ -27,7 +27,6 @@ from knowledge import parse_index
 REPO_URL = os.environ.get("KNOWLEDGE_REPO_URL", "git@github.com:shunchengGit/knowledge.git")
 REPO_BRANCH = "master"
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
-INDEX_DIR = "index"
 
 
 def init_repo() -> dict:
@@ -60,7 +59,7 @@ def main():
         print(json.dumps(result, ensure_ascii=False, indent=2))
         sys.exit(1)
 
-    categories, _indexed_paths = parse_index(KNOWLEDGE_DIR, INDEX_DIR)
+    categories, _indexed_paths = parse_index(KNOWLEDGE_DIR)
     total = sum(len(e) for e in categories.values())
     print(json.dumps({
         **result,

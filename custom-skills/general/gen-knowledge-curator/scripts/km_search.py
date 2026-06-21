@@ -25,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index, search_entries
 
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
-INDEX_DIR = "index"
 
 
 def cmd_search(query: str, category: str | None = None, limit: int = 20) -> dict:
@@ -36,7 +35,7 @@ def cmd_search(query: str, category: str | None = None, limit: int = 20) -> dict
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
         }
 
-    results = search_entries(KNOWLEDGE_DIR, query, INDEX_DIR)
+    results = search_entries(KNOWLEDGE_DIR, query)
 
     # 按分类过滤
     if category:
