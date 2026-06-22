@@ -43,8 +43,8 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 
 部署后检查目标目录结构：
 
-- `~/.hermes/skills/skills-store/` — 应包含 profile 对应的技能软链接
-- `~/.workbuddy/skills/skills-store/` — 应包含 profile 对应的技能软链接
+- `~/.hermes/skills/skills-store/` — 应包含所有技能的软链接
+- `~/.workbuddy/skills/skills-store/` — 应包含所有技能的软链接
 - 软链接指向源目录，`ls -la` 可确认
 
 ## 目录结构
@@ -53,8 +53,8 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 ~/.hermes/
   skills/
     skills-store/          ← 部署目标（软链接）
-      base-skill-loader → ~/.skills-store/custom-skills/base/base-skill-loader
-      gen-daily-planner → ~/.skills-store/custom-skills/general/gen-daily-planner
+      inv-stock-data → ~/.skills-store/custom-skills/inv-stock-data
+      inv-valuation-engine → ~/.skills-store/custom-skills/inv-valuation-engine
       ...
     [其他来源技能...]       ← 不受部署影响
 ```
@@ -64,9 +64,9 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 ```json
 {
   "profiles": {
-    "home":   { "hermes": ["general", "invest"], "workbuddy": ["general"] },
-    "work":   { "hermes": ["general"],           "workbuddy": ["general"] },
-    "server": { "hermes": ["invest"] }
+    "home":   ["hermes", "workbuddy"],
+    "work":   ["hermes", "workbuddy"],
+    "server": ["hermes"]
   },
   "agents": {
     "hermes":    { "skills_dir": "~/.hermes/skills/skills-store" },
@@ -75,8 +75,8 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 }
 ```
 
-- `base` 分类始终同步，无需在 profile 中声明
 - 每个 agent 的技能部署到 `skills/skills-store/` 子目录，不影响其他来源的技能
+- profile 是 agent 名称列表，所有技能都会部署到列出的 agent
 
 ## sync.py 核心逻辑
 
@@ -85,29 +85,28 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 ### 输入
 
 1. `.claude/skills/deploy-skills/scripts/deploy.json` — profiles 与 agents 配置
-2. `custom-skills/` — 技能源码目录
+2. `custom-skills/` — 技能源码目录（扁平结构）
 
 ### 同步流程
 
 ```
 1. 加载 deploy.json
-2. 展开所有分类 → 收集技能目录列表（base 始终包含）
-3. 对每个 agent：
+2. 扫描 custom-skills/ 顶层 → 收集所有技能目录
+3. 对 profile 中的每个 agent：
    a. 确保目标目录存在
-   b. 创建软链接：目标/技能名 → 源/分类/技能名
-   c. 清理不在当前 profile 范围内的过期软链接
+   b. 创建软链接：目标/技能名 → 源/技能名
+   c. 清理不再存在的过期软链接
 4. 汇报结果：created / skipped / failed / removed
 ```
 
-### 分类展开规则
+### 扫描规则
 
-- `base` 始终包含，profile 中无需声明
-- `_shared` 目录不是技能，跳过
-- profile 中声明的分类名对应 `custom-skills/` 下的子目录名
+- `_shared` 目录不是技能，作为共享工具模块单独同步
+- `custom-skills/` 下所有含 `SKILL.md` 的子目录都是技能
 
 ### 清理规则
 
 - 仅删除**软链接**，不删除普通目录或文件
-- 如果目标目录下存在**非空普通目录**且名称不在当前 profile 范围内：
+- 如果目标目录下存在**非空普通目录**且名称不在当前技能列表中：
   - 默认跳过并警告
   - `--force` 模式下删除

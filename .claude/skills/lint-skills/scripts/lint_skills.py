@@ -9,7 +9,6 @@ import os
 import re
 import subprocess
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 def _find_repo_root() -> Path:
@@ -24,7 +23,6 @@ SKILLS_DIR = ROOT / "custom-skills"
 HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "skills-store"
 DEPLOY_JSON = ROOT / ".claude" / "skills" / "deploy-skills" / "scripts" / "deploy.json"
 CLAUDE_MD = ROOT / "CLAUDE.md"
-SKILL_INDEX_FILE = SKILLS_DIR / "base" / "base-skill-loader" / "SKILL.md"
 
 ERRORS = 0
 WARNINGS = 0
@@ -51,11 +49,13 @@ def ok(msg: str) -> None:
 def find_skills() -> dict[str, Path]:
     """返回 {skill_name: skill_dir} 映射。"""
     skills = {}
-    for d in sorted(SKILLS_DIR.rglob("SKILL.md")):
-        if "_shared" in d.parts or ".archive" in d.parts:
+    if not SKILLS_DIR.exists():
+        return skills
+    for d in sorted(SKILLS_DIR.iterdir()):
+        if not d.is_dir() or d.name.startswith(".") or d.name == "_shared":
             continue
-        name = d.parent.name
-        skills[name] = d.parent
+        if (d / "SKILL.md").exists():
+            skills[d.name] = d
     return skills
 
 
@@ -124,26 +124,16 @@ def parse_frontmatter(path: Path) -> dict | None:
 
 
 def find_empty_dirs() -> list[Path]:
-    """找出没有 SKILL.md 的技能目录（空壳），不再硬编码分类。"""
+    """找出没有 SKILL.md 的技能目录（空壳）。"""
     empty = []
+    if not SKILLS_DIR.exists():
+        return empty
     for d in sorted(SKILLS_DIR.iterdir()):
         if not d.is_dir() or d.name.startswith(".") or d.name == "_shared":
             continue
-        # 一级目录（分类目录如 base/general/invest）
-        if (d / "SKILL.md").exists():
-            continue
-        for sub in sorted(d.iterdir()):
-            if sub.is_dir() and not sub.name.startswith(".") and sub.name != "_shared":
-                if not (sub / "SKILL.md").exists():
-                    empty.append(sub)
+        if not (d / "SKILL.md").exists():
+            empty.append(d)
     return empty
-
-
-def get_category(name: str, skills: dict[str, Path]) -> str | None:
-    """根据技能名获取其分类目录名。"""
-    if name in skills:
-        return skills[name].parent.name
-    return None
 
 
 # ── 1. _meta.json 校验 ──────────────────────────────────────────────────
@@ -181,14 +171,6 @@ def check_meta_json(skills: dict[str, Path]) -> None:
         for dep in deps:
             if dep not in skills:
                 err(f"{name}: dependencies 引用不存在的技能 {dep}")
-
-        # 1f. 跨分类依赖检查
-        cat = get_category(name, skills)
-        if cat:
-            for dep in deps:
-                dep_cat = get_category(dep, skills)
-                if dep_cat and dep_cat != cat:
-                    warn(f"{name}: 跨分类引用 {dep}（{cat} → {dep_cat}），违反隔离原则")
 
         # 1g. scripts 指向的文件是否存在
         for script_key, script_path in meta.get("scripts", {}).items():
@@ -248,16 +230,12 @@ def _check_description_best_practices(name: str, desc: str) -> None:
         warn(f"{name}: description 以'当'开头（场景描述），建议改为功能描述")
 
     # 规则6：应与 _meta.json 的 description 一致
-    for cat_dir in sorted(SKILLS_DIR.iterdir()):
-        if not cat_dir.is_dir() or cat_dir.name.startswith("."):
-            continue
-        p = cat_dir / name / "_meta.json"
-        if p.exists():
-            meta = json.loads(p.read_text(encoding="utf-8"))
-            meta_desc = meta.get("description", "")
-            if meta_desc and meta_desc != desc:
-                warn(f"{name}: frontmatter description 与 _meta.json 不一致")
-            break
+    p = SKILLS_DIR / name / "_meta.json"
+    if p.exists():
+        meta = json.loads(p.read_text(encoding="utf-8"))
+        meta_desc = meta.get("description", "")
+        if meta_desc and meta_desc != desc:
+            warn(f"{name}: frontmatter description 与 _meta.json 不一致")
 
 
 def check_frontmatter(skills: dict[str, Path]) -> None:
@@ -312,16 +290,9 @@ def check_frontmatter(skills: dict[str, Path]) -> None:
 def check_naming(skills: dict[str, Path]) -> None:
     print("\n── 3. 命名规范 ──")
 
-    prefix_map = {"base": "base-", "general": "gen-", "invest": "inv-"}
-
-    for name, skill_dir in sorted(skills.items()):
-        parent = skill_dir.parent.name
-        expected_prefix = prefix_map.get(parent)
-        if expected_prefix is None:
-            warn(f"{name}: 未知分类目录 {parent}")
-            continue
-        if not name.startswith(expected_prefix):
-            err(f"{name}: 命名不符合规范，期望前缀 {expected_prefix}")
+    for name in sorted(skills.keys()):
+        if "-" not in name:
+            err(f"{name}: 命名不符合规范，期望格式 `{{前缀}}-{{语义名}}`")
 
     ok("命名规范校验完成")
 
@@ -350,57 +321,31 @@ def check_deploy_json(skills: dict[str, Path]) -> None:
 
     deploy = json.loads(DEPLOY_JSON.read_text(encoding="utf-8"))
 
-    # 收集各分类的实际技能
-    categories: dict[str, set[str]] = defaultdict(set)
-    for name, skill_dir in skills.items():
-        cat = skill_dir.parent.name
-        categories[cat].add(name)
-
-    # 检查 profile 引用的分类
-    for profile_name, agents in deploy.get("profiles", {}).items():
-        for agent, cat_list in agents.items():
-            for cat in cat_list:
-                if cat not in categories and cat != "base":
-                    warn(f"deploy.json profile={profile_name} 引用未知分类 {cat}")
+    # 检查 profile 引用的 agent 是否存在
+    agents_cfg = deploy.get("agents", {})
+    for profile_name, agent_list in deploy.get("profiles", {}).items():
+        for agent in agent_list:
+            if agent not in agents_cfg:
+                warn(f"deploy.json profile={profile_name} 引用未知 agent {agent}")
 
     ok("deploy.json 一致性检查完成")
 
 
-# ── 6. 索引表一致性 ──────────────────────────────────────────────────────
+# ── 6. CLAUDE.md 一致性 ──────────────────────────────────────────────────
 
-def check_index(skills: dict[str, Path]) -> None:
-    print("\n── 6. 索引表与 CLAUDE.md 一致性 ──")
+def check_claude_md(skills: dict[str, Path]) -> None:
+    print("\n── 6. CLAUDE.md 一致性 ──")
 
-    if not SKILL_INDEX_FILE.exists():
-        err(f"索引文件不存在: {SKILL_INDEX_FILE}")
+    if not CLAUDE_MD.exists():
+        err(f"CLAUDE.md 不存在: {CLAUDE_MD}")
         return
 
-    index_text = SKILL_INDEX_FILE.read_text(encoding="utf-8")
-
-    # 从索引表提取已登记技能
-    indexed = set()
-    for m in re.finditer(r"\|\s*\*\*(.*?)\*\*\s*\|", index_text):
-        name = m.group(1).strip()
-        if "-" in name:
-            indexed.add(name)
-
-    # 有 SKILL.md 但不在索引表中
-    missing = set(skills.keys()) - indexed
-    for name in sorted(missing):
-        warn(f"{name}: 有 SKILL.md 但不在索引表中")
-
-    # 在索引表但无 SKILL.md
-    stale = indexed - set(skills.keys())
-    for name in sorted(stale):
-        err(f"{name}: 在索引表中但无 SKILL.md")
-
-    # CLAUDE.md 目录结构中是否列出
     claude_text = CLAUDE_MD.read_text(encoding="utf-8")
     for name in sorted(skills.keys()):
         if name not in claude_text:
             warn(f"{name}: 未在 CLAUDE.md 中找到")
 
-    ok("索引表一致性检查完成")
+    ok("CLAUDE.md 一致性检查完成")
 
 
 # ── 7. SKILL.md 行数 ─────────────────────────────────────────────────────
@@ -700,37 +645,6 @@ def check_scripts_consistency(skills: dict[str, Path]) -> None:
     ok("scripts 一致性检查完成")
 
 
-# ── 13. 未使用分类检查 ───────────────────────────────────────────────────
-
-def check_unused_categories(skills: dict[str, Path]) -> None:
-    """检查是否有分类目录未被 deploy.json 引用（base 除外）。"""
-    print("\n── 13. 未使用分类检查 ──")
-
-    if not DEPLOY_JSON.exists():
-        err("deploy.json 不存在")
-        return
-
-    deploy = json.loads(DEPLOY_JSON.read_text(encoding="utf-8"))
-
-    # 收集 deploy.json 中引用的所有分类
-    used_cats: set[str] = set()
-    for profile_name, agents in deploy.get("profiles", {}).items():
-        for agent, cat_list in agents.items():
-            used_cats.update(cat_list)
-
-    # 收集实际存在的分类目录
-    actual_cats: set[str] = set()
-    for d in sorted(SKILLS_DIR.iterdir()):
-        if d.is_dir() and not d.name.startswith(".") and d.name not in ("_shared",):
-            actual_cats.add(d.name)
-
-    unused = actual_cats - used_cats - {"base"}
-    for cat in sorted(unused):
-        warn(f"分类 `{cat}` 未在 deploy.json 中引用")
-
-    ok("未使用分类检查完成")
-
-
 # ── main ─────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -740,10 +654,10 @@ def main() -> int:
     print("Skills Lint 检查")
     print("=" * 60)
 
-    if not (HERMES_SKILLS / "base-skill-loader").exists():
+    if not HERMES_SKILLS.exists() or not any(HERMES_SKILLS.iterdir()):
         print("⚠ 尚未部署，正在部署 home profile...")
         subprocess.run(
-            [sys.executable, str(ROOT / "deploy" / "sync.py"), "--profile", "home"],
+            [sys.executable, str(ROOT / ".claude" / "skills" / "deploy-skills" / "scripts" / "sync.py"), "--profile", "home"],
             cwd=ROOT,
         )
 
@@ -755,14 +669,13 @@ def main() -> int:
     check_naming(skills)
     check_empty_dirs()
     check_deploy_json(skills)
-    check_index(skills)
+    check_claude_md(skills)
     check_skill_length(skills)
     check_scripts(skills)
     check_path_resolution()
     check_personal_paths(skills)
     check_references_consistency(skills)
     check_scripts_consistency(skills)
-    check_unused_categories(skills)
 
     print("\n" + "=" * 60)
     print(f"结果: {ERRORS} 错误, {WARNINGS} 警告")

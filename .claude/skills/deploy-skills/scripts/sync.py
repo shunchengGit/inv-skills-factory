@@ -10,8 +10,6 @@ Skills 同步脚本（软链接模式）。
   python3 .claude/skills/deploy-skills/scripts/sync.py --profile work --dry-run
   python3 .claude/skills/deploy-skills/scripts/sync.py --profile home --agent hermes
   python3 .claude/skills/deploy-skills/scripts/sync.py --list
-
-base 分类始终同步，无需在 profile 中声明。
 """
 
 import argparse
@@ -98,20 +96,17 @@ def _create_symlink(source: Path, target: Path, label: str = "", force: bool = F
         return False
 
 
-def _collect_expected_skills(categories: list[str]) -> set[str]:
+def _collect_expected_skills() -> set[str]:
     """收集期望同步的所有技能目录名（不含路径）"""
     expected = set()
-    all_categories = ["base"] + categories
-    for cat in all_categories:
-        cat_dir = SKILLS_SRC / cat
-        if not cat_dir.exists():
-            continue
-        # _shared
-        if (cat_dir / "_shared").is_dir():
-            expected.add("_shared")
-        for item in cat_dir.iterdir():
-            if item.is_dir() and item.name != "_shared" and (item / "SKILL.md").exists():
-                expected.add(item.name)
+    if not SKILLS_SRC.exists():
+        return expected
+    # _shared
+    if (SKILLS_SRC / "_shared").is_dir():
+        expected.add("_shared")
+    for item in SKILLS_SRC.iterdir():
+        if item.is_dir() and item.name != "_shared" and (item / "SKILL.md").exists():
+            expected.add(item.name)
     return expected
 
 
@@ -162,49 +157,43 @@ def _remove_stale_links(dest_root: Path, expected: set[str], dry_run: bool = Fal
     return removed
 
 
-def sync_skills(categories: list[str], skills_dir: str, force: bool = False, dry_run: bool = False) -> tuple[int, int, int, int]:
+def sync_skills(skills_dir: str, force: bool = False, dry_run: bool = False) -> tuple[int, int, int, int]:
     """同步技能（软链接）。返回 (created, skipped, failed, removed)"""
     dest_root = Path(skills_dir).expanduser()
     dest_root.mkdir(parents=True, exist_ok=True)
 
     created, skipped, failed = 0, 0, 0
 
-    # base 始终同步
-    all_categories = ["base"] + categories
+    if not SKILLS_SRC.exists():
+        print(f"  ⚠ 技能源目录不存在: {SKILLS_SRC}")
+        return 0, 0, 1, 0
 
-    for cat in all_categories:
-        cat_dir = SKILLS_SRC / cat
-        if not cat_dir.exists():
-            print(f"  ⚠ 分类不存在: {cat}")
-            failed += 1
+    # 同步 _shared 工具模块（如有）
+    shared_dir = SKILLS_SRC / "_shared"
+    if shared_dir.is_dir():
+        label = "_shared"
+        target = dest_root / "_shared"
+        result = _create_symlink(shared_dir, target, label, force)
+        if result:
+            created += 1
+        else:
+            skipped += 1
+
+    for item in SKILLS_SRC.iterdir():
+        if not item.is_dir() or item.name == "_shared" or not (item / "SKILL.md").exists():
             continue
 
-        # 同步 _shared 工具模块（如有）
-        shared_dir = cat_dir / "_shared"
-        if shared_dir.is_dir():
-            label = f"{cat}/_shared"
-            target = dest_root / "_shared"
-            result = _create_symlink(shared_dir, target, label, force)
-            if result:
-                created += 1
-            else:
-                skipped += 1
+        label = item.name
+        target = dest_root / item.name
+        result = _create_symlink(item, target, label, force)
 
-        for item in cat_dir.iterdir():
-            if not item.is_dir() or item.name == "_shared" or not (item / "SKILL.md").exists():
-                continue
-
-            label = f"{cat}/{item.name}"
-            target = dest_root / item.name
-            result = _create_symlink(item, target, label, force)
-
-            if result:
-                created += 1
-            else:
-                skipped += 1
+        if result:
+            created += 1
+        else:
+            skipped += 1
 
     # 清理旧链接和过期目录
-    expected = _collect_expected_skills(categories)
+    expected = _collect_expected_skills()
     removed = _remove_stale_links(dest_root, expected, dry_run=dry_run)
     stale_dir_count = _remove_stale_dirs(dest_root, expected, dry_run=dry_run, force=force)
     removed += stale_dir_count
@@ -215,10 +204,7 @@ def sync_skills(categories: list[str], skills_dir: str, force: bool = False, dry
 def list_profiles(config: dict):
     print("Available profiles:\n")
     for name, agents in sorted(config["profiles"].items()):
-        print(f"  {name}:")
-        for agent, categories in agents.items():
-            cats = ", ".join(["base"] + categories)
-            print(f"    {agent}: [{cats}]")
+        print(f"  {name}: {agents}")
 
 
 def main():
@@ -241,8 +227,8 @@ def main():
         print("available:", ", ".join(sorted(config["profiles"])))
         return
 
-    profile = config["profiles"].get(args.profile)
-    if not profile:
+    agents = config["profiles"].get(args.profile)
+    if not agents:
         print(f"profile '{args.profile}' not found in deploy.json")
         print("available:", ", ".join(sorted(config["profiles"])))
         return
@@ -250,7 +236,7 @@ def main():
     agents_cfg = config["agents"]
     total_created, total_skipped, total_failed, total_removed = 0, 0, 0, 0
 
-    for agent_name, categories in profile.items():
+    for agent_name in agents:
         if args.agent and agent_name != args.agent:
             continue
 
@@ -262,10 +248,9 @@ def main():
         print(f"\n=== {agent_name} ===")
 
         if args.dry_run:
-            cats = ", ".join(["base"] + categories)
-            print(f"  [dry-run] skills: [{cats}] → {cfg['skills_dir']}")
+            print(f"  [dry-run] skills: → {cfg['skills_dir']}")
         else:
-            c, s, f, r = sync_skills(categories, cfg["skills_dir"], force=args.force, dry_run=args.dry_run)
+            c, s, f, r = sync_skills(cfg["skills_dir"], force=args.force, dry_run=args.dry_run)
             total_created += c
             total_skipped += s
             total_failed += f

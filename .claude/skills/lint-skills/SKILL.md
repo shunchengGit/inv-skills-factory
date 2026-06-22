@@ -71,11 +71,10 @@ python3 .claude/skills/lint-skills/scripts/lint_skills.py
 
 目标 ≤200 行。新建 reference 文件后更新 `_meta.json` 的 `references` 字段。
 
-### ⑤ 索引与 CLAUDE.md 同步
+### ⑤ CLAUDE.md 同步
 
-修改后确保四者一致：
+修改后确保两者一致：
 
-- `base-skill-loader/SKILL.md` 技能索引表
 - `CLAUDE.md` 目录结构
-- `CLAUDE.md` + `base-skill-loader/SKILL.md` 依赖关系图
+- `CLAUDE.md` 依赖关系图
 - 实际的 `custom-skills/` 文件系统

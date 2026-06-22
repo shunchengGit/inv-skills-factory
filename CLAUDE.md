@@ -4,42 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Skills 管理和开发仓库，通过软链接将技能和 hooks 按场景（profile）部署到各 Agent 目录。
+Skills 管理和开发仓库，通过软链接将技能按场景（profile）部署到各 Agent 目录。
 
 ## 命名规范
 
-技能目录名格式：`{分类前缀}-{语义名}`
-
-| 分类 | 前缀 | 示例 |
-|------|------|------|
-| base | `base-` | base-skill-loader |
-| general | `gen-` | gen-daily-planner |
-| invest | `inv-` | inv-stock-data |
+技能目录名格式：`{前缀}-{语义名}`，前缀反映技能领域（如 `inv-` 投资类）。
 
 ## 目录结构
 
 ```
-custom-skills/                  # 技能源码（按分类隔离）
-  base/                         # 基础技能（所有 profile 必含）
-    base-skill-loader/          #   技能使用指南
-  general/                      # 通用技能
-    gen-daily-planner/          #   日程安排
-    gen-dingtalk-group-report/  #   群聊月度消息分析报告
-    gen-dingtalk-personal-daily/  #   个人每日工作日志
-    gen-dingtalk-personal-weekly-mail/  #   个人周报邮件生成
-    gen-dingtalk-team-weekly-review/    #   团队周报审阅总结
-    gen-interviewer/            #   面试辅助
-    gen-knowledge-curator/      #   知识管理
-  invest/                       # 投资分析技能
-    _shared/                    #   共享工具模块
-    inv-stock-data/             #   数据层
-    inv-valuation-engine/       #   估值引擎
-    inv-qarp-strategy/          #   操作决策
-    inv-porter-five-forces/     #   五力分析
-    inv-research-analyzer/      #   研报分析
-    inv-topic-researcher/       #   投资主题研究
-    inv-hk-ipo-analysis/        #   港股IPO打新分析
-    inv-portfolio-tracker/      #   持仓管理
+custom-skills/                  # 技能源码（扁平结构）
+  _shared/                      #   共享工具模块
+  inv-stock-data/               #   数据层
+  inv-valuation-engine/         #   估值引擎
+  inv-qarp-strategy/            #   操作决策
+  inv-porter-five-forces/       #   五力分析
+  inv-research-analyzer/        #   研报分析
+  inv-topic-researcher/         #   投资主题研究
+  inv-hk-ipo-analysis/          #   港股IPO打新分析
+  inv-portfolio-tracker/        #   持仓管理
 
 lib/
   dotenv.py                     # .env 加载
@@ -66,7 +49,6 @@ inv-stock-data（数据层）─────────────────
 
 inv-topic-researcher（信息采集框架）─┐
   ├── inv-research-analyzer（本地研报）
-  ├── gen-knowledge-curator（存储）
   └── inv-portfolio-tracker（持仓管理）
 ```
 
@@ -78,9 +60,9 @@ inv-topic-researcher（信息采集框架）─┐
 ## 新建 Skill
 
 ```bash
-mkdir -p custom-skills/<category>/<prefix>-<name>/{scripts,references}
-touch custom-skills/<category>/<prefix>-<name>/SKILL.md
-cat > custom-skills/<category>/<prefix>-<name>/_meta.json << 'EOF'
+mkdir -p custom-skills/<prefix>-<name>/{scripts,references}
+touch custom-skills/<prefix>-<name>/SKILL.md
+cat > custom-skills/<prefix>-<name>/_meta.json << 'EOF'
 {
   "name": "<prefix>-<name>",
   "version": "0.1.0",
@@ -96,5 +78,4 @@ EOF
 
 ## 约束
 
-- 不同分类目录下技能必须隔离，禁止跨分类引用
 - 技能命名必须遵循 `{前缀}-{语义名}` 格式

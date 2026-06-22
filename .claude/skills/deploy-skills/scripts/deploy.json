@@ -1,16 +1,8 @@
 {
   "profiles": {
-    "home": {
-      "hermes": ["general", "invest"],
-      "workbuddy": ["general"]
-    },
-    "work": {
-      "hermes": ["general"],
-      "workbuddy": ["general"]
-    },
-    "server": {
-      "hermes": ["invest"]
-    }
+    "home": ["hermes", "workbuddy"],
+    "work": ["hermes", "workbuddy"],
+    "server": ["hermes"]
   },
   "agents": {
     "hermes": {
