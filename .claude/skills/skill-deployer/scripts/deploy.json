@@ -1,10 +1,10 @@
 {
   "agents": {
     "hermes": {
-      "skills_dir": "~/.hermes/skills/skills-store"
+      "skills_dir": "~/.hermes/skills/inv-skills"
     },
     "workbuddy": {
-      "skills_dir": "~/.workbuddy/skills/skills-store"
+      "skills_dir": "~/.workbuddy/skills/inv-skills"
     }
   }
 }

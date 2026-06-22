@@ -162,7 +162,7 @@ When adding a new stock to the holdings table and QARP check:
 当用户说"更新持仓/行情"且无调仓时，直接运行内置脚本：
 
 ```bash
-python3 ~/.hermes/skills/skills-store/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
+python3 ~/.hermes/skills/inv-skills/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
 ```
 
 纯 QQ Finance 方案，~0.4秒完成，覆盖 A股/港股/美股/ETF。脚本自动完成：拉取行情 → 计算市值/仓位/行业集中度 → 更新 PORTFOLIO.md 的「当前持仓」「纪律检查」「数据缺口说明」三个 section。

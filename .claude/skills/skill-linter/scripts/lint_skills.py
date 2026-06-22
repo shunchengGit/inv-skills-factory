@@ -20,7 +20,7 @@ def _find_repo_root() -> Path:
 
 ROOT = _find_repo_root()
 SKILLS_DIR = ROOT / "custom-skills"
-HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "skills-store"
+HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "inv-skills"
 DEPLOY_JSON = ROOT / ".claude" / "skills" / "skill-deployer" / "scripts" / "deploy.json"
 CLAUDE_MD = ROOT / "CLAUDE.md"
 

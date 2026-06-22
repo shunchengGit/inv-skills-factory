@@ -53,8 +53,8 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 
 部署后检查目标目录结构：
 
-- `~/.hermes/skills/skills-store/` — 应包含所有技能的软链接
-- `~/.workbuddy/skills/skills-store/` — 应包含所有技能的软链接
+- `~/.hermes/skills/inv-skills/` — 应包含所有技能的软链接
+- `~/.workbuddy/skills/inv-skills/` — 应包含所有技能的软链接
 - 软链接指向源目录，`ls -la` 可确认
 
 ## 目录结构
@@ -62,7 +62,7 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 ```
 ~/.hermes/
   skills/
-    skills-store/          ← 部署目标（软链接）
+    inv-skills/            ← 部署目标（软链接）
       inv-stock-data → ~/.skills-store/custom-skills/inv-stock-data
       inv-valuation-engine → ~/.skills-store/custom-skills/inv-valuation-engine
       ...
@@ -74,13 +74,13 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 ```json
 {
   "agents": {
-    "hermes":    { "skills_dir": "~/.hermes/skills/skills-store" },
-    "workbuddy": { "skills_dir": "~/.workbuddy/skills/skills-store" }
+    "hermes":    { "skills_dir": "~/.hermes/skills/inv-skills" },
+    "workbuddy": { "skills_dir": "~/.workbuddy/skills/inv-skills" }
   }
 }
 ```
 
-- 每个 agent 的技能部署到 `skills/skills-store/` 子目录，不影响其他来源的技能
+- 每个 agent 的技能部署到 `skills/inv-skills/` 子目录，不影响其他来源的技能
 
 ## sync.py 核心逻辑
 

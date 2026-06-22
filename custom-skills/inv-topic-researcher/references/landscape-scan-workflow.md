@@ -50,8 +50,8 @@ export HTTPS_PROXY=http://127.0.0.1:7890
 export HTTP_PROXY=http://127.0.0.1:7890
 
 # 逐个拉取，间隔 ≥3 秒避免限流
-uv run ~/.hermes/skills/skills-store/inv-stock-data/scripts/cs_stock_info.py snapshot ETN --output json > /tmp/etn.json
-uv run ~/.hermes/skills/skills-store/inv-stock-data/scripts/cs_stock_info.py snapshot HUBB --output json > /tmp/hubb.json
+uv run ~/.hermes/skills/inv-skills/inv-stock-data/scripts/cs_stock_info.py snapshot ETN --output json > /tmp/etn.json
+uv run ~/.hermes/skills/inv-skills/inv-stock-data/scripts/cs_stock_info.py snapshot HUBB --output json > /tmp/hubb.json
 ```
 
 > ⚠️ 禁止混用 A 股和美股在同一批调用中（代理状态切换必然出错）
