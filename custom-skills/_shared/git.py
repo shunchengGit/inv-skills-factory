@@ -3,7 +3,7 @@
 用法:
   import sys
   from pathlib import Path
-  sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
   from git import run, is_repo, same_remote, clone, pull, sync
 """
 

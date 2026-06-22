@@ -19,7 +19,7 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index, search_entries

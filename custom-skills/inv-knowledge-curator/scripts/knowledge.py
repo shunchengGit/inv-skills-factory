@@ -9,7 +9,7 @@ OKF (Open Knowledge Format) 规范：
 用法:
   import sys
   from pathlib import Path
-  sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
   from knowledge import parse_index, migrate_index, build_entry, slugify, search_entries, validate_okf, regenerate_indexes, validate_bundle_paths
 """
 

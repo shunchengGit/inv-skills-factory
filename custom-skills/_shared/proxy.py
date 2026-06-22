@@ -1,36 +1,41 @@
-"""统一代理检测与管理模块（重导出层）。
+"""统一代理检测与管理模块。
 
-核心逻辑已迁移至 lib/proxy.py，本文件保持向后兼容。
-供 invest 分类下的脚本继续使用原有 import 路径。
+提供代理检测、环境变量设置、Session 注入三类能力。
+供 invest 技能脚本通过 `_shared` 路径引用。
 
 用法:
+  import sys
+  from pathlib import Path
   sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
-  from proxy import detect_proxy, setup_proxy_env
-  from proxy import apply_proxy_to_session
+  from proxy import detect_proxy, setup_proxy_env, apply_proxy_to_session
 """
 
 from __future__ import annotations
 
 import os
+import socket
 import sys
-from pathlib import Path
 
-# 从 lib/proxy.py 导入核心检测逻辑
-_scripts_dir = Path(__file__).resolve().parents[2] / "lib"
-if str(_scripts_dir) not in sys.path:
-    sys.path.insert(0, str(_scripts_dir))
+_CLASH_PORTS = (7890, 7891, 7897)
 
-# 避免循环导入：如果当前模块名也是 proxy，跳过
-if __name__ == "__main__" or __name__ != "proxy":
-    from proxy import detect_proxy  # noqa: E402, F401
-else:
-    # 被当作 proxy 模块导入时，直接从 lib 导入
-    import importlib.util
-    _lib_proxy = Path(__file__).resolve().parents[2] / "lib" / "proxy.py"
-    _spec = importlib.util.spec_from_file_location("_lib_proxy", _lib_proxy)
-    _mod = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
-    detect_proxy = _mod.detect_proxy
+
+def detect_proxy() -> str | None:
+    """检测可用代理：优先环境变量，其次本地 Clash 端口扫描。"""
+    proxy = (
+        os.environ.get("HTTPS_PROXY")
+        or os.environ.get("HTTP_PROXY")
+        or os.environ.get("https_proxy")
+        or os.environ.get("http_proxy")
+    )
+    if proxy:
+        return proxy
+    for port in _CLASH_PORTS:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return f"http://127.0.0.1:{port}"
+        except (ConnectionRefusedError, OSError):
+            pass
+    return None
 
 
 def setup_proxy_env(override: str | None = None) -> bool:

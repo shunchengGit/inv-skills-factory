@@ -130,6 +130,6 @@ OKF 用标准 markdown 链接建立关联：
 
 ## 依赖
 
-- `lib/pwright.py`：Playwright 网页抓取
-- `lib/git.py`：git 同步
+- `_shared/pwright.py`：Playwright 网页抓取
+- `_shared/git.py`：git 同步
 - 远程仓库：`git@github.com:shunchengGit/knowledge.git`

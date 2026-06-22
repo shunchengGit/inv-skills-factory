@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 STORE_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(STORE_ROOT / "lib"))
+sys.path.insert(0, str(STORE_ROOT / "custom-skills" / "_shared"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
 SKILLS_SRC = STORE_ROOT / "custom-skills"

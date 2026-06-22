@@ -3,7 +3,7 @@
 用法:
   import sys
   from pathlib import Path
-  sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts"))
+  sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
   from dotenv import load
   load()
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 
 def load() -> None:
     """加载 SkillsStore/.env，已存在的环境变量不覆盖。"""
-    env_file = Path(__file__).resolve().parents[1] / ".env"
+    env_file = Path(__file__).resolve().parents[2] / ".env"
     if not env_file.exists():
         return
 

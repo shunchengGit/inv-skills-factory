@@ -14,7 +14,7 @@ Skills 管理和开发仓库，通过软链接将技能按场景（profile）部
 
 ```
 custom-skills/                  # 技能源码（扁平结构）
-  _shared/                      #   共享工具模块
+  _shared/                      #   共享工具模块（dotenv/proxy/pwright/git/indicators）
   inv-stock-data/               #   数据层
   inv-valuation-engine/         #   估值引擎
   inv-qarp-strategy/            #   操作决策
@@ -23,12 +23,6 @@ custom-skills/                  # 技能源码（扁平结构）
   inv-topic-researcher/         #   投资主题研究
   inv-hk-ipo-analysis/          #   港股IPO打新分析
   inv-portfolio-tracker/        #   持仓管理
-
-lib/
-  dotenv.py                     # .env 加载
-  proxy.py                      # 代理检测
-  pwright.py                    # Playwright 抓取
-  git.py                        # Git 操作
 
 openspec/                       # OpenSpec 变更管理
   config.yaml
