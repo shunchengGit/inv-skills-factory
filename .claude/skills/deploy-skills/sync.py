@@ -22,7 +22,7 @@ import shutil
 import sys
 from pathlib import Path
 
-STORE_ROOT = Path(__file__).resolve().parent.parent.parent
+STORE_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(STORE_ROOT / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
