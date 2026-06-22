@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
+
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
@@ -137,8 +139,12 @@ def _update_index(category: str, title: str, rel_path: str, url: str, descriptio
     index_file = cat_dir / "index.md"
     desc_segment = f" — {description}" if description else ""
     entry_line = f"- [{title}]({rel_path}) — {url}{desc_segment}\n"
-    with open(index_file, "a", encoding="utf-8") as f:
-        f.write(entry_line)
+    try:
+        with open(index_file, "a", encoding="utf-8") as f:
+            f.write(entry_line)
+    except (OSError, PermissionError) as e:
+        print(f"Error: cannot write to index {index_file}: {e}", file=sys.stderr)
+        raise
 
 
 def _auto_description(content: str, title: str, max_len: int = 120) -> str:

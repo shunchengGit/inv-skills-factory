@@ -229,9 +229,16 @@ class PdfEntry:
 def md5_file(path: Path) -> str:
     """计算文件的 MD5 哈希。"""
     h = hashlib.md5()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
+    try:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+    except FileNotFoundError:
+        print(f"Error: file not found: {path}", file=sys.stderr)
+        return ""
+    except PermissionError:
+        print(f"Error: permission denied reading: {path}", file=sys.stderr)
+        return ""
     return h.hexdigest()
 
 

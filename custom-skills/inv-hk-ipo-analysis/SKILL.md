@@ -1,6 +1,6 @@
 ---
 name: inv-hk-ipo-analysis
-description: 分析港股IPO招股书PDF，提取财务数据、基石投资者、行业前景、风险因素，综合判断打新价值
+description: 分析港股IPO招股书PDF，提取财务数据、基石投资者、行业前景、风险因素，综合判断打新价值。用于港股新股认购决策时
 version: 1.0.0
 triggers:
   - "新股分析"
@@ -27,84 +27,7 @@ triggers:
 
 ### 第一步：读取招股书PDF
 
-#### 环境准备
-
-IPO prospectus 提取复用 `inv-research-analyzer` 的 PyMuPDF venv 模式：
-
-```bash
-# 复用 research-analyzer 的 venv（若不存在则创建）
-if [ ! -d /tmp/research-pdf-venv ]; then
-    python3 -m venv --clear /tmp/research-pdf-venv
-    /tmp/research-pdf-venv/bin/pip install -q pymupdf
-fi
-PY=/tmp/research-pdf-venv/bin/python
-```
-
-#### 1A. 建立关键词地图（推荐用于100页以上大文件）
-
-对400页以上的招股书，先用关键词扫描全文档定位章节，再定向提取：
-
-```bash
-$PY -c "
-import fitz  # pymupdf
-doc = fitz.open('/path/to/prospectus.pdf')
-
-# 第一遍：建立关键词→页码映射
-keywords = {
-    '基石': [], '財務資料': [], '行業概覽': [],
-    '風險因素': [], '所得款項': [], '業務': [],
-    '公司資料': [], '發售價': [], '市值': [],
-    '虧損': [], '收入': [], '研發': [],
-    '現金': [], '經營現金流': [],
-}
-for i in range(doc.page_count):
-    text = doc[i].get_text()
-    for kw in keywords:
-        if kw in text:
-            keywords[kw].append(i+1)
-
-for kw, pages in keywords.items():
-    if pages:
-        print(f'{kw}: 第{pages[:5]}页... (共{len(pages)}页)')
-doc.close()
-"
-```
-
-#### 1B. 定向提取关键页面
-
-根据关键词地图，提取对应页面内容：
-
-```bash
-$PY -c "
-import fitz
-doc = fitz.open('/path/to/prospectus.pdf')
-pages_to_extract = [2, 8, 16, 17, 22, 23, 157]  # 根据关键词地图调整
-for p in pages_to_extract:
-    text = doc[p-1].get_text()
-    print(f'=== 第{p}页 ===')
-    print(text[:3000])
-doc.close()
-"
-```
-
-#### 1C. 全文搜索模式（用于查找分散信息）
-
-当关键词分布在多个不连续页面时（如基石投资者名单可能分散在几十页），使用全文搜索：
-
-```bash
-$PY -c "
-import fitz
-doc = fitz.open('/path/to/prospectus.pdf')
-target_kw = '基石投資'  # 或 'Cornerstone' / '所得款項用途'
-for i in range(1, doc.page_count + 1):
-    text = doc[i-1].get_text()
-    if target_kw in text:
-        print(f'=== 第{i}页 ({target_kw}) ===')
-        print(text[:2000])
-        print()
-doc.close()
-"
-```
+IPO prospectus 提取复用 `inv-research-analyzer` 的 PyMuPDF venv 模式。详见 `references/hk-ipo-prospectus-extraction-patterns.md`，包含关键词地图、定向提取、全文搜索三种模式的完整代码。
 
 ### 第二步：提取关键信息
 

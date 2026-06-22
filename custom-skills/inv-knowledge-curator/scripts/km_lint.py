@@ -361,8 +361,12 @@ def fix_orphans(orphans: list[dict]) -> list[dict]:
             if path in content:
                 continue
 
-        with open(idx_file, "a", encoding="utf-8") as f:
-            f.write(f"- [{title}]({path}) — local\n")
+        try:
+            with open(idx_file, "a", encoding="utf-8") as f:
+                f.write(f"- [{title}]({path}) — local\n")
+        except (OSError, PermissionError) as e:
+            print(f"Warning: cannot write to index {idx_file}: {e}", file=sys.stderr)
+            continue
         fixed.append({"path": path, "title": title, "action": "added_to_index", "category": category})
     return fixed
 

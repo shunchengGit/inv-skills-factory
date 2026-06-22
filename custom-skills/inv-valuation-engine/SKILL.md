@@ -1,7 +1,15 @@
 ---
 name: inv-valuation-engine
-description: 从价值投资视角评估个股估值，结合巴菲特/芒格、段永平、彼得·林奇、邓普顿等框架给出买卖参考
+description: 从价值投资视角评估个股估值，结合巴菲特/芒格、段永平、彼得·林奇、邓普顿等框架给出买卖参考。用于估值判断、多股票对比时
 version: 1.6.0
+trigger:
+  - 估值分析
+  - 价值投资
+  - 市盈率
+  - PE
+  - PB
+  - 估值对比
+  - valuation
 commands:
   - /valuation - 价值估值判断（先抓数据再结论）
   - /valuation_data - 仅抓取估值数据快照
@@ -14,51 +22,9 @@ commands:
 ## 核心目标
 基于公司类型、经营质量、增长预期和估值水平，输出五档结论：`低估`、`合理偏低`、`合理`、`合理偏高`、`高估`。
 
-## 快速命令（新增）
+## 快速命令
 
-路径中 `{baseDir}` = 本技能目录，`{stockDir}` = `{baseDir}/../inv-stock-data`，`{researchDir}` = `{baseDir}/../inv-research-analyzer`。
-
-```bash
-# ===== 代理设置说明 =====
-# 美股/港股数据依赖 Yahoo Finance，国内网络需要代理
-# 通过环境变量设置代理（inv-stock-data CLI 自动读取）
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
-
-# ===== 首选：一次获取全量数据 =====
-# cs_stock_all 合并 snapshot + financial + financials，减少跨进程调用和限流风险
-uv run {stockDir}/scripts/cs_stock_info.py all AAPL --output json
-uv run {stockDir}/scripts/cs_stock_info.py all 600519 --output json
-
-# ===== 具体命令 =====
-# 1) 抓取估值快照（文本）
-uv run {baseDir}/scripts/valuation_snapshot.py AAPL
-
-# 2) 抓取估值快照（JSON，便于后续自动化）
-uv run {baseDir}/scripts/valuation_snapshot.py 600519 --output json
-uv run {baseDir}/scripts/valuation_snapshot.py 0700.HK --output json
-
-# 3) 直接输出五档估值报告
-uv run {baseDir}/scripts/valuation_report.py 600660
-
-# 4) 指定公司类型，避免自动识别偏差
-uv run {baseDir}/scripts/valuation_report.py 002475 --company-type tech
-
-# 5) 同行相对估值比较
-uv run {baseDir}/scripts/valuation_compare.py 002475 601138 002241 --company-type tech
-
-# 6) 输出 Markdown 表格版，便于直接阅读
-uv run {baseDir}/scripts/valuation_report.py AAPL --output markdown
-
-# 7) 手动估值计算（当自动化脚本失败时降级）
-uv run {baseDir}/scripts/valuation_manual_compute.py \
-  --price 98.78 --shares 14.82 --fx 7.15 \
-  --ni-gaap 978.43 --ni-nongaap 1073 --eps-fy1 82.08 \
-  --equity 4133.85 --equity-prev 3133.13 \
-  --revenue 4318.46 --gross-profit 2430.44 --op-income 931.02 \
-  --fcf 1057.94 --cash 1089 --investments 3134 --debt 54 \
-  --scenario-profit "悲观,1127,8|基准,1300,10|乐观,1500,12"
-```
+路径中 `{baseDir}` = 本技能目录。详见 `references/commands-quickref.md`。
 
 ## 脚本优先级（新增）
 1. **首选 `cs_stock_all`**：一次调用获取 snapshot + financial + financials，避免分开调用触发限流或超时。这是所有估值分析的默认第一步。
@@ -196,39 +162,8 @@ uv run {baseDir}/scripts/valuation_manual_compute.py \
 运行脚本后**必做检查清单**见 `references/valuation-traps.md` 末尾（5 项）。
 
 ## 输出模板
-按以下结构输出，避免自由发挥：
 
-```markdown
-## 核心结论
-- 估值结论：低估 / 合理偏低 / 合理 / 合理偏高 / 高估
-- 结论置信度：高 / 中 / 低
-
-## 关键依据
-- 1-3 条最重要的定量或定性依据
-- （若有本地 PDF）卖方研报近半年共识/分歧要点，并注明与脚本数据时点是否一致
-
-## 分框架判断
-- 巴菲特/芒格：
-- 段永平：
-- 彼得·林奇：
-- 邓普顿：
-
-## 定量指标验证
-- 数据时点：
-- 当前估值指标：
-- 历史分位：
-- 增长假设：
-- 安全边际：
-
-## 核心假设
-- 明确列出 2-4 条估值建立在什么前提上
-
-## 风险与失效条件
-- 哪些变量变化会让当前结论失效
-
-## 操作参考
-- 持有 / 逢低加仓 / 观望 / 分批减仓 / 回避
-```
+详见 `references/output-template.md`。
 
 ## 报告输出规范
 

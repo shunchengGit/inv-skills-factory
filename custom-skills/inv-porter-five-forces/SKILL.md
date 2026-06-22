@@ -1,7 +1,14 @@
 ---
 name: inv-porter-five-forces
-description: 基于Porter五力模型分析行业竞争格局，评估企业护城河与行业吸引力
+description: 基于Porter五力模型分析行业竞争格局，评估企业护城河与行业吸引力。用于分析公司竞争优势、行业进入壁垒时
 version: 1.3.0
+trigger:
+  - 五力分析
+  - 竞争格局
+  - 护城河
+  - 行业分析
+  - Porter
+  - porter_five_forces
 commands:
   - /porter_five_forces - 对指定行业或公司进行 Porter 五力竞争格局分析
 ---

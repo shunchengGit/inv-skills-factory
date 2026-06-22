@@ -1,7 +1,12 @@
 ---
 name: inv-research-analyzer
-description: 本地券商研报PDF分析：LLM查找Index.md → extract提取 → 结构化综合观点
+description: 本地券商研报PDF分析：LLM查找Index.md → extract提取 → 结构化综合观点。用于分析券商研报、提取研报核心观点时
 version: 2.0.2
+trigger:
+  - 研报分析
+  - 券商研报
+  - 研报提取
+  - research_pdf
 commands:
   - /research_pdf extract - 抽取正文到 stdout（edges / first-n / all / --folder）
   - /research_pdf list - 列出匹配 PDF（调试用）
@@ -109,173 +114,26 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 
 ## 数据源与约束
 
-- 抽取工具：`pymupdf`；表格在纯文本中可能错位，**财务数字以 PDF 原文为准**。
-- 加密/损坏 PDF：自动跳过，stderr 记录。
-- `--max-pages`（默认 30）防止大研报卡死。
-- Python：用 venv + `requirements.txt`，勿全局 `pip`。
+- 抽取工具：`pymupdf`；表格可能错位，**财务数字以 PDF 原文为准**。加密/损坏 PDF 自动跳过。
+- `--max-pages`（默认 30）防卡死。Python：用 venv + `requirements.txt`。
 
 ## 输出结构
 
-**多篇同一标的时必须有「综合观点」**，禁止只堆单篇摘要。
+**多篇同一标的时必须有「综合观点」**，禁止只堆单篇摘要。分析维度：元信息、评级与目标价、核心逻辑、盈利预测、风险、商业模式与护城河、资本配置、盈利质量、增长假设。
 
-### 分析维度
-
-| 模块 | 要点 |
-|------|------|
-| 元信息 | 券商、日期、页数、时效性 |
-| 评级与目标价 | 原文；无则未披露 |
-| 核心逻辑 | 1～3 条主线 |
-| 盈利预测 | 仅摘录研报表内数字 |
-| 风险 | 研报列示 |
-| 商业模式与护城河 | 须可归因原文 |
-| 资本配置与股东回报 | CAPEX、分红回购等 |
-| 盈利质量线索 | ROE、毛利率等 |
-| 增长假设与边界 | 关键变量、失效情景 |
-
-### 结构化输出模板（被下游技能调用时）
-
-```markdown
-## 研报结构化摘要：{TICKER}
-
-### 元信息
-- 标的：{代码} {名称}
-- 覆盖研报数：N 篇（{最早} ~ {最晚}）
-- 时效性：fresh / aging / stale
-
-### 共识观点（2-3 条）
-1. …
-
-### 分歧观点（1-2 条）
-1. …
-
-### 评级与目标价区间
-| 券商 | 日期 | 评级 | 目标价 |
-|------|------|------|--------|
-
-### 盈利预测区间
-| 指标 | 年份 | 区间 | 来源 |
-|------|------|------|------|
-
-### 核心风险
-1. …
-
-### 隐含假设与失效条件
-1. …
-
-### 与五力/估值的交叉验证点
-- 供下游技能引用的具体验证点
-```
-
-### Markdown 输出模板（用户直接使用时）
-
-```markdown
-# 【标的】研报梳理（本地 PDF）
-## 一、覆盖文件清单
-## 二、分报告摘要（逐篇，宜短）
-## 三、综合观点（共识 / 分歧 / 预测区间 / 隐含假设）
-## 四、局限说明
-## 五、待核实项
-```
+结构化输出模板详见 `references/output-templates.md`。
 
 ## 被调用模式
 
-| 项目 | 说明 |
-|------|------|
-| **输入** | ticker + 可选 `--within-days`、`--pages` |
-| **输出** | 结构化输出模板 |
-| **调用方式** | 1) 读 `~/.inv-report/Index.md` 匹配代码 → 2) `extract --folder <子文件夹>` → 按模板整理 |
-| **时效性约束** | 默认仅引用 fresh；aging 需标注；stale 不引用 |
-| **典型调用方** | `inv-valuation-engine`（估值）、`inv-porter-five-forces`（五力） |
+输入 ticker + 可选窗口/页数，输出结构化模板。调用：读 Index.md → `extract --folder` → 按模板整理。时效性：默认 fresh（≤90天），aging 标注，stale 不引用。典型调用方：`inv-valuation-engine`、`inv-porter-five-forces`。
 
 ## 执行流程
 
-1. 确认标的、日期窗口（默认半年）。
-2. 读取 `~/.inv-report/Index.md`，在目录表匹配代码，确定子文件夹名。
-3. `extract --folder <子文件夹名>` 提取文本。
-4. 按「输出结构」写作；注明研报文件名日期窗口和时效性。
-5. **若 Index.md 无匹配**：走 Web 降级（`references/web-fallback-for-non-a-share.md`）。
-6. **若用户直接提供 PDF 路径**：用 PyMuPDF 直接提取（勿用 read_file 读二进制 PDF）。批量提取到 `/tmp/` 后分批读取。
-7. 若用户问「是否低估/值得买」：引导 `inv-stock-data` + `inv-valuation-engine`。
+1. 确认标的、日期窗口（默认半年）→ 2. 读 `~/.inv-report/Index.md` 匹配代码 → 3. `extract --folder` 提取 → 4. 按输出结构写作。Index.md 无匹配走 Web 降级；用户提供 PDF 路径则 PyMuPDF 直接提取。若用户问估值/买卖：引导 `inv-stock-data` + `inv-valuation-engine`。
 
-## 归档技术细节
+## 归档技术细节与 Index.md 维护
 
-- **scan 不需要 pymupdf**，用系统 Python 即可：`python3 "$SK" scan --source ~/Downloads`
-- **archive 也不需要 pymupdf**（重建索引除外，失败时会跳过索引继续 git push）
-- macOS 沙盒下 `pathlib` 可能无法访问 `~/Downloads/`，脚本内部自动回退 AppleScript
-
-### 已知限制：scan 对中文路径/目录名可能返回空
-
-实测发现 `scan --source ~/.inv-report` 在中文目录名环境下可能返回 "来源目录中未找到 PDF 文件"，即使目录内存在大量 PDF。
-
-**降级方案**：直接用 Python 遍历重建：
-
-```python
-from pathlib import Path
-import re
-
-base = Path.home() / ".inv-report"
-for subdir in sorted(base.iterdir()):
-    if not subdir.is_dir() or subdir.name.startswith('.'):
-        continue
-    pdfs = [f for f in subdir.iterdir() if f.suffix.lower() == '.pdf']
-    if pdfs:
-        print(f"{subdir.name}: {len(pdfs)} 份")
-```
-
-归档方案 JSON 格式：
-
-```json
-{
-  "actions": [
-    {"source_path": "~/Downloads/研报文件.pdf", "target_folder": "目标子文件夹名"}
-  ]
-}
-```
-
-过期清理规则：个股研报 6 个月，行业/策略 12 个月。
-
-## Index.md 维护与清理工作流
-
-archive 命令不会自动更新 Index.md 元数据和目录条目，归档后必须手动 lint 检查。详见 `references/index-maintenance-workflow.md`。
-
-### lint 检查清单（每次归档/删除/手动改动后必须执行）
-
-1. **元数据头**：总研报数是否与文件夹内实际 PDF 总数一致？
-2. **总览表**：日期范围是否与最早/最晚文件匹配？
-3. **目录表**：每行的 `X 份` 是否与对应子文件夹实际 PDF 数一致？
-4. **行业速览/策略速览**：手动维护章节是否存在且未过时？
-5. **文件清单章节**：是否存在子文件夹未在清单中体现？
-
-### 删除与重建流程
-
-当需要批量删除低质量研报（如页数过少、内容过短）或彻底移除某个标的时：
-
-1. **读取 Index.md 确定范围**
-2. **用 Python 遍历统计页数/文件**：提取每份 PDF 页数，筛选待删除列表
-3. **执行删除**：`rm` 删除文件；若删除后子文件夹为空，用 `rmdir` 移除空目录
-4. **重建 Index.md**：用 Python 遍历重新生成总览表和目录表
-5. **git commit & push**
-
-**重建 Index.md 的 Python 模板**：
-
-```python
-from pathlib import Path
-import re
-
-base = Path.home() / ".inv-report"
-subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
-
-# 统计
-folder_counts = {}
-all_pdfs = []
-for subdir in subdirs:
-    pdfs = [f for f in subdir.iterdir() if f.suffix.lower() == '.pdf']
-    folder_counts[subdir.name] = len(pdfs)
-    all_pdfs.extend(pdfs)
-
-# 生成总览表（示例）
-print(f"**总研报数**：{len(all_pdfs)} 份（{len(subdirs)} 个标的）")
-```
+详见 `references/archive-and-index-guide.md`，包含 scan 中文路径降级、归档 JSON 格式、Index.md lint 检查清单、删除与重建流程。
 
 ## 与其他技能配合
 

@@ -1,7 +1,16 @@
 ---
 name: inv-knowledge-curator
-description: 个人知识管理（OKF v0.1）：URL采集 → LLM总结分类 → 交叉关联 → Git仓库存储 + 索引 + 搜索 + Lint + 可视化
+description: 个人知识管理：URL采集→LLM总结分类→交叉关联→Git仓库存储。用于整理网页文章、学习笔记、研究资料时
 version: 1.3.0
+trigger:
+  - 知识管理
+  - 收藏文章
+  - 笔记整理
+  - km_init
+  - km_import
+  - km_search
+  - km_stats
+  - km_lint
 commands:
   - /km_init - 拉取知识库并输出 Index 结构化数据
   - /km_import - 从 URL 抓取知识，总结分类，建立交叉关联，存入 OKF 知识库

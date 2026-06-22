@@ -1,7 +1,16 @@
 ---
 name: inv-stock-data
-description: 获取A股/港股/美股/ETF行情与财务数据，所有投资技能的唯一数据层
+description: 获取A股/港股/美股/ETF行情与财务数据，所有投资技能的唯一数据层。用于查询股票行情、财务报表、估值指标时
 version: 1.5.0
+trigger:
+  - 股票数据
+  - 行情查询
+  - 财务数据
+  - A股
+  - 港股
+  - 美股
+  - ETF
+  - cs_stock
 commands:
   - /cs_stock - 综合信息快照（默认；自动识别 A 股 / ETF / 美港股）
   - /cs_stock_profile - A 股交易所列表全量键值；美港股 Yahoo info 全量键值；ETF 同花顺分类信息

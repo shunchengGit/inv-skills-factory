@@ -1,9 +1,15 @@
 ---
 name: inv-portfolio-tracker
-description: 管理投资组合持仓主数据，更新持仓/现金，支持 T1-T4 自动化日报/周报流程
+description: 管理投资组合持仓主数据，更新持仓/现金，支持 T1-T4 自动化日报/周报流程。用于跟踪持仓变化、生成投资组合报告时
 category: invest
 tags: [portfolio, holdings, tracking, daily-report, cron]
 version: 1.2.0
+trigger:
+  - 持仓管理
+  - 投资组合
+  - 调仓
+  - 持仓日报
+  - portfolio
 ---
 
 # Portfolio Tracker

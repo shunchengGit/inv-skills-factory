@@ -43,8 +43,11 @@ def migrate_index(knowledge_dir: Path) -> None:
                 continue
             if current_category and line.startswith("- "):
                 idx_file = knowledge_dir / current_category / "index.md"
-                with open(idx_file, "a", encoding="utf-8") as f:
-                    f.write(line + "\n")
+                try:
+                    with open(idx_file, "a", encoding="utf-8") as f:
+                        f.write(line + "\n")
+                except (OSError, PermissionError) as e:
+                    print(f"Warning: cannot write to {idx_file}: {e}", file=sys.stderr)
         old_root_index.rename(old_root_index.with_suffix(".md.bak"))
 
     # 迁移2: index/category.md → category/index.md
