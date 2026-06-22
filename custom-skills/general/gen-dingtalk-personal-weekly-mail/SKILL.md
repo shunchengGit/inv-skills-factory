@@ -111,7 +111,9 @@ dws doc update --node <NODE_ID> --content-file /tmp/dingtalk_doc_update.md --mod
 - 状态之间用 `.sep` 分隔符连接
 
 **技术专项**：
-- 用 `.proj-line`，量化数据用 `.g` 绿色高亮
+- 主项目作为独立标题行（加粗）
+- 子项目缩进排列，格式：`子项目名：描述内容`
+- 量化数据用 `.g` 绿色高亮
 
 #### 5.3 HTML 样式模板
 
@@ -178,7 +180,9 @@ li { margin-bottom: 3px; font-size: 14px; }
 
 <div class="section">
   <div class="section-title"><span>⚡</span>技术专项</div>
-  <div class="proj-line"><span class="proj-name">专项名</span>描述 <span class="g">量化数据</span></div>
+  <div><b>主项目名</b></div>
+  <div style="padding-left:14px; margin:2px 0; font-size:14px;"><b>子项目名：</b>描述 <span class="g">量化数据</span></div>
+  <div style="padding-left:14px; margin:2px 0; font-size:14px;"><b>子项目名：</b>描述</div>
 </div>
 ```
 
@@ -205,7 +209,7 @@ from_email = os.environ["TL_MAIL_USER"]          # chengs@tuwan.com
 mail_pass = os.environ["TL_MAIL_PASS"]
 from_name = os.environ["WEEKLY_REPORT_FROM_NAME"] # 程舜
 to_email = os.environ["WEEKLY_REPORT_TO"]         # hhh@tuwan.com
-cc_email = os.environ.get("WEEKLY_REPORT_CC", "") # qupq@tuwan.com,wangfz@tuwan.com
+cc_email = os.environ.get("WEEKLY_REPORT_CC", "") # qupq@tuwan.com,wangfz@tuwan.com,zhaoyy@tuwan.com
 
 imap = imaplib.IMAP4_SSL("imap.exmail.qq.com", 993)
 imap.login(from_email, mail_pass)

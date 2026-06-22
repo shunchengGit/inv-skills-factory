@@ -8,7 +8,7 @@
 - `TL_MAIL_USER` — 发件人邮箱（chengs@tuwan.com）
 - `TL_MAIL_PASS` — 邮箱授权码
 - `WEEKLY_REPORT_TO` — 主收件人（hhh@tuwan.com）
-- `WEEKLY_REPORT_CC` — 抄送人（qupq@tuwan.com,wangfz@tuwan.com）
+- `WEEKLY_REPORT_CC` — 抄送人（qupq@tuwan.com,wangfz@tuwan.com,zhaoyy@tuwan.com）
 
 **注意**：公司邮箱格式不统一，不能按规则推测，必须从 .env 或邮件记录确认。
 
