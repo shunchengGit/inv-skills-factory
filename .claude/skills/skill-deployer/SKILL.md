@@ -69,8 +69,8 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 ~/.hermes/
   skills/
     inv-skills/            ← 部署目标（软链接）
-      inv-stock-data → ~/.skills-store/custom-skills/inv-stock-data
-      inv-valuation-engine → ~/.skills-store/custom-skills/inv-valuation-engine
+      inv-stock-data → ~/.inv-skills-factory/custom-skills/inv-stock-data
+      inv-valuation-engine → ~/.inv-skills-factory/custom-skills/inv-valuation-engine
       ...
     [其他来源技能...]       ← 不受部署影响
 ```

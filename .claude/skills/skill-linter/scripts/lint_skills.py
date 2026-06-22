@@ -468,7 +468,7 @@ def check_path_resolution() -> None:
 def check_personal_paths(skills: dict[str, Path]) -> None:
     """扫描所有技能文件，检查是否包含 /Users/xxx 等暴露用户名的绝对路径。
 
-    注意：~/xxx 形式的通用路径（如 ~/.skills-store）是合理的，不检查。
+    注意：~/xxx 形式的通用路径（如 ~/.inv-skills-factory）是合理的，不检查。
     只检查包含真实用户名的绝对路径（如 /Users/chengshun、/home/chengshun）。
     """
     print("\n── 9. 个人路径泄露检查 ──")
