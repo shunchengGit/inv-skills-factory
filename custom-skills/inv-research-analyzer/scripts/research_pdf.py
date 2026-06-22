@@ -58,7 +58,7 @@ TICKER_PATTERNS = [
 ]
 
 DEFAULT_ROOT = Path.home() / "股票研报"
-REPORT_REMOTE = os.environ.get("STOCK_REPORT_REPO_URL", "git@github.com:shunchengGit/stock-report.git")
+REPORT_REMOTE = os.environ.get("INV_REPORT_REPO_URL", "git@github.com:shunchengGit/stock-report.git")
 
 
 def default_root() -> Path:

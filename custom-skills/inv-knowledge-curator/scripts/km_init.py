@@ -24,7 +24,7 @@ from git import is_repo, same_remote, clone, pull
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index
 
-REPO_URL = os.environ.get("KNOWLEDGE_REPO_URL", "git@github.com:shunchengGit/knowledge.git")
+REPO_URL = os.environ.get("INV_KNOWLEDGE_REPO_URL", "git@github.com:shunchengGit/knowledge.git")
 REPO_BRANCH = "master"
 KNOWLEDGE_DIR = Path.home() / ".knowledge"
 
