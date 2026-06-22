@@ -6,11 +6,11 @@ Skills & hooks 同步脚本（软链接模式）。
 软链接指向源目录，修改源文件即刻生效，无需重新同步。
 
 用法:
-  python3 .claude/skills/deploy-skills/sync.py --profile home
-  python3 .claude/skills/deploy-skills/sync.py --profile work --dry-run
-  python3 .claude/skills/deploy-skills/sync.py --profile home --agent hermes
-  python3 .claude/skills/deploy-skills/sync.py --profile home --hooks-only
-  python3 .claude/skills/deploy-skills/sync.py --list
+  python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
+  python3 .claude/skills/deploy-skills/scripts/sync.py --profile work --dry-run
+  python3 .claude/skills/deploy-skills/scripts/sync.py --profile home --agent hermes
+  python3 .claude/skills/deploy-skills/scripts/sync.py --profile home --hooks-only
+  python3 .claude/skills/deploy-skills/scripts/sync.py --list
 
 base 分类始终同步，无需在 profile 中声明。
 """
@@ -22,7 +22,7 @@ import shutil
 import sys
 from pathlib import Path
 
-STORE_ROOT = Path(__file__).resolve().parents[3]
+STORE_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(STORE_ROOT / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()

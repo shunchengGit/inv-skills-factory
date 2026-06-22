@@ -23,13 +23,13 @@ description: 将技能和 hooks 按场景（profile）软链接部署到各 Agen
 默认 `home`。如果用户指定了 profile 则用指定的。
 
 ```bash
-python3 .claude/skills/deploy-skills/sync.py --list
+python3 .claude/skills/deploy-skills/scripts/sync.py --list
 ```
 
 ### ② 执行部署
 
 ```bash
-python3 .claude/skills/deploy-skills/sync.py --profile home
+python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 ```
 
 可选参数：
@@ -85,11 +85,11 @@ python3 .claude/skills/deploy-skills/sync.py --profile home
 
 ## sync.py 核心逻辑
 
-脚本路径：`.claude/skills/deploy-skills/sync.py`
+脚本路径：`.claude/skills/deploy-skills/scripts/sync.py`
 
 ### 输入
 
-1. `.claude/skills/deploy-skills/deploy.json` — profiles 与 agents 配置
+1. `.claude/skills/deploy-skills/scripts/deploy.json` — profiles 与 agents 配置
 2. `custom-skills/` — 技能源码目录
 3. `custom-hooks/` — hooks 源码目录
 
