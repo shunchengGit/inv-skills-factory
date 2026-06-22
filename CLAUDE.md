@@ -29,6 +29,7 @@ custom-skills/                  # 技能源码（扁平结构）
   skill-creator/                #   创建/优化技能
   skill-deployer/               #   部署技能到 agent 目录
   skill-linter/                 #   技能结构与文档一致性检查
+  project-init/                 #   项目初始化：引导 env 配置并拉取仓库
 
 openspec/                       # OpenSpec 变更管理
   config.yaml
