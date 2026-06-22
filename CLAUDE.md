@@ -92,18 +92,6 @@ python3 .claude/skills/skill-linter/scripts/lint_skills.py
 ```bash
 mkdir -p custom-skills/<prefix>-<name>/{scripts,references}
 touch custom-skills/<prefix>-<name>/SKILL.md
-cat > custom-skills/<prefix>-<name>/_meta.json << 'EOF'
-{
-  "name": "<prefix>-<name>",
-  "version": "0.1.0",
-  "description": "",
-  "commands": [],
-  "scripts": {},
-  "references": {},
-  "dependencies": [],
-  "derivedFrom": null
-}
-EOF
 ```
 
 ## 约束

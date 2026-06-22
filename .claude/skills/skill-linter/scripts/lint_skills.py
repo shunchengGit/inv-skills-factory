@@ -27,22 +27,18 @@ CLAUDE_MD = ROOT / "CLAUDE.md"
 ERRORS = 0
 WARNINGS = 0
 
-
 def err(msg: str) -> None:
     global ERRORS
     print(f"  ❌ {msg}")
     ERRORS += 1
-
 
 def warn(msg: str) -> None:
     global WARNINGS
     print(f"  ⚠ {msg}")
     WARNINGS += 1
 
-
 def ok(msg: str) -> None:
     print(f"  ✅ {msg}")
-
 
 # ── 工具函数 ─────────────────────────────────────────────────────────────
 
@@ -57,7 +53,6 @@ def find_skills() -> dict[str, Path]:
         if (d / "SKILL.md").exists():
             skills[d.name] = d
     return skills
-
 
 def parse_frontmatter(path: Path) -> dict | None:
     """解析 Markdown YAML frontmatter。
@@ -122,7 +117,6 @@ def parse_frontmatter(path: Path) -> dict | None:
     flush()
     return result
 
-
 def find_empty_dirs() -> list[Path]:
     """找出没有 SKILL.md 的技能目录（空壳）。"""
     empty = []
@@ -135,71 +129,7 @@ def find_empty_dirs() -> list[Path]:
             empty.append(d)
     return empty
 
-
-# ── 1. _meta.json 校验 ──────────────────────────────────────────────────
-
-def check_meta_json(skills: dict[str, Path]) -> None:
-    print("\n── 1. _meta.json 校验 ──")
-
-    for name, skill_dir in sorted(skills.items()):
-        meta_file = skill_dir / "_meta.json"
-
-        # 1a. 存在性
-        if not meta_file.exists():
-            err(f"{name}: 缺少 _meta.json")
-            continue
-
-        # 1b. JSON 语法
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            err(f"{name}: _meta.json JSON 解析失败: {e}")
-            continue
-
-        # 1c. name 与实际目录一致
-        meta_name = meta.get("name", "")
-        if meta_name != name:
-            err(f"{name}: _meta.json name={meta_name}，与目录名不匹配")
-
-        # 1d. 必需字段
-        for field in ["version", "description"]:
-            if not meta.get(field):
-                warn(f"{name}: _meta.json 缺少 {field}")
-
-        # 1e. dependencies 引用的技能是否存在
-        deps = meta.get("dependencies", [])
-        for dep in deps:
-            if dep not in skills:
-                err(f"{name}: dependencies 引用不存在的技能 {dep}")
-
-        # 1g. scripts 指向的文件是否存在
-        for script_key, script_path in meta.get("scripts", {}).items():
-            if "/" in str(script_path) or str(script_path).endswith(".py"):
-                full_path = skill_dir / script_path
-            else:
-                full_path = skill_dir / "scripts" / script_key
-            if not full_path.exists():
-                err(f"{name}: scripts.{script_key} → 文件不存在")
-
-        # 1h. derivedFrom 引用的源技能是否存在（如果是字符串且为技能名）
-        derived = meta.get("derivedFrom")
-        if derived and isinstance(derived, str) and derived not in skills:
-            # 允许 null / 非技能名的描述
-            if "-" in derived:
-                warn(f"{name}: derivedFrom={derived}，该技能可能不存在")
-
-    # 1i. 反过来：有没有 _meta.json 但无 SKILL.md 的
-    for mf in sorted(SKILLS_DIR.rglob("_meta.json")):
-        skill_dir = mf.parent
-        if "_shared" in skill_dir.parts or ".archive" in skill_dir.parts:
-            continue
-        if not (skill_dir / "SKILL.md").exists():
-            err(f"{skill_dir.name}: 有 _meta.json 但缺少 SKILL.md")
-
-    ok("_meta.json 校验完成")
-
-
-# ── 2. SKILL.md frontmatter 校验 ────────────────────────────────────────
+# ── 1. SKILL.md 校验 ───────────────────────────────────────────────────
 
 def _check_description_best_practices(name: str, desc: str) -> None:
     """检查 description 字段是否符合最佳实践。"""
@@ -208,7 +138,7 @@ def _check_description_best_practices(name: str, desc: str) -> None:
         warn(f"{name}: description 包含触发句式（'当...时'），应改为功能描述")
 
     # 规则2：不要嵌入多个引号包裹的触发短语
-    quote_count = len(re.findall(r'"[^"]*"', desc)) + len(re.findall(r'"[^"]*"', desc))
+    quote_count = len(re.findall(r'"[^"]*"', desc)) + len(re.findall(r'","[^"]*"', desc))
     if quote_count >= 3:
         warn(f"{name}: description 嵌入了触发短语（{quote_count} 处引号），应移至 trigger 字段")
 
@@ -229,66 +159,65 @@ def _check_description_best_practices(name: str, desc: str) -> None:
     if desc.startswith("当"):
         warn(f"{name}: description 以'当'开头（场景描述），建议改为功能描述")
 
-    # 规则6：应与 _meta.json 的 description 一致
-    p = SKILLS_DIR / name / "_meta.json"
-    if p.exists():
-        meta = json.loads(p.read_text(encoding="utf-8"))
-        meta_desc = meta.get("description", "")
-        if meta_desc and meta_desc != desc:
-            warn(f"{name}: frontmatter description 与 _meta.json 不一致")
-
-
-def check_frontmatter(skills: dict[str, Path]) -> None:
-    print("\n── 2. SKILL.md frontmatter 校验 ──")
+def check_skill_md(skills: dict[str, Path]) -> None:
+    print("\n── 1. SKILL.md 校验 ──")
 
     for name, skill_dir in sorted(skills.items()):
-        fm = parse_frontmatter(skill_dir / "SKILL.md")
+        skmd = skill_dir / "SKILL.md"
+        if not skmd.exists():
+            err(f"{name}: 缺少 SKILL.md")
+            continue
+
+        fm = parse_frontmatter(skmd)
         if fm is None:
             err(f"{name}: SKILL.md 缺少有效的 frontmatter (--- ... ---)")
             continue
 
-        if "name" not in fm:
+        # name 与目录名一致
+        fm_name = fm.get("name", "")
+        if not fm_name:
             err(f"{name}: frontmatter 缺少 name")
-        elif fm["name"] != name:
-            err(f"{name}: frontmatter name={fm['name']}，与目录名不匹配")
+        elif fm_name != name:
+            err(f"{name}: frontmatter name={fm_name}，与目录名不匹配")
 
-        if "version" not in fm:
+        # version
+        fm_version = fm.get("version", "")
+        if not fm_version:
             warn(f"{name}: frontmatter 缺少 version")
-        if "description" not in fm:
+
+        # description
+        fm_desc = fm.get("description", "")
+        if not fm_desc:
             warn(f"{name}: frontmatter 缺少 description")
         else:
-            _check_description_best_practices(name, str(fm["description"]))
+            _check_description_best_practices(name, str(fm_desc))
 
-        # trigger/triggers 字段一致性（有些用单数有些用复数，都接受）
+        # trigger/triggers 字段一致性
         if "trigger" in fm and "triggers" in fm:
             warn(f"{name}: frontmatter 同时有 trigger 和 triggers，建议统一为一个")
 
-        # 交叉验证 version / description / commands 与 _meta.json 一致
-        meta_file = skill_dir / "_meta.json"
-        if meta_file.exists():
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if "version" in fm and "version" in meta:
-                if str(fm["version"]) != str(meta["version"]):
-                    warn(f"{name}: version 不一致（fm={fm['version']} vs meta={meta['version']}）")
+        # dependencies 引用的技能是否存在
+        deps = fm.get("dependencies", [])
+        if isinstance(deps, str):
+            deps = [deps]
+        for dep in deps:
+            if dep not in skills:
+                err(f"{name}: dependencies 引用不存在的技能 {dep}")
 
-            # commands 字段一致性
-            fm_cmds = fm.get("commands", [])
-            meta_cmds = meta.get("commands", [])
-            if isinstance(fm_cmds, str):
-                fm_cmds = [fm_cmds]
-            if fm_cmds and meta_cmds:
-                fm_set = set(c.strip() for c in fm_cmds)
-                meta_set = set(c.strip() for c in meta_cmds)
-                if fm_set != meta_set:
-                    warn(f"{name}: commands 不一致")
+        # scripts 文件存在性
+        scripts_dir = skill_dir / "scripts"
+        if scripts_dir.is_dir():
+            for f in sorted(scripts_dir.iterdir()):
+                if f.is_file() and not f.name.startswith(".") and f.suffix == ".py":
+                    if not f.exists():
+                        err(f"{name}: scripts/{f.name} 文件不存在")
 
-    ok("frontmatter 校验完成")
+    ok("SKILL.md 校验完成")
 
-
-# ── 3. 命名规范校验 ──────────────────────────────────────────────────────
+# ── 2. 命名规范校验 ──────────────────────────────────────────────────────
 
 def check_naming(skills: dict[str, Path]) -> None:
-    print("\n── 3. 命名规范 ──")
+    print("\n── 2. 命名规范 ──")
 
     for name in sorted(skills.keys()):
         if "-" not in name:
@@ -296,11 +225,10 @@ def check_naming(skills: dict[str, Path]) -> None:
 
     ok("命名规范校验完成")
 
-
-# ── 4. 空壳目录 ──────────────────────────────────────────────────────────
+# ── 3. 空壳目录 ──────────────────────────────────────────────────────────
 
 def check_empty_dirs() -> None:
-    print("\n── 4. 空壳目录 ──")
+    print("\n── 3. 空壳目录 ──")
 
     empty = find_empty_dirs()
     if empty:
@@ -309,11 +237,10 @@ def check_empty_dirs() -> None:
     else:
         ok("无空壳目录")
 
-
-# ── 5. deploy.json 一致性 ────────────────────────────────────────────────
+# ── 4. deploy.json 一致性 ────────────────────────────────────────────────
 
 def check_deploy_json(skills: dict[str, Path]) -> None:
-    print("\n── 5. deploy.json 一致性 ──")
+    print("\n── 4. deploy.json 一致性 ──")
 
     if not DEPLOY_JSON.exists():
         err("deploy.json 不存在")
@@ -331,11 +258,10 @@ def check_deploy_json(skills: dict[str, Path]) -> None:
 
     ok("deploy.json 一致性检查完成")
 
-
-# ── 6. CLAUDE.md 一致性 ──────────────────────────────────────────────────
+# ── 5. CLAUDE.md 一致性 ──────────────────────────────────────────────────
 
 def check_claude_md(skills: dict[str, Path]) -> None:
-    print("\n── 6. CLAUDE.md 一致性 ──")
+    print("\n── 5. CLAUDE.md 一致性 ──")
 
     if not CLAUDE_MD.exists():
         err(f"CLAUDE.md 不存在: {CLAUDE_MD}")
@@ -348,11 +274,10 @@ def check_claude_md(skills: dict[str, Path]) -> None:
 
     ok("CLAUDE.md 一致性检查完成")
 
-
-# ── 7. SKILL.md 行数 ─────────────────────────────────────────────────────
+# ── 6. SKILL.md 行数 ─────────────────────────────────────────────────────
 
 def check_skill_length(skills: dict[str, Path]) -> None:
-    print("\n── 7. SKILL.md 行数 ──")
+    print("\n── 6. SKILL.md 行数 ──")
 
     for name, skill_dir in sorted(skills.items()):
         lines = len((skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines())
@@ -363,15 +288,13 @@ def check_skill_length(skills: dict[str, Path]) -> None:
 
     ok("行数检查完成")
 
-
-# ── 8. 脚本可执行性验证 ──────────────────────────────────────────────────
+# ── 7. 脚本可执行性验证 ──────────────────────────────────────────────────
 
 def _is_pep723_script(path: Path) -> bool:
     try:
         return "# /// script" in path.read_text(encoding="utf-8")[:200]
     except Exception:
         return False
-
 
 def _is_entry_point(path: Path) -> bool:
     try:
@@ -380,9 +303,8 @@ def _is_entry_point(path: Path) -> bool:
     except Exception:
         return True
 
-
 def check_scripts(skills: dict[str, Path]) -> None:
-    print("\n── 8. 脚本可执行性验证 ──")
+    print("\n── 7. 脚本可执行性验证 ──")
 
     checked = 0
     skipped = 0
@@ -432,12 +354,11 @@ def check_scripts(skills: dict[str, Path]) -> None:
 
     print(f"  入口脚本 {checked} 个，内部模块 {skipped} 个（仅语法检查）")
 
-
-# ── 9. 跨技能路径解析验证 ──────────────────────────────────────────────
+# ── 8. 跨技能路径解析验证 ──────────────────────────────────────────────
 
 def check_path_resolution() -> None:
     """验证脚本中 __file__ 路径解析是否正确。"""
-    print("\n── 9. 跨技能路径解析验证 ──")
+    print("\n── 8. 跨技能路径解析验证 ──")
 
     # 先检查：所有用 __file__ 的脚本是否做了 resolve
     unresolved = 0
@@ -510,8 +431,7 @@ def check_path_resolution() -> None:
     if not verified and not failed:
         ok("未发现跨文件路径引用")
 
-
-# ── 10. 个人路径泄露检查 ────────────────────────────────────────────────
+# ── 9. 个人路径泄露检查 ────────────────────────────────────────────────
 
 def check_personal_paths(skills: dict[str, Path]) -> None:
     """扫描所有技能文件，检查是否包含 /Users/xxx 等暴露用户名的绝对路径。
@@ -519,7 +439,7 @@ def check_personal_paths(skills: dict[str, Path]) -> None:
     注意：~/xxx 形式的通用路径（如 ~/.skills-store）是合理的，不检查。
     只检查包含真实用户名的绝对路径（如 /Users/chengshun、/home/chengshun）。
     """
-    print("\n── 10. 个人路径泄露检查 ──")
+    print("\n── 9. 个人路径泄露检查 ──")
 
     # 只匹配暴露用户名的绝对路径
     personal_path_patterns = [
@@ -530,8 +450,8 @@ def check_personal_paths(skills: dict[str, Path]) -> None:
 
     found = 0
     for name, skill_dir in sorted(skills.items()):
-        # 扫描 SKILL.md、_meta.json、脚本文件
-        for pattern in ["SKILL.md", "_meta.json"]:
+        # 扫描 SKILL.md 和脚本文件
+        for pattern in ["SKILL.md"]:
             file_path = skill_dir / pattern
             if not file_path.exists():
                 continue
@@ -575,77 +495,6 @@ def check_personal_paths(skills: dict[str, Path]) -> None:
     else:
         ok("未发现个人路径泄露")
 
-
-# ── 11. references 目录与 _meta.json 一致性 ──────────────────────────────
-
-def check_references_consistency(skills: dict[str, Path]) -> None:
-    """检查 references/ 目录下的文件与 _meta.json references 字段是否一致。"""
-    print("\n── 11. references 目录与 _meta.json 一致性 ──")
-
-    for name, skill_dir in sorted(skills.items()):
-        meta_file = skill_dir / "_meta.json"
-        if not meta_file.exists():
-            continue
-
-        meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        meta_refs = set(meta.get("references", {}).keys())
-
-        refs_dir = skill_dir / "references"
-        actual_refs = set()
-        if refs_dir.is_dir():
-            for f in sorted(refs_dir.iterdir()):
-                if f.is_file() and not f.name.startswith("."):
-                    actual_refs.add(f.name)
-
-        # meta 声明了但实际不存在
-        missing = meta_refs - actual_refs
-        for ref in sorted(missing):
-            warn(f"{name}: _meta.json 声明 references.{ref} 但文件不存在")
-
-        # 实际存在但未在 meta 声明
-        extra = actual_refs - meta_refs
-        for ref in sorted(extra):
-            warn(f"{name}: references/{ref} 存在但未在 _meta.json 中声明")
-
-    ok("references 一致性检查完成")
-
-
-# ── 12. scripts 目录与 _meta.json 一致性 ─────────────────────────────────
-
-def check_scripts_consistency(skills: dict[str, Path]) -> None:
-    """检查 scripts/ 目录下的文件与 _meta.json scripts 字段是否一致。"""
-    print("\n── 12. scripts 目录与 _meta.json 一致性 ──")
-
-    for name, skill_dir in sorted(skills.items()):
-        meta_file = skill_dir / "_meta.json"
-        if not meta_file.exists():
-            continue
-
-        meta = json.loads(meta_file.read_text(encoding="utf-8"))
-        meta_scripts = set(meta.get("scripts", {}).keys())
-
-        scripts_dir = skill_dir / "scripts"
-        actual_scripts = set()
-        if scripts_dir.is_dir():
-            for f in sorted(scripts_dir.iterdir()):
-                if f.is_file() and not f.name.startswith("."):
-                    # 去掉扩展名作为 key
-                    stem = f.stem
-                    actual_scripts.add(stem)
-
-        # meta 声明了但实际不存在
-        missing = meta_scripts - actual_scripts
-        for script in sorted(missing):
-            warn(f"{name}: _meta.json 声明 scripts.{script} 但文件不存在")
-
-        # 实际存在但未在 meta 声明（排除 __init__.py 等）
-        extra = actual_scripts - meta_scripts
-        for script in sorted(extra):
-            warn(f"{name}: scripts/{script} 存在但未在 _meta.json 中声明")
-
-    ok("scripts 一致性检查完成")
-
-
 # ── main ─────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -661,8 +510,8 @@ def main() -> int:
     skills = find_skills()
     print(f"\n发现 {len(skills)} 个技能\n")
 
-    check_meta_json(skills)
-    check_frontmatter(skills)
+    
+    check_skill_md(skills)
     check_naming(skills)
     check_empty_dirs()
     check_deploy_json(skills)
@@ -671,15 +520,12 @@ def main() -> int:
     check_scripts(skills)
     check_path_resolution()
     check_personal_paths(skills)
-    check_references_consistency(skills)
-    check_scripts_consistency(skills)
 
     print("\n" + "=" * 60)
     print(f"结果: {ERRORS} 错误, {WARNINGS} 警告")
     print("=" * 60)
 
     return 1 if ERRORS > 0 else 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

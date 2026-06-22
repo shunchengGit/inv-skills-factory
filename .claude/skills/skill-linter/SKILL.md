@@ -5,7 +5,7 @@ description: 技能全面检查与自动修复：结构校验 → 合并分析 �
 
 # 技能 Lint 检查
 
-每次新增、合并、删除技能，或修改了 SKILL.md、_meta.json、脚本后执行。
+每次新增、合并、删除技能，或修改了 SKILL.md、脚本后执行。
 
 ## ⚡ 先行判断：确定检查范围
 
@@ -16,7 +16,6 @@ description: 技能全面检查与自动修复：结构校验 → 合并分析 �
 | 新增技能 | ①→②→③→④→⑤（全流程） |
 | 删除技能 | ①→⑤（清索引） |
 | 修改 SKILL.md | ①→③→④（校验+瘦身） |
-| 修改 _meta.json | ①（结构校验） |
 | 修改/新增脚本 | ①（结构校验） |
 | 合并技能 | ②→③→④→⑤（全流程） |
 
@@ -28,7 +27,7 @@ description: 技能全面检查与自动修复：结构校验 → 合并分析 �
 python3 .claude/skills/skill-linter/scripts/lint_skills.py
 ```
 
-9 项自动检查：_meta.json、frontmatter、命名、空壳、deploy.json、索引表、行数、脚本执行、路径解析。有错误先修。
+9 项自动检查：SKILL.md frontmatter、命名、空壳、deploy.json、CLAUDE.md、行数、脚本执行、路径解析、个人路径泄露。有错误先修。
 
 ### ② 合并分析
 
@@ -51,8 +50,8 @@ python3 .claude/skills/skill-linter/scripts/lint_skills.py
 | 2 | 单句，≤60 字（中文）/ ≤120 字符（英文） | 一行说清 |
 | 3 | 触发词在 trigger 字段，不在 description | — |
 | 4 | 不以 ... 结尾 | — |
-| 5 | frontmatter 与 _meta.json 一致 | — |
-| 6 | version / commands 在 fm 和 meta 中也一致 | — |
+| 5 | frontmatter 字段完整（name/version/description 必填） | — |
+| 6 | dependencies 引用的技能必须存在 | — |
 
 发现问题直接修复。
 
@@ -69,7 +68,7 @@ python3 .claude/skills/skill-linter/scripts/lint_skills.py
 | 子模式详细工作流 | — |
 | 已知常量、命令清单 | — |
 
-目标 ≤200 行。新建 reference 文件后更新 `_meta.json` 的 `references` 字段。
+目标 ≤200 行。
 
 ### ⑤ CLAUDE.md 同步
 
