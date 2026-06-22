@@ -1,5 +1,5 @@
 ---
-name: lint-skill
+name: lint-skills
 description: 技能全面检查与自动修复：结构校验 → 合并分析 → description 优化 → 瘦身 → 索引同步。每次修改技能后执行。
 ---
 
@@ -25,7 +25,7 @@ description: 技能全面检查与自动修复：结构校验 → 合并分析 �
 ### ① 结构校验 — `lint_skills.py` 基线
 
 ```bash
-python3 scripts/lint_skills.py
+python3 .claude/skills/lint-skills/scripts/lint_skills.py
 ```
 
 9 项自动检查：_meta.json、frontmatter、命名、空壳、deploy.json、索引表、行数、脚本执行、路径解析。有错误先修。

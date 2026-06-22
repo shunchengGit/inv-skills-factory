@@ -12,10 +12,17 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+def _find_repo_root() -> Path:
+    """沿目录树向上查找包含 CLAUDE.md 的仓库根目录。"""
+    for p in Path(__file__).resolve().parents:
+        if (p / "CLAUDE.md").is_file():
+            return p
+    raise FileNotFoundError("找不到仓库根目录（缺少 CLAUDE.md）")
+
+ROOT = _find_repo_root()
 SKILLS_DIR = ROOT / "custom-skills"
 HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "skills-store"
-DEPLOY_JSON = ROOT / ".claude" / "skills" / "deploy-skills" / "deploy.json"
+DEPLOY_JSON = ROOT / "deploy" / "deploy.json"
 CLAUDE_MD = ROOT / "CLAUDE.md"
 SKILL_INDEX_FILE = SKILLS_DIR / "base" / "base-skill-loader" / "SKILL.md"
 

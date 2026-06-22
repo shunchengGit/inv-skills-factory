@@ -52,46 +52,11 @@ lib/
   pwright.py                    # Playwright 抓取
   git.py                        # Git 操作
 
-deploy/
-  sync.py                       # 部署同步
-  deploy.json                   # 部署配置：profiles + agents
-
 openspec/                       # OpenSpec 变更管理
   config.yaml
   changes/
   specs/
 ```
-
-## 部署配置 (deploy.json)
-
-```json
-{
-  "profiles": {
-    "home":   { "hermes": ["general", "invest"], "workbuddy": ["general"] },
-    "work":   { "hermes": ["general"],           "workbuddy": ["general"] },
-    "server": { "hermes": ["invest"] }
-  },
-  "agents": {
-    "hermes":    { "skills_dir": "~/.hermes/skills",    "hooks_dir": "~/.hermes/hooks" },
-    "workbuddy": { "skills_dir": "~/.workbuddy/skills", "hooks_dir": "~/.workbuddy/hooks" }
-  }
-}
-```
-
-base 分类始终同步，无需在 profile 中声明。
-
-## 同步脚本
-
-```bash
-python deploy/sync.py --profile work          # 同步 work 场景
-python deploy/sync.py --profile home --dry-run # 预览
-python deploy/sync.py --profile home --agent hermes  # 仅同步指定 agent
-python deploy/sync.py --profile home --hooks-only    # 仅同步 hooks
-python deploy/sync.py --profile home --force   # 强制替换非空目录
-python deploy/sync.py --list                  # 列出可用 profiles
-```
-
-同步时会自动清理目标目录中不在当前 profile 范围内的过期软链接。
 
 ## 技能依赖关系
 
