@@ -217,11 +217,15 @@ def check_skill_md(skills: dict[str, Path]) -> None:
 # ── 2. 命名规范校验 ──────────────────────────────────────────────────────
 
 def check_naming(skills: dict[str, Path]) -> None:
-    print("\n── 2. 命名规范 ──")
+    print("\n── 2. 命名规范（agentskills.io 标准）──")
 
     for name in sorted(skills.keys()):
-        if "-" not in name:
-            err(f"{name}: 命名不符合规范，期望格式 `{{前缀}}-{{语义名}}`")
+        # agentskills.io spec: 1-64 chars, lowercase a-z/0-9/hyphens only,
+        # no leading/trailing hyphens, no consecutive hyphens
+        if len(name) > 64:
+            err(f"{name}: 名称超过 64 字符（当前 {len(name)}）")
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name):
+            err(f"{name}: 不符合命名规范（仅允许小写字母/数字/连字符，首尾不能为连字符，不能有连续连字符）")
 
     ok("命名规范校验完成")
 
