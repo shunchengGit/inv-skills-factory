@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-Skills & hooks 同步脚本（软链接模式）。
+Skills 同步脚本（软链接模式）。
 
-将 SkillsStore 中的技能和 hooks 以软链接方式部署到各 Agent 目录。
+将 SkillsStore 中的技能以软链接方式部署到各 Agent 目录。
 软链接指向源目录，修改源文件即刻生效，无需重新同步。
 
 用法:
   python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
   python3 .claude/skills/deploy-skills/scripts/sync.py --profile work --dry-run
   python3 .claude/skills/deploy-skills/scripts/sync.py --profile home --agent hermes
-  python3 .claude/skills/deploy-skills/scripts/sync.py --profile home --hooks-only
   python3 .claude/skills/deploy-skills/scripts/sync.py --list
 
 base 分类始终同步，无需在 profile 中声明。
@@ -27,7 +26,6 @@ sys.path.insert(0, str(STORE_ROOT / "lib"))
 from dotenv import load as _load_dotenv
 _load_dotenv()
 SKILLS_SRC = STORE_ROOT / "custom-skills"
-HOOKS_SRC = STORE_ROOT / "custom-hooks"
 DEPLOY_FILE = Path(__file__).resolve().parent / "deploy.json"
 
 
@@ -214,50 +212,6 @@ def sync_skills(categories: list[str], skills_dir: str, force: bool = False, dry
     return created, skipped, failed, removed
 
 
-def sync_hooks(agent_name: str, hooks_dir: str, force: bool = False, dry_run: bool = False) -> tuple[int, int, int, int]:
-    """同步 hooks（软链接）。返回 (created, skipped, failed, removed)"""
-    src = HOOKS_SRC / agent_name
-    if not src.exists():
-        return 0, 0, 0, 0
-
-    dest_root = Path(hooks_dir).expanduser()
-    dest_root.mkdir(parents=True, exist_ok=True)
-
-    created, skipped, failed = 0, 0, 0
-
-    # 收集期望的 hooks
-    expected_hooks = set()
-    for hook_dir in src.iterdir():
-        if hook_dir.is_dir():
-            expected_hooks.add(hook_dir.name)
-
-    for hook_dir in src.iterdir():
-        if not hook_dir.is_dir():
-            continue
-
-        label = f"{agent_name}/{hook_dir.name}"
-        target = dest_root / hook_dir.name
-        result = _create_symlink(hook_dir, target, label, force)
-
-        if result:
-            created += 1
-        else:
-            skipped += 1
-
-    # 清理旧链接
-    removed = 0
-    for item in dest_root.iterdir():
-        if item.is_symlink() and item.name not in expected_hooks:
-            if dry_run:
-                print(f"  [dry-run] 删除旧 hook 链接: {item.name}")
-            else:
-                print(f"  删除旧 hook 链接: {item.name}")
-                item.unlink()
-            removed += 1
-
-    return created, skipped, failed, removed
-
-
 def list_profiles(config: dict):
     print("Available profiles:\n")
     for name, agents in sorted(config["profiles"].items()):
@@ -268,12 +222,10 @@ def list_profiles(config: dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Sync skills & hooks to agents (symlink)")
+    parser = argparse.ArgumentParser(description="Sync skills to agents (symlink)")
     parser.add_argument("--profile", default=os.environ.get("SYNC_PROFILE"), help="profile name (default: $SYNC_PROFILE)")
     parser.add_argument("--agent", help="only sync this agent")
     parser.add_argument("--dry-run", action="store_true", help="preview only")
-    parser.add_argument("--hooks-only", action="store_true")
-    parser.add_argument("--skills-only", action="store_true")
     parser.add_argument("--list", action="store_true", help="list available profiles")
     parser.add_argument("--force", action="store_true", help="force replace non-empty directories")
     args = parser.parse_args()
@@ -309,31 +261,16 @@ def main():
 
         print(f"\n=== {agent_name} ===")
 
-        if not args.hooks_only:
-            if args.dry_run:
-                cats = ", ".join(["base"] + categories)
-                print(f"  [dry-run] skills: [{cats}] → {cfg['skills_dir']}")
-            else:
-                c, s, f, r = sync_skills(categories, cfg["skills_dir"], force=args.force, dry_run=args.dry_run)
-                total_created += c
-                total_skipped += s
-                total_failed += f
-                total_removed += r
-                print(f"  skills: {c} created, {s} skipped, {f} failed, {r} removed → {cfg['skills_dir']}")
-
-        if not args.skills_only:
-            hooks_dir = cfg.get("hooks_dir", "")
-            if not hooks_dir:
-                print(f"  hooks: no hooks_dir configured")
-            elif args.dry_run:
-                print(f"  [dry-run] hooks: → {hooks_dir}")
-            else:
-                c, s, f, r = sync_hooks(agent_name, hooks_dir, force=args.force, dry_run=args.dry_run)
-                total_created += c
-                total_skipped += s
-                total_failed += f
-                total_removed += r
-                print(f"  hooks: {c} created, {s} skipped, {f} failed, {r} removed → {hooks_dir}")
+        if args.dry_run:
+            cats = ", ".join(["base"] + categories)
+            print(f"  [dry-run] skills: [{cats}] → {cfg['skills_dir']}")
+        else:
+            c, s, f, r = sync_skills(categories, cfg["skills_dir"], force=args.force, dry_run=args.dry_run)
+            total_created += c
+            total_skipped += s
+            total_failed += f
+            total_removed += r
+            print(f"  skills: {c} created, {s} skipped, {f} failed, {r} removed → {cfg['skills_dir']}")
 
     print(f"\nDone. total: {total_created} created, {total_skipped} skipped, {total_failed} failed, {total_removed} removed")
 

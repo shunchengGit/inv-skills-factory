@@ -1,6 +1,6 @@
 ---
 name: deploy-skills
-description: 将技能和 hooks 按场景（profile）软链接部署到各 Agent 目录。修改技能后执行。
+description: 将技能按场景（profile）软链接部署到各 Agent 目录。修改技能后执行。
 ---
 
 # 技能部署
@@ -14,7 +14,6 @@ description: 将技能和 hooks 按场景（profile）软链接部署到各 Agen
 | 修改了技能内容（SKILL.md/脚本/references） | 部署当前 profile |
 | 新增/删除技能 | 部署 + lint |
 | 修改 deploy.json | 部署受影响 profile |
-| 仅修改 hooks | `--hooks-only` |
 
 ## 执行流程
 
@@ -39,8 +38,6 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 | `--dry-run` | 预览，不实际操作 |
 | `--force` | 强制替换非空目录（慎用） |
 | `--agent hermes` | 仅部署指定 agent |
-| `--hooks-only` | 仅同步 hooks |
-| `--skills-only` | 仅同步技能 |
 
 ### ③ 验证
 
@@ -60,8 +57,6 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
       gen-daily-planner → ~/.skills-store/custom-skills/general/gen-daily-planner
       ...
     [其他来源技能...]       ← 不受部署影响
-  hooks/
-    base-skill-loader → ~/.skills-store/custom-hooks/hermes/base-skill-loader
 ```
 
 ## deploy.json 配置
@@ -74,8 +69,8 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
     "server": { "hermes": ["invest"] }
   },
   "agents": {
-    "hermes":    { "skills_dir": "~/.hermes/skills/skills-store", "hooks_dir": "~/.hermes/hooks" },
-    "workbuddy": { "skills_dir": "~/.workbuddy/skills/skills-store", "hooks_dir": "~/.workbuddy/hooks" }
+    "hermes":    { "skills_dir": "~/.hermes/skills/skills-store" },
+    "workbuddy": { "skills_dir": "~/.workbuddy/skills/skills-store" }
   }
 }
 ```
@@ -91,7 +86,6 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 
 1. `.claude/skills/deploy-skills/scripts/deploy.json` — profiles 与 agents 配置
 2. `custom-skills/` — 技能源码目录
-3. `custom-hooks/` — hooks 源码目录
 
 ### 同步流程
 
@@ -117,8 +111,3 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 - 如果目标目录下存在**非空普通目录**且名称不在当前 profile 范围内：
   - 默认跳过并警告
   - `--force` 模式下删除
-
-### hooks 同步
-
-- 按代理隔离：`custom-hooks/hermes/` → `~/.hermes/hooks/`
-- 同样使用软链接，同样的清理规则
