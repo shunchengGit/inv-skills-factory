@@ -166,7 +166,7 @@ grep -n "HSBC\|JPMorgan\|Deutsche\|UBS" /tmp/tencent_reports_extracted.txt
 
 ## 行业调研纪要批量浏览工作流
 
-适用场景：用户给出一个**目录路径**（如 `/Users/xxx/Desktop/股票研报/行业研究-互联网`），问"这说的是啥"，而非指定具体标的代码。目录下通常是**行业调研纪要**（industry tour takeaways），覆盖多家公司、多位专家，不是单一公司深度研报。
+适用场景：用户给出一个**目录路径**（如 `/Users/xxx/.inv-report/行业研究-互联网`），问"这说的是啥"，而非指定具体标的代码。目录下通常是**行业调研纪要**（industry tour takeaways），覆盖多家公司、多位专家，不是单一公司深度研报。
 
 ### 与标准研报的核心差异
 
@@ -225,7 +225,7 @@ for f in files:
 
 ### 实例（2026-04 中国互联网行业调研）
 
-目录 `~/股票研报/行业研究-互联网` 含2份PDF：
+目录 `~/.inv-report/行业研究-互联网` 含2份PDF：
 
 | 文件 | 页数 | 类型 | 核心内容 |
 |------|------|------|----------|
@@ -303,7 +303,7 @@ def find_duplicate_pdfs(root_dir):
     return duplicates
 
 # 使用示例
-dups = find_duplicate_pdfs(os.path.expanduser('~/股票研报'))
+dups = find_duplicate_pdfs(os.path.expanduser('~/.inv-report'))
 for h, paths in dups.items():
     print(f"\n重复组（hash {h[:8]}...）: {len(paths)} 份")
     for p in paths:

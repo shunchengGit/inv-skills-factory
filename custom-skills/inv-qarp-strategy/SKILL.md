@@ -305,7 +305,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 | 并行任务 | 脚本 | 预计耗时 |
 |---------|------|---------|
 | **A. 估值快照** | `uv run {valuationDir}/scripts/valuation_snapshot.py <代码> --output json` | 10-30s |
-| **B. 研报提取** | 1) 读 `~/股票研报/Index.md` 匹配子文件夹 → 2) `python3 {researchDir}/scripts/research_pdf.py extract --folder <子文件夹>` → 3) 按结构化模板整理（共识/分歧/盈利预测/风险/隐含假设/交叉验证点） | 10-30s |
+| **B. 研报提取** | 1) 读 `~/.inv-report/Index.md` 匹配子文件夹 → 2) `python3 {researchDir}/scripts/research_pdf.py extract --folder <子文件夹>` → 3) 按结构化模板整理（共识/分歧/盈利预测/风险/隐含假设/交叉验证点） | 10-30s |
 
 - A 是必须的；B 若无本地研报则走 Web 降级（`inv-research-analyzer` 的 `references/web-fallback-for-non-a-share.md`）
 - 估值定量判断以 `inv-valuation-engine` 的 `references/scoring-rules.md` 为准
@@ -585,7 +585,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
 
 ### 13.4 无本地研报时的降级路径
 
-当 `~/股票研报/Index.md` 无匹配时，按以下优先级降级：
+当 `~/.inv-report/Index.md` 无匹配时，按以下优先级降级：
 1. **Web 降级**：按 `inv-research-analyzer` 的 `references/web-fallback-for-non-a-share.md` 执行（Yahoo Finance 分析师数据、搜狗微信搜索、Brave Search）
 2. **标注信息缺口**：在输出模板的"卖方研报摘要"中明确标注"无本地研报，已走 Web 降级 / 无可用研报"，并说明对分析完整性的影响
 

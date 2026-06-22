@@ -39,7 +39,7 @@ PY=/tmp/research-pdf-venv/bin/python
 
 ## 查找研报（硬规则）
 
-**第一步永远是读 `~/股票研报/Index.md`**，任何情况下不得跳过。
+**第一步永远是读 `~/.inv-report/Index.md`**，任何情况下不得跳过。
 
 禁止操作：
 - ❌ 直接用 `list --code` 查找（对非 A 股不可靠）
@@ -48,7 +48,7 @@ PY=/tmp/research-pdf-venv/bin/python
 
 **正确流程**：
 
-1. **读取 `~/股票研报/Index.md`**（必做，不可跳过）
+1. **读取 `~/.inv-report/Index.md`**（必做，不可跳过）
 2. 在目录表中按**代码列**匹配标的（支持 `0700.HK` / `MSFT` / `PDD` / `2330.TW` 等任意格式）
 3. 确定目标**子文件夹名**（如「微软」「腾讯控股」）和报告份数
 4. `extract --folder <子文件夹名>` 提取文本
@@ -59,7 +59,7 @@ PY=/tmp/research-pdf-venv/bin/python
 将 Downloads 等目录的散落研报 PDF 归档到研报库：
 
 1. `scan --source ~/Downloads` → 获取待归档清单 JSON
-2. 读 `~/股票研报/Index.md`，判断每个文件应归档到哪个子文件夹
+2. 读 `~/.inv-report/Index.md`，判断每个文件应归档到哪个子文件夹
 3. 构造归档方案 JSON，调用 `archive --plan '<JSON>'` 执行移动、建索引、git push
 
 这是完整闭环——不要只提取不归档。新下载的研报应先 scan → archive 入库，再从库中 extract。
@@ -88,7 +88,7 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 
 ## 脚本使用优先级
 
-1. **读 `~/股票研报/Index.md`**：确定子文件夹名和报告份数。
+1. **读 `~/.inv-report/Index.md`**：确定子文件夹名和报告份数。
 2. **`extract --folder`**：直接提取（推荐，最精确）。
 3. **`extract --contains`**：按文件名子串匹配（不确定子文件夹名时）。
 4. **`list`**：仅调试用。
@@ -183,14 +183,14 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 |------|------|
 | **输入** | ticker + 可选 `--within-days`、`--pages` |
 | **输出** | 结构化输出模板 |
-| **调用方式** | 1) 读 `~/股票研报/Index.md` 匹配代码 → 2) `extract --folder <子文件夹>` → 按模板整理 |
+| **调用方式** | 1) 读 `~/.inv-report/Index.md` 匹配代码 → 2) `extract --folder <子文件夹>` → 按模板整理 |
 | **时效性约束** | 默认仅引用 fresh；aging 需标注；stale 不引用 |
 | **典型调用方** | `inv-valuation-engine`（估值）、`inv-porter-five-forces`（五力） |
 
 ## 执行流程
 
 1. 确认标的、日期窗口（默认半年）。
-2. 读取 `~/股票研报/Index.md`，在目录表匹配代码，确定子文件夹名。
+2. 读取 `~/.inv-report/Index.md`，在目录表匹配代码，确定子文件夹名。
 3. `extract --folder <子文件夹名>` 提取文本。
 4. 按「输出结构」写作；注明研报文件名日期窗口和时效性。
 5. **若 Index.md 无匹配**：走 Web 降级（`references/web-fallback-for-non-a-share.md`）。
@@ -205,7 +205,7 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 
 ### 已知限制：scan 对中文路径/目录名可能返回空
 
-实测发现 `scan --source ~/股票研报` 在中文目录名环境下可能返回 "来源目录中未找到 PDF 文件"，即使目录内存在大量 PDF。
+实测发现 `scan --source ~/.inv-report` 在中文目录名环境下可能返回 "来源目录中未找到 PDF 文件"，即使目录内存在大量 PDF。
 
 **降级方案**：直接用 Python 遍历重建：
 
@@ -213,7 +213,7 @@ $PY "$SK" extract --folder 五粮液 --within-days 0
 from pathlib import Path
 import re
 
-base = Path.home() / "股票研报"
+base = Path.home() / ".inv-report"
 for subdir in sorted(base.iterdir()):
     if not subdir.is_dir() or subdir.name.startswith('.'):
         continue
@@ -262,7 +262,7 @@ archive 命令不会自动更新 Index.md 元数据和目录条目，归档后�
 from pathlib import Path
 import re
 
-base = Path.home() / "股票研报"
+base = Path.home() / ".inv-report"
 subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
 
 # 统计

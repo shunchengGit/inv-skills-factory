@@ -57,8 +57,8 @@ TICKER_PATTERNS = [
     (re.compile(r"(?:^|[-_/])(\d{6})(?:[-_/]|$)"), "a_share_bare"),
 ]
 
-DEFAULT_ROOT = Path.home() / "股票研报"
-REPORT_REMOTE = os.environ.get("INV_REPORT_REPO_URL", "git@github.com:shunchengGit/stock-report.git")
+DEFAULT_ROOT = Path.home() / ".inv-report"
+REPORT_REMOTE = os.environ.get("INV_REPORT_REPO_URL", "git@github.com:shunchengGit/inv-report.git")
 
 
 def default_root() -> Path:

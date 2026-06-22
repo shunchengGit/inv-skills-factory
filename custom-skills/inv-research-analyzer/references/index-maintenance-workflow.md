@@ -1,6 +1,6 @@
 # Index.md 维护工作流
 
-`~/股票研报/Index.md` 是研报库的主索引，但 `archive` 命令**不会自动更新它**。归档/删除/手动改动后必须手动 lint，否则元数据头、目录表、文件清单会逐渐和实际文件对不上。
+`~/.inv-report/Index.md` 是研报库的主索引，但 `archive` 命令**不会自动更新它**。归档/删除/手动改动后必须手动 lint，否则元数据头、目录表、文件清单会逐渐和实际文件对不上。
 
 ## 关键陷阱：用 patch 编辑 Index.md 的锚点选择
 
@@ -47,7 +47,7 @@
 from pathlib import Path
 import re
 
-base = Path.home() / "股票研报"
+base = Path.home() / ".inv-report"
 subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
 
 folder_counts = {}
@@ -108,7 +108,7 @@ from pathlib import Path
 import re
 from datetime import datetime
 
-base = Path.home() / "股票研报"
+base = Path.home() / ".inv-report"
 subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
 
 # 提取每个 PDF 的日期前缀
