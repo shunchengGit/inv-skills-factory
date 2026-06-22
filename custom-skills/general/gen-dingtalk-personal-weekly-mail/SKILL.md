@@ -196,7 +196,7 @@ li { margin-bottom: 3px; font-size: 14px; }
 
 收件人信息从 `.env` 文件读取（`TL_MAIL_USER` 为发件人、`WEEKLY_REPORT_TO`、`WEEKLY_REPORT_CC`）。
 
-.env 文件位置：`/Users/chengshun/.skills-store/.env`
+.env 文件位置：`~/.skills-store/.env`
 
 ```python
 import imaplib

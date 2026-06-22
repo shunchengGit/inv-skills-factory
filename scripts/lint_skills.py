@@ -558,6 +558,172 @@ def check_path_resolution() -> None:
         ok("未发现跨文件路径引用")
 
 
+# ── 10. 个人路径泄露检查 ────────────────────────────────────────────────
+
+def check_personal_paths(skills: dict[str, Path]) -> None:
+    """扫描所有技能文件，检查是否包含 /Users/xxx 等暴露用户名的绝对路径。
+
+    注意：~/xxx 形式的通用路径（如 ~/.skills-store）是合理的，不检查。
+    只检查包含真实用户名的绝对路径（如 /Users/chengshun、/home/chengshun）。
+    """
+    print("\n── 10. 个人路径泄露检查 ──")
+
+    # 只匹配暴露用户名的绝对路径
+    personal_path_patterns = [
+        re.compile(r"/Users/[^/\s]+"),
+        re.compile(r"/home/[^/\s]+"),
+        re.compile(r"C:\\\\Users\\\\[^\\\s]+"),
+    ]
+
+    found = 0
+    for name, skill_dir in sorted(skills.items()):
+        # 扫描 SKILL.md、_meta.json、脚本文件
+        for pattern in ["SKILL.md", "_meta.json"]:
+            file_path = skill_dir / pattern
+            if not file_path.exists():
+                continue
+            try:
+                text = file_path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            for pat in personal_path_patterns:
+                for match in pat.finditer(text):
+                    matched = match.group()
+                    # 排除环境变量引用
+                    if matched.startswith("$"):
+                        continue
+                    found += 1
+                    warn(f"{name}/{pattern}: 包含个人路径 `{matched}`")
+
+        # 扫描脚本文件
+        scripts_dir = skill_dir / "scripts"
+        if scripts_dir.is_dir():
+            for py_file in sorted(scripts_dir.glob("*.py")):
+                try:
+                    text = py_file.read_text(encoding="utf-8")
+                except Exception:
+                    continue
+                for pat in personal_path_patterns:
+                    for match in pat.finditer(text):
+                        matched = match.group()
+                        if matched.startswith("$"):
+                            continue
+                        found += 1
+                        warn(f"{name}/scripts/{py_file.name}: 包含个人路径 `{matched}`")
+
+    if found:
+        err(f"共发现 {found} 处个人路径泄露")
+    else:
+        ok("未发现个人路径泄露")
+
+    if found:
+        err(f"共发现 {found} 处个人路径泄露")
+    else:
+        ok("未发现个人路径泄露")
+
+
+# ── 11. references 目录与 _meta.json 一致性 ──────────────────────────────
+
+def check_references_consistency(skills: dict[str, Path]) -> None:
+    """检查 references/ 目录下的文件与 _meta.json references 字段是否一致。"""
+    print("\n── 11. references 目录与 _meta.json 一致性 ──")
+
+    for name, skill_dir in sorted(skills.items()):
+        meta_file = skill_dir / "_meta.json"
+        if not meta_file.exists():
+            continue
+
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        meta_refs = set(meta.get("references", {}).keys())
+
+        refs_dir = skill_dir / "references"
+        actual_refs = set()
+        if refs_dir.is_dir():
+            for f in sorted(refs_dir.iterdir()):
+                if f.is_file() and not f.name.startswith("."):
+                    actual_refs.add(f.name)
+
+        # meta 声明了但实际不存在
+        missing = meta_refs - actual_refs
+        for ref in sorted(missing):
+            warn(f"{name}: _meta.json 声明 references.{ref} 但文件不存在")
+
+        # 实际存在但未在 meta 声明
+        extra = actual_refs - meta_refs
+        for ref in sorted(extra):
+            warn(f"{name}: references/{ref} 存在但未在 _meta.json 中声明")
+
+    ok("references 一致性检查完成")
+
+
+# ── 12. scripts 目录与 _meta.json 一致性 ─────────────────────────────────
+
+def check_scripts_consistency(skills: dict[str, Path]) -> None:
+    """检查 scripts/ 目录下的文件与 _meta.json scripts 字段是否一致。"""
+    print("\n── 12. scripts 目录与 _meta.json 一致性 ──")
+
+    for name, skill_dir in sorted(skills.items()):
+        meta_file = skill_dir / "_meta.json"
+        if not meta_file.exists():
+            continue
+
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        meta_scripts = set(meta.get("scripts", {}).keys())
+
+        scripts_dir = skill_dir / "scripts"
+        actual_scripts = set()
+        if scripts_dir.is_dir():
+            for f in sorted(scripts_dir.iterdir()):
+                if f.is_file() and not f.name.startswith("."):
+                    # 去掉扩展名作为 key
+                    stem = f.stem
+                    actual_scripts.add(stem)
+
+        # meta 声明了但实际不存在
+        missing = meta_scripts - actual_scripts
+        for script in sorted(missing):
+            warn(f"{name}: _meta.json 声明 scripts.{script} 但文件不存在")
+
+        # 实际存在但未在 meta 声明（排除 __init__.py 等）
+        extra = actual_scripts - meta_scripts
+        for script in sorted(extra):
+            warn(f"{name}: scripts/{script} 存在但未在 _meta.json 中声明")
+
+    ok("scripts 一致性检查完成")
+
+
+# ── 13. 未使用分类检查 ───────────────────────────────────────────────────
+
+def check_unused_categories(skills: dict[str, Path]) -> None:
+    """检查是否有分类目录未被 deploy.json 引用（base 除外）。"""
+    print("\n── 13. 未使用分类检查 ──")
+
+    if not DEPLOY_JSON.exists():
+        err("deploy.json 不存在")
+        return
+
+    deploy = json.loads(DEPLOY_JSON.read_text(encoding="utf-8"))
+
+    # 收集 deploy.json 中引用的所有分类
+    used_cats: set[str] = set()
+    for profile_name, agents in deploy.get("profiles", {}).items():
+        for agent, cat_list in agents.items():
+            used_cats.update(cat_list)
+
+    # 收集实际存在的分类目录
+    actual_cats: set[str] = set()
+    for d in sorted(SKILLS_DIR.iterdir()):
+        if d.is_dir() and not d.name.startswith(".") and d.name not in ("_shared",):
+            actual_cats.add(d.name)
+
+    unused = actual_cats - used_cats - {"base"}
+    for cat in sorted(unused):
+        warn(f"分类 `{cat}` 未在 deploy.json 中引用")
+
+    ok("未使用分类检查完成")
+
+
 # ── main ─────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -586,6 +752,10 @@ def main() -> int:
     check_skill_length(skills)
     check_scripts(skills)
     check_path_resolution()
+    check_personal_paths(skills)
+    check_references_consistency(skills)
+    check_scripts_consistency(skills)
+    check_unused_categories(skills)
 
     print("\n" + "=" * 60)
     print(f"结果: {ERRORS} 错误, {WARNINGS} 警告")
