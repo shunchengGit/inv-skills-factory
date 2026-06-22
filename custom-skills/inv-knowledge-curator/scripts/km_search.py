@@ -24,7 +24,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index, search_entries
 
-KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
+_DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
+
+
+def _get_knowledge_dir() -> Path:
+    env = os.environ.get("INV_KNOWLEDGE_ROOT", "").strip()
+    return Path(env).expanduser() if env else _DEFAULT_KNOWLEDGE_DIR
+
+
+KNOWLEDGE_DIR = _get_knowledge_dir()
 
 
 def cmd_search(query: str, category: str | None = None, limit: int = 20) -> dict:

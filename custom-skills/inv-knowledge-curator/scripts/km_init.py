@@ -26,7 +26,15 @@ from knowledge import parse_index
 
 REPO_URL = os.environ.get("INV_KNOWLEDGE_REPO_URL", "git@github.com:shunchengGit/inv-knowledge.git")
 REPO_BRANCH = "master"
-KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
+_DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
+
+
+def _get_knowledge_dir() -> Path:
+    env = os.environ.get("INV_KNOWLEDGE_ROOT", "").strip()
+    return Path(env).expanduser() if env else _DEFAULT_KNOWLEDGE_DIR
+
+
+KNOWLEDGE_DIR = _get_knowledge_dir()
 
 
 def init_repo() -> dict:

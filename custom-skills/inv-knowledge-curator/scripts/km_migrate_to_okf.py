@@ -33,7 +33,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import validate_okf, now_iso
 
-KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
+_DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
+
+
+def _get_knowledge_dir() -> Path:
+    env = os.environ.get("INV_KNOWLEDGE_ROOT", "").strip()
+    return Path(env).expanduser() if env else _DEFAULT_KNOWLEDGE_DIR
+
+
+KNOWLEDGE_DIR = _get_knowledge_dir()
 LOCAL_TZ = timezone(timedelta(hours=8))
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)

@@ -81,11 +81,8 @@ python3 .claude/skills/skill-linter/scripts/lint_skills.py
 |------|------|--------|
 | `INV_KNOWLEDGE_REPO_URL` | inv-knowledge-curator 远程仓库 | `git@github.com:shunchengGit/inv-knowledge.git` |
 | `INV_REPORT_REPO_URL` | inv-research-analyzer 远程仓库 | `git@github.com:shunchengGit/inv-report.git` |
+| `INV_KNOWLEDGE_ROOT` | 知识库本地根目录 | `~/.inv-knowledge` |
 | `RESEARCH_PDF_ROOT` | 研报库本地根目录 | `~/.inv-report` |
-
-本地数据目录：
-- `~/.inv-knowledge/` — 知识库（inv-knowledge-curator）
-- `~/.inv-report/` — 研报库（inv-research-analyzer）
 
 ## 新建 Skill
 
