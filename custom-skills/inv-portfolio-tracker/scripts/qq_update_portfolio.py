@@ -474,7 +474,7 @@ def main():
         print(f"✅ 已更新 {portfolio_path}", file=sys.stderr)
         print(f"   总资产: {calc['total_assets']}万 | 现金: {calc['cash_value']}万({calc['cash_pct']}%)", file=sys.stderr)
         for r in calc["holdings"]:
-            print(f"   {r['name']}: {r['price']} ({r['change_pct']:+.2f}%) | PE={format_pe(r)} | 52w位={r['pos_52w']}%", file=sys.stderr)
+            print(f"   {r['name']}: {int(r['shares'])}股 × {r['price']} ({r['change_pct']:+.2f}%) | PE={format_pe(r)} | 52w位={r['pos_52w']}%", file=sys.stderr)
         return
 
     if args.json:
