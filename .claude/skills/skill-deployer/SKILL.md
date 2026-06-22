@@ -1,5 +1,5 @@
 ---
-name: deploy-skills
+name: skill-deployer
 description: 将技能按场景（profile）软链接部署到各 Agent 目录。修改技能后执行。
 ---
 
@@ -22,13 +22,13 @@ description: 将技能按场景（profile）软链接部署到各 Agent 目录�
 默认 `home`。如果用户指定了 profile 则用指定的。
 
 ```bash
-python3 .claude/skills/deploy-skills/scripts/sync.py --list
+python3 .claude/skills/skill-deployer/scripts/sync.py --list
 ```
 
 ### ② 执行部署
 
 ```bash
-python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
+python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
 ```
 
 可选参数：
@@ -80,11 +80,11 @@ python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
 
 ## sync.py 核心逻辑
 
-脚本路径：`.claude/skills/deploy-skills/scripts/sync.py`
+脚本路径：`.claude/skills/skill-deployer/scripts/sync.py`
 
 ### 输入
 
-1. `.claude/skills/deploy-skills/scripts/deploy.json` — profiles 与 agents 配置
+1. `.claude/skills/skill-deployer/scripts/deploy.json` — profiles 与 agents 配置
 2. `custom-skills/` — 技能源码目录（扁平结构）
 
 ### 同步流程

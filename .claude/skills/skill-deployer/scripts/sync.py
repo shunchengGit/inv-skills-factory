@@ -6,10 +6,10 @@ Skills 同步脚本（软链接模式）。
 软链接指向源目录，修改源文件即刻生效，无需重新同步。
 
 用法:
-  python3 .claude/skills/deploy-skills/scripts/sync.py --profile home
-  python3 .claude/skills/deploy-skills/scripts/sync.py --profile work --dry-run
-  python3 .claude/skills/deploy-skills/scripts/sync.py --profile home --agent hermes
-  python3 .claude/skills/deploy-skills/scripts/sync.py --list
+  python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
+  python3 .claude/skills/skill-deployer/scripts/sync.py --profile work --dry-run
+  python3 .claude/skills/skill-deployer/scripts/sync.py --profile home --agent hermes
+  python3 .claude/skills/skill-deployer/scripts/sync.py --list
 """
 
 import argparse

@@ -21,7 +21,7 @@ def _find_repo_root() -> Path:
 ROOT = _find_repo_root()
 SKILLS_DIR = ROOT / "custom-skills"
 HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "skills-store"
-DEPLOY_JSON = ROOT / ".claude" / "skills" / "deploy-skills" / "scripts" / "deploy.json"
+DEPLOY_JSON = ROOT / ".claude" / "skills" / "skill-deployer" / "scripts" / "deploy.json"
 CLAUDE_MD = ROOT / "CLAUDE.md"
 
 ERRORS = 0
@@ -657,7 +657,7 @@ def main() -> int:
     if not HERMES_SKILLS.exists() or not any(HERMES_SKILLS.iterdir()):
         print("⚠ 尚未部署，正在部署 home profile...")
         subprocess.run(
-            [sys.executable, str(ROOT / ".claude" / "skills" / "deploy-skills" / "scripts" / "sync.py"), "--profile", "home"],
+            [sys.executable, str(ROOT / ".claude" / "skills" / "skill-deployer" / "scripts" / "sync.py"), "--profile", "home"],
             cwd=ROOT,
         )
 
