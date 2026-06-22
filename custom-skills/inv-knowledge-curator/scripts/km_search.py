@@ -8,9 +8,9 @@ from __future__ import annotations
 """知识库搜索工具：支持标题、内容、标签多维度搜索。
 
 用法:
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_search.py <query>
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_search.py "python async" --category programming
-  uv run custom-skills/general/gen-knowledge-curator/scripts/km_search.py "python async" --limit 10
+  uv run custom-skills/inv-knowledge-curator/scripts/km_search.py <query>
+  uv run custom-skills/inv-knowledge-curator/scripts/km_search.py "python async" --category programming
+  uv run custom-skills/inv-knowledge-curator/scripts/km_search.py "python async" --limit 10
 """
 
 import argparse

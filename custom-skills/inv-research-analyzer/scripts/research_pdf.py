@@ -59,12 +59,16 @@ TICKER_PATTERNS = [
 
 DEFAULT_ROOT = Path.home() / "股票研报"
 REPORT_REMOTE = os.environ.get("STOCK_REPORT_REPO_URL", "git@github.com:shunchengGit/stock-report.git")
-INDEX_FILE = Path(__file__).resolve().parent.parent / "research-index.json"
 
 
 def default_root() -> Path:
     env = os.environ.get("RESEARCH_PDF_ROOT", "").strip()
     return Path(env).expanduser() if env else DEFAULT_ROOT
+
+
+def index_file(root: Path) -> Path:
+    """索引缓存文件路径：跟随研报根目录，避免污染技能源码目录。"""
+    return root / ".research-index.json"
 
 
 def filename_date(name: str) -> str | None:
@@ -324,10 +328,10 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     if getattr(args, "use_index", False):
         # 索引不存在时自动构建
-        if not INDEX_FILE.exists():
+        if not index_file(root).exists():
             print("# 索引不存在，自动生成...", file=sys.stderr)
             cmd_index(args)
-        indexed = query_index(args.code, args.contains, args)
+        indexed = query_index(args.code, args.contains, args, root)
         if indexed is not None:
             if not indexed:
                 print("（索引中无匹配）", file=sys.stderr)
@@ -432,11 +436,12 @@ def cmd_extract(args: argparse.Namespace) -> int:
     return 0
 
 
-def query_index(code: str | None, contains: str | None, args: argparse.Namespace) -> list[dict] | None:
-    if not INDEX_FILE.exists():
+def query_index(code: str | None, contains: str | None, args: argparse.Namespace, root: Path) -> list[dict] | None:
+    idx = index_file(root)
+    if not idx.exists():
         return None
     try:
-        data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+        data = json.loads(idx.read_text(encoding="utf-8"))
     except Exception:
         return None
     entries = data.get("entries", [])
@@ -473,9 +478,10 @@ def cmd_index(args: argparse.Namespace) -> int:
         return 1
 
     existing: dict[str, dict] = {}
-    if INDEX_FILE.exists():
+    idx = index_file(root)
+    if idx.exists():
         try:
-            data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+            data = json.loads(idx.read_text(encoding="utf-8"))
             for entry in data.get("entries", []):
                 existing[entry.get("filename", "")] = entry
         except Exception:
@@ -542,9 +548,10 @@ def cmd_index(args: argparse.Namespace) -> int:
         "meta": {"last_updated": as_of.isoformat(), "total": len(entries)},
         "entries": entries,
     }
-    INDEX_FILE.write_text(json.dumps(index_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    idx = index_file(root)
+    idx.write_text(json.dumps(index_data, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"索引已更新: {len(entries)} 条（新增扫描 {scanned}，跳过 {skipped}）", file=sys.stderr)
-    print(f"写入: {INDEX_FILE}", file=sys.stderr)
+    print(f"写入: {idx}", file=sys.stderr)
     return 0
 
 

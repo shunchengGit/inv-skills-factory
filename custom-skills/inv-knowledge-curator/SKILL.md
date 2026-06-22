@@ -1,5 +1,5 @@
 ---
-name: gen-knowledge-curator
+name: inv-knowledge-curator
 description: 个人知识管理（OKF v0.1）：URL采集 → LLM总结分类 → 交叉关联 → Git仓库存储 + 索引 + 搜索 + Lint + 可视化
 version: 1.3.0
 commands:
@@ -11,7 +11,7 @@ commands:
   - /km_visualize - 生成知识图谱（Cytoscape.js 交互式 HTML）
 ---
 
-# gen-knowledge-curator：个人知识管理
+# inv-knowledge-curator：个人知识管理
 
 ## 命令
 
