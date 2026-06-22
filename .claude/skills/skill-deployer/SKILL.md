@@ -1,6 +1,11 @@
 ---
 name: skill-deployer
-description: 将技能软链接部署到指定 Agent 目录。修改技能后执行。
+description: 将技能以软链接方式部署到 Agent 目录（hermes/workbuddy），同步 `_shared/` 工具模块
+trigger:
+  - 部署技能
+  - 同步技能
+  - deploy
+  - 发布技能
 ---
 
 # 技能部署
