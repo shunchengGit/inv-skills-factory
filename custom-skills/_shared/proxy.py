@@ -1,13 +1,13 @@
 """统一代理检测与管理模块。
 
-提供代理检测、环境变量设置、Session 注入三类能力。
+提供代理检测、环境变量设置两类能力。
 供 invest 技能脚本通过 `_shared` 路径引用。
 
 用法:
   import sys
   from pathlib import Path
   sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
-  from proxy import detect_proxy, setup_proxy_env, apply_proxy_to_session
+  from proxy import detect_proxy, setup_proxy_env
 """
 
 from __future__ import annotations
@@ -59,16 +59,3 @@ def setup_proxy_env(override: str | None = None) -> bool:
     print("   美股/港股通过 Yahoo Finance 获取数据，国内网络直连大概率被限流。", file=sys.stderr)
     print("   请先启动 Clash 或手动设置: export HTTPS_PROXY=http://127.0.0.1:7890", file=sys.stderr)
     return False
-
-
-def apply_proxy_to_session(session, proxy: str | None = None) -> None:
-    """为 requests.Session 设置代理。
-
-    Args:
-        session: requests.Session 实例。
-        proxy: 代理地址。None 则自动检测。检测不到时不修改 session。
-    """
-    proxy_url = proxy or detect_proxy()
-    if proxy_url:
-        session.proxies["http"] = proxy_url
-        session.proxies["https"] = proxy_url

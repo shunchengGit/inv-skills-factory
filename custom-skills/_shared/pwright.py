@@ -6,7 +6,7 @@
   import sys
   from pathlib import Path
   sys.path.insert(0, str(Path(__file__).resolve().parents[N] / "_shared"))
-  from pwright import scrape_url, extract_text, launch_browser
+  from pwright import scrape_url
 """
 
 from __future__ import annotations
@@ -80,19 +80,6 @@ def scrape_url(
     )
 
 
-def extract_text(
-    url: str,
-    *,
-    wait_ms: int = 3000,
-    proxy: str | None = None,
-) -> dict:
-    """用 Playwright 抓取 URL，返回纯文本（不做 markdown 转换）。"""
-    return _do_scrape(
-        url, _extract_txt, "text",
-        wait_ms=wait_ms, wait_until="domcontentloaded", proxy=proxy,
-    )
-
-
 # ── 内部实现 ──────────────────────────────────────────────────
 
 
@@ -130,20 +117,6 @@ def _extract_main_html(page, selector: str | None = None) -> str:
         except Exception:
             continue
     return page.content()
-
-
-def _extract_main_text(page) -> str:
-    """智能提取正文纯文本，优先语义标签，回退 body.inner_text()。"""
-    for sel in _CONTENT_SELECTORS:
-        try:
-            el = page.query_selector(sel)
-            if el:
-                t = el.inner_text()
-                if len(t) > 200:
-                    return t
-        except Exception:
-            continue
-    return page.inner_text("body")
 
 
 def _html_to_markdown(html: str) -> str:
@@ -184,7 +157,3 @@ def _do_scrape(
 
 def _extract_md(page, selector: str | None = None) -> str:
     return _html_to_markdown(_extract_main_html(page, selector=selector))
-
-
-def _extract_txt(page, _selector: str | None = None) -> str:
-    return _extract_main_text(page)
