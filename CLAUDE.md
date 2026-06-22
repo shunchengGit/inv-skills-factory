@@ -83,6 +83,7 @@ python3 .claude/skills/skill-linter/scripts/lint_skills.py
 | `INV_REPORT_REPO_URL` | inv-research-analyzer 远程仓库 | `git@github.com:shunchengGit/inv-report.git` |
 | `INV_KNOWLEDGE_ROOT` | 知识库本地根目录 | `~/.inv-knowledge` |
 | `RESEARCH_PDF_ROOT` | 研报库本地根目录 | `~/.inv-report` |
+| `DEPLOY_SKILLS_DIR` | 部署目标子目录名 | `inv-skills` |
 
 ## 新建 Skill
 
