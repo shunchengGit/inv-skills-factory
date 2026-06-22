@@ -91,11 +91,11 @@ def parse_portfolio(filepath: Path) -> dict:
     if m:
         hkd_cny = float(m.group(1))
 
-    # 提取现金
+    # 提取现金（支持负数）
     cash_hkd = 0
     cash_cny = 0
     cash_usd = 0
-    m = re.search(r"港币现金.*?([\d,]+)\s*HKD", content)
+    m = re.search(r"港币现金.*?(-?[\d,]+)\s*HKD", content)
     if m:
         cash_hkd = float(m.group(1).replace(",", ""))
     m = re.search(r"人民币现金.*?([\d.]+)万?\s*CNY", content)
@@ -313,7 +313,10 @@ def generate_portfolio_md(calc: dict, portfolio: dict) -> str:
     lines.append(f"- **汇率**：USD/CNY={portfolio['usd_cny']}，HKD/CNY={portfolio['hkd_cny']}")
     lines.append(f"- **总资产**：**{calc['total_assets']} 万元**")
     lines.append(f"- **现金**：**{calc['cash_value']} 万元（{calc['cash_pct']}%）**")
-    lines.append(f"  - 港币现金：{int(portfolio['cash_hkd']):,} HKD ≈ **{portfolio['cash_hkd'] * portfolio['hkd_cny'] / 10000:.2f}万 CNY**")
+    # 港币现金支持负数显示
+    hkd_cash = portfolio['cash_hkd']
+    hkd_cny_val = hkd_cash * portfolio['hkd_cny'] / 10000
+    lines.append(f"  - 港币现金：**{int(hkd_cash):,} HKD**（约 **{hkd_cny_val:.2f}万 CNY**）")
     lines.append(f"  - 人民币现金：**{portfolio['cash_cny'] / 10000:.2f}万 CNY**")
     lines.append(f"  - 美元现金：**{int(portfolio['cash_usd'])}**")
     lines.append(f"- **现金建议区间**：5-10% {'✅ 合理区间' if 5 <= calc['cash_pct'] <= 10 else '⚠️ 需调整'}\n")
@@ -474,7 +477,7 @@ def main():
         print(f"✅ 已更新 {portfolio_path}", file=sys.stderr)
         print(f"   总资产: {calc['total_assets']}万 | 现金: {calc['cash_value']}万({calc['cash_pct']}%)", file=sys.stderr)
         for r in calc["holdings"]:
-            print(f"   {r['name']}: {int(r['shares'])}股 × {r['price']} ({r['change_pct']:+.2f}%) | PE={format_pe(r)} | 52w位={r['pos_52w']}%", file=sys.stderr)
+            print(f"   {r['name']}: {int(r['shares'])}股 × {r['price']} = {r['value_wan']}万 ({r['change_pct']:+.2f}%) | PE={format_pe(r)} | 52w位={r['pos_52w']}%", file=sys.stderr)
         return
 
     if args.json:
