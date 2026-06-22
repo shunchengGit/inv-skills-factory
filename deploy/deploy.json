@@ -14,11 +14,11 @@
   },
   "agents": {
     "hermes": {
-      "skills_dir": "~/.hermes/skills",
+      "skills_dir": "~/.hermes/skills/skills-store",
       "hooks_dir": "~/.hermes/hooks"
     },
     "workbuddy": {
-      "skills_dir": "~/.workbuddy/skills",
+      "skills_dir": "~/.workbuddy/skills/skills-store",
       "hooks_dir": "~/.workbuddy/hooks"
     }
   }

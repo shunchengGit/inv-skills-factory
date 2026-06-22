@@ -4,16 +4,16 @@
 
 ```bash
 # 一键更新持仓（直接写回 PORTFOLIO.md）
-python3 ~/.hermes/skills/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
+python3 ~/.hermes/skills/skills-store/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
 
 # 预览（不写文件）
-python3 ~/.hermes/skills/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py
+python3 ~/.hermes/skills/skills-store/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py
 
 # 检查数据可用性
-python3 ~/.hermes/skills/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --check
+python3 ~/.hermes/skills/skills-store/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --check
 
 # JSON 格式输出
-python3 ~/.hermes/skills/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --json
+python3 ~/.hermes/skills/skills-store/invest/inv-portfolio-tracker/scripts/qq_update_portfolio.py --json
 ```
 
 ## API 请求格式

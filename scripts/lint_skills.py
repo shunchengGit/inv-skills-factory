@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = ROOT / "custom-skills"
-HERMES_SKILLS = Path.home() / ".hermes" / "skills"
+HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "skills-store"
 DEPLOY_JSON = ROOT / "deploy" / "deploy.json"
 CLAUDE_MD = ROOT / "CLAUDE.md"
 SKILL_INDEX_FILE = SKILLS_DIR / "base" / "base-skill-loader" / "SKILL.md"
