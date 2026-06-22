@@ -22,11 +22,34 @@ import sys
 from pathlib import Path
 
 STORE_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(STORE_ROOT / "custom-skills" / "_shared"))
-from dotenv import load as _load_dotenv
-_load_dotenv()
 SKILLS_SRC = STORE_ROOT / "custom-skills"
 DEPLOY_FILE = Path(__file__).resolve().parent / "deploy.json"
+
+# 加载项目 .env
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv(STORE_ROOT / ".env")
+
+_DEPLOY_SKILLS_DIR = os.environ.get("DEPLOY_SKILLS_DIR", "").strip()
+
+
+def _resolve_deploy_skills_dir() -> str:
+    """确保 DEPLOY_SKILLS_DIR 已配置，未配置时交互提示并写入 .env。"""
+    global _DEPLOY_SKILLS_DIR
+    if _DEPLOY_SKILLS_DIR:
+        return _DEPLOY_SKILLS_DIR
+
+    env_file = STORE_ROOT / ".env"
+    print("未配置 DEPLOY_SKILLS_DIR（部署目标子目录名）", file=sys.stderr)
+    name = input("请输入部署子目录名: ").strip()
+    if not name:
+        print("已取消。", file=sys.stderr)
+        sys.exit(1)
+
+    with open(env_file, "a", encoding="utf-8") as f:
+        f.write(f"\nDEPLOY_SKILLS_DIR={name}\n")
+    print(f"已写入 {env_file}", file=sys.stderr)
+    _DEPLOY_SKILLS_DIR = name
+    return name
 
 
 def load_config() -> dict:
@@ -203,24 +226,28 @@ def sync_skills(skills_dir: str, force: bool = False, dry_run: bool = False) -> 
     return created, skipped, failed, removed
 
 
+def _agent_skills_dir(agent_cfg: dict) -> str:
+    base = agent_cfg.get("skills_dir", "")
+    return f"{base}/{_resolve_deploy_skills_dir()}"
+
+
 def list_agents(config: dict):
     print("Available agents:\n")
     for name, cfg in sorted(config["agents"].items()):
-        print(f"  {name}: {cfg.get('skills_dir', '(no skills_dir)')}")
+        print(f"  {name}: {_agent_skills_dir(cfg)}")
     print("\n用法: --agent <name> [...]  或  --agent all")
 
 
-def resolve_agents(args_agents: list[str], config: dict) -> list[str]:
-    """把 --agent 值解析为实际要部署的 agent 列表。"""
+def resolve_agents(args_agents: list[str], config: dict) -> list[tuple[str, str]]:
+    """把 --agent 值解析为 (agent_name, skills_dir) 列表。"""
     available = list(config["agents"].keys())
-    if "all" in args_agents:
-        return available
-    unknown = [a for a in args_agents if a not in available]
+    names = available if "all" in args_agents else args_agents
+    unknown = [a for a in names if a not in available]
     if unknown:
         print(f"⚠ 未知 agent: {', '.join(unknown)}")
         print("available:", ", ".join(available))
         return []
-    return args_agents
+    return [(n, _agent_skills_dir(config["agents"][n])) for n in names]
 
 
 def main():
@@ -251,26 +278,20 @@ def main():
     if not agent_names:
         sys.exit(1)
 
-    agents_cfg = config["agents"]
     total_created, total_skipped, total_failed, total_removed = 0, 0, 0, 0
 
-    for agent_name in agent_names:
-        cfg = agents_cfg.get(agent_name)
-        if not cfg:
-            print(f"⚠ unknown agent: {agent_name}")
-            continue
-
+    for agent_name, skills_dir in agent_names:
         print(f"\n=== {agent_name} ===")
 
         if args.dry_run:
-            print(f"  [dry-run] skills: → {cfg['skills_dir']}")
+            print(f"  [dry-run] skills: → {skills_dir}")
         else:
-            c, s, f, r = sync_skills(cfg["skills_dir"], force=args.force, dry_run=args.dry_run)
+            c, s, f, r = sync_skills(skills_dir, force=args.force, dry_run=args.dry_run)
             total_created += c
             total_skipped += s
             total_failed += f
             total_removed += r
-            print(f"  skills: {c} created, {s} skipped, {f} failed, {r} removed → {cfg['skills_dir']}")
+            print(f"  skills: {c} created, {s} skipped, {f} failed, {r} removed → {skills_dir}")
 
     print(f"\nDone. total: {total_created} created, {total_skipped} skipped, {total_failed} failed, {total_removed} removed")
 
