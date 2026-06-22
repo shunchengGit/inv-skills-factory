@@ -38,9 +38,8 @@ custom-skills/                  # 技能源码（按分类隔离）
     inv-porter-five-forces/     #   五力分析
     inv-research-analyzer/      #   研报分析
     inv-topic-researcher/       #   投资主题研究
-    inv-hk-ipo-analysis/       #   港股IPO打新分析
-
-    inv-portfolio-tracker/     #   持仓管理
+    inv-hk-ipo-analysis/        #   港股IPO打新分析
+    inv-portfolio-tracker/      #   持仓管理
 
 custom-hooks/                   # Hooks 源码（按 agent 隔离）
   hermes/                       # Hermes 专属 hooks
