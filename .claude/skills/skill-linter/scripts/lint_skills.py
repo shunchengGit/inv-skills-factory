@@ -321,12 +321,13 @@ def check_deploy_json(skills: dict[str, Path]) -> None:
 
     deploy = json.loads(DEPLOY_JSON.read_text(encoding="utf-8"))
 
-    # 检查 profile 引用的 agent 是否存在
+    # 检查 agents 配置完整性
     agents_cfg = deploy.get("agents", {})
-    for profile_name, agent_list in deploy.get("profiles", {}).items():
-        for agent in agent_list:
-            if agent not in agents_cfg:
-                warn(f"deploy.json profile={profile_name} 引用未知 agent {agent}")
+    if not agents_cfg:
+        warn("deploy.json 未配置任何 agent")
+    for agent_name, cfg in agents_cfg.items():
+        if "skills_dir" not in cfg or not cfg["skills_dir"]:
+            warn(f"deploy.json agent={agent_name} 缺少 skills_dir")
 
     ok("deploy.json 一致性检查完成")
 
@@ -655,11 +656,7 @@ def main() -> int:
     print("=" * 60)
 
     if not HERMES_SKILLS.exists() or not any(HERMES_SKILLS.iterdir()):
-        print("⚠ 尚未部署，正在部署 home profile...")
-        subprocess.run(
-            [sys.executable, str(ROOT / ".claude" / "skills" / "skill-deployer" / "scripts" / "sync.py"), "--profile", "home"],
-            cwd=ROOT,
-        )
+        print("⚠ hermes 尚未部署，请执行: python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes")
 
     skills = find_skills()
     print(f"\n发现 {len(skills)} 个技能\n")

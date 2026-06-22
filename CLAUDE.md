@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Skills 管理和开发仓库，通过软链接将技能按场景（profile）部署到各 Agent 目录。
+Skills 管理和开发仓库，通过软链接将技能部署到各 Agent 目录。
 
 ## 命名规范
 

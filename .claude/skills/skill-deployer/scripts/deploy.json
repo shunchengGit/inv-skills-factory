@@ -1,9 +1,4 @@
 {
-  "profiles": {
-    "home": ["hermes", "workbuddy"],
-    "work": ["hermes", "workbuddy"],
-    "server": ["hermes"]
-  },
   "agents": {
     "hermes": {
       "skills_dir": "~/.hermes/skills/skills-store"

@@ -2,14 +2,16 @@
 """
 Skills 同步脚本（软链接模式）。
 
-将 SkillsStore 中的技能以软链接方式部署到各 Agent 目录。
+将 SkillsStore 中的技能以软链接方式部署到指定 Agent 目录。
 软链接指向源目录，修改源文件即刻生效，无需重新同步。
 
 用法:
-  python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
-  python3 .claude/skills/skill-deployer/scripts/sync.py --profile work --dry-run
-  python3 .claude/skills/skill-deployer/scripts/sync.py --profile home --agent hermes
+  python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes
+  python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes workbuddy
+  python3 .claude/skills/skill-deployer/scripts/sync.py --agent all --dry-run
   python3 .claude/skills/skill-deployer/scripts/sync.py --list
+
+--agent 必填，未指定直接退出。
 """
 
 import argparse
@@ -201,45 +203,58 @@ def sync_skills(skills_dir: str, force: bool = False, dry_run: bool = False) -> 
     return created, skipped, failed, removed
 
 
-def list_profiles(config: dict):
-    print("Available profiles:\n")
-    for name, agents in sorted(config["profiles"].items()):
-        print(f"  {name}: {agents}")
+def list_agents(config: dict):
+    print("Available agents:\n")
+    for name, cfg in sorted(config["agents"].items()):
+        print(f"  {name}: {cfg.get('skills_dir', '(no skills_dir)')}")
+    print("\n用法: --agent <name> [...]  或  --agent all")
+
+
+def resolve_agents(args_agents: list[str], config: dict) -> list[str]:
+    """把 --agent 值解析为实际要部署的 agent 列表。"""
+    available = list(config["agents"].keys())
+    if "all" in args_agents:
+        return available
+    unknown = [a for a in args_agents if a not in available]
+    if unknown:
+        print(f"⚠ 未知 agent: {', '.join(unknown)}")
+        print("available:", ", ".join(available))
+        return []
+    return args_agents
 
 
 def main():
     parser = argparse.ArgumentParser(description="Sync skills to agents (symlink)")
-    parser.add_argument("--profile", default=os.environ.get("SYNC_PROFILE"), help="profile name (default: $SYNC_PROFILE)")
-    parser.add_argument("--agent", help="only sync this agent")
-    parser.add_argument("--dry-run", action="store_true", help="preview only")
-    parser.add_argument("--list", action="store_true", help="list available profiles")
+    parser.add_argument(
+        "--agent",
+        nargs="+",
+        help="目标 agent（必填，可多个；或用 'all' 部署全部）",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="预览，不实际操作")
+    parser.add_argument("--list", action="store_true", help="列出可用 agent")
     parser.add_argument("--force", action="store_true", help="force replace non-empty directories")
     args = parser.parse_args()
 
     config = load_config()
 
     if args.list:
-        list_profiles(config)
+        list_agents(config)
         return
 
-    if not args.profile:
-        print("请指定 --profile 或在 .env 中设置 SYNC_PROFILE")
-        print("available:", ", ".join(sorted(config["profiles"])))
-        return
+    if not args.agent:
+        print("⚠ 必须指定 --agent。可用 agent:")
+        print("  " + ", ".join(sorted(config["agents"].keys())))
+        print("用法: --agent <name> [...]  或  --agent all")
+        sys.exit(1)
 
-    agents = config["profiles"].get(args.profile)
-    if not agents:
-        print(f"profile '{args.profile}' not found in deploy.json")
-        print("available:", ", ".join(sorted(config["profiles"])))
-        return
+    agent_names = resolve_agents(args.agent, config)
+    if not agent_names:
+        sys.exit(1)
 
     agents_cfg = config["agents"]
     total_created, total_skipped, total_failed, total_removed = 0, 0, 0, 0
 
-    for agent_name in agents:
-        if args.agent and agent_name != args.agent:
-            continue
-
+    for agent_name in agent_names:
         cfg = agents_cfg.get(agent_name)
         if not cfg:
             print(f"⚠ unknown agent: {agent_name}")

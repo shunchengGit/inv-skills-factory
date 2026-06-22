@@ -1,25 +1,25 @@
 ---
 name: skill-deployer
-description: 将技能按场景（profile）软链接部署到各 Agent 目录。修改技能后执行。
+description: 将技能软链接部署到指定 Agent 目录。修改技能后执行。
 ---
 
 # 技能部署
 
-修改技能后、push 前执行，确保各 Agent 目录同步最新。
+修改技能后、push 前执行，确保 Agent 目录同步最新。
 
 ## ⚡ 先行判断
 
 | 场景 | 操作 |
 |------|------|
-| 修改了技能内容（SKILL.md/脚本/references） | 部署当前 profile |
+| 修改了技能内容（SKILL.md/脚本/references） | 部署到对应 agent |
 | 新增/删除技能 | 部署 + lint |
-| 修改 deploy.json | 部署受影响 profile |
+| 修改 deploy.json | 部署受影响 agent |
 
 ## 执行流程
 
-### ① 确定当前 profile
+### ① 确定 agent（必填）
 
-默认 `home`。如果用户指定了 profile 则用指定的。
+`--agent` 强制必填，未指定直接退出。可多选，或用 `all` 部署全部。
 
 ```bash
 python3 .claude/skills/skill-deployer/scripts/sync.py --list
@@ -28,7 +28,17 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --list
 ### ② 执行部署
 
 ```bash
-python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
+# 单个 agent
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes
+
+# 多个 agent
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes workbuddy
+
+# 全部 agent
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
+
+# 预览
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 ```
 
 可选参数：
@@ -37,7 +47,7 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
 |------|------|
 | `--dry-run` | 预览，不实际操作 |
 | `--force` | 强制替换非空目录（慎用） |
-| `--agent hermes` | 仅部署指定 agent |
+| `--list` | 列出可用 agent |
 
 ### ③ 验证
 
@@ -63,11 +73,6 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
 
 ```json
 {
-  "profiles": {
-    "home":   ["hermes", "workbuddy"],
-    "work":   ["hermes", "workbuddy"],
-    "server": ["hermes"]
-  },
   "agents": {
     "hermes":    { "skills_dir": "~/.hermes/skills/skills-store" },
     "workbuddy": { "skills_dir": "~/.workbuddy/skills/skills-store" }
@@ -76,7 +81,6 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
 ```
 
 - 每个 agent 的技能部署到 `skills/skills-store/` 子目录，不影响其他来源的技能
-- profile 是 agent 名称列表，所有技能都会部署到列出的 agent
 
 ## sync.py 核心逻辑
 
@@ -84,7 +88,7 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
 
 ### 输入
 
-1. `.claude/skills/skill-deployer/scripts/deploy.json` — profiles 与 agents 配置
+1. `.claude/skills/skill-deployer/scripts/deploy.json` — agents 配置
 2. `custom-skills/` — 技能源码目录（扁平结构）
 
 ### 同步流程
@@ -92,7 +96,7 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --profile home
 ```
 1. 加载 deploy.json
 2. 扫描 custom-skills/ 顶层 → 收集所有技能目录
-3. 对 profile 中的每个 agent：
+3. 对 --agent 指定的每个 agent：
    a. 确保目标目录存在
    b. 创建软链接：目标/技能名 → 源/技能名
    c. 清理不再存在的过期软链接
