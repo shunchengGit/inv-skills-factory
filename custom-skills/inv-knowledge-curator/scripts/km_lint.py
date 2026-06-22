@@ -32,7 +32,7 @@ from proxy import detect_proxy
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index, validate_okf, validate_bundle_paths, regenerate_indexes, find_cross_references
 
-KNOWLEDGE_DIR = Path.home() / ".knowledge"
+KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 
 
 def check_dead_links(categories: dict[str, list[dict]]) -> list[dict]:

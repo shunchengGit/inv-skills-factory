@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import parse_index, _read_frontmatter
 
-KNOWLEDGE_DIR = Path.home() / ".knowledge"
+KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 DEFAULT_OUTPUT = KNOWLEDGE_DIR / "knowledge-graph.html"
 
 _LINK_RE = re.compile(r"\]\(([^)]+)\)")

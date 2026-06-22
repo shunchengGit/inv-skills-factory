@@ -16,7 +16,7 @@ from __future__ import annotations
 
 子命令：
   fetch  - 抓取 URL 内容（Firecrawl）
-  store  - 存储知识条目到 ~/.knowledge + 更新 index/{category}.md + git 同步
+  store  - 存储知识条目到 ~/.inv-knowledge + 更新 index/{category}.md + git 同步
   categories - 列出所有可用分类
 
 用法:
@@ -40,7 +40,7 @@ from git import sync as _git_sync
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import slugify, build_entry, parse_index, now_iso
 
-KNOWLEDGE_DIR = Path.home() / ".knowledge"
+KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 REPO_BRANCH = "master"
 FIRECRAWL_URL = "http://localhost:3672/v1/scrape"
 
@@ -173,7 +173,7 @@ def cmd_store(
     entry_type: str = "Article",
     description: str = "",
 ) -> dict:
-    """存储知识条目到 ~/.knowledge，更新 index，git 同步。
+    """存储知识条目到 ~/.inv-knowledge，更新 index，git 同步。
     输出符合 OKF v0.1 格式。"""
     if not KNOWLEDGE_DIR.exists():
         return {

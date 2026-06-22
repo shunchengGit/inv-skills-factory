@@ -17,7 +17,7 @@ commands:
 
 | 命令 | 用途 |
 |------|------|
-| `/km_init` | 拉取知识库到 `~/.knowledge`，输出 Index |
+| `/km_init` | 拉取知识库到 `~/.inv-knowledge`，输出 Index |
 | `/km_import <url>` | 抓取 → 总结 → 分类 → **交叉关联** → 存储（含图谱 + log 自动更新） |
 | `/km_search <query>` | 搜索，支持按分类过滤 |
 | `/km_stats` | 统计（分类/类型分布、标签、时间范围） |
@@ -118,7 +118,7 @@ OKF 用标准 markdown 链接建立关联：
 ## 知识库结构（OKF bundle）
 
 ```
-~/.knowledge/
+~/.inv-knowledge/
 ├── log.md                   ← 变更日志（km_import 自动追加）
 ├── investing/
 │   ├── index.md             ← 分类索引
@@ -131,4 +131,4 @@ OKF 用标准 markdown 链接建立关联：
 ## 依赖
 
 - `_shared/git.py`：git 同步
-- 远程仓库：`git@github.com:shunchengGit/knowledge.git`
+- 远程仓库：`git@github.com:shunchengGit/inv-knowledge.git`
