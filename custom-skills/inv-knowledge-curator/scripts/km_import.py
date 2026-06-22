@@ -15,7 +15,7 @@ from __future__ import annotations
   - 推荐: resource (=url), tags
 
 子命令：
-  fetch  - 抓取 URL 内容（Firecrawl → pwright 兜底）
+  fetch  - 抓取 URL 内容（Firecrawl）
   store  - 存储知识条目到 ~/.knowledge + 更新 index/{category}.md + git 同步
   categories - 列出所有可用分类
 
@@ -35,7 +35,6 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
-from pwright import scrape_url as pwright_scrape_url
 from git import sync as _git_sync
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -85,20 +84,8 @@ def _firecrawl_scrape(url: str) -> dict | None:
         return None
 
 
-def _pwright_scrape(url: str) -> dict | None:
-    """Playwright 抓取兜底，返回 {title, content} 或 None。"""
-    try:
-        result = pwright_scrape_url(url)
-    except RuntimeError:
-        return None
-
-    if result["success"] and result["markdown"] and len(result["markdown"].strip()) >= 100:
-        return {"title": result["title"], "content": result["markdown"].strip()}
-    return None
-
-
 def cmd_fetch(url: str) -> dict:
-    """抓取 URL 内容，Firecrawl 优先，pwright 兜底。"""
+    """抓取 URL 内容（Firecrawl）。失败时返回错误，由用户手动 store。"""
     result = _firecrawl_scrape(url)
     if result:
         return {
@@ -109,19 +96,9 @@ def cmd_fetch(url: str) -> dict:
             "url": url,
         }
 
-    result = _pwright_scrape(url)
-    if result:
-        return {
-            "success": True,
-            "source": "pwright",
-            "title": result["title"],
-            "content": result["content"],
-            "url": url,
-        }
-
     return {
         "success": False,
-        "error": "Firecrawl 和 pwright_scrape 均失败",
+        "error": "Firecrawl 抓取失败，请手动 store",
         "url": url,
     }
 

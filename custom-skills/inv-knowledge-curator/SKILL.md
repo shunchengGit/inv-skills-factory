@@ -107,7 +107,7 @@ OKF 用标准 markdown 链接建立关联：
 | 脚本 | 用途 |
 |------|------|
 | `km_init.py` | 拉取仓库 + 输出 Index |
-| `km_import.py fetch <url>` | 抓取 URL（Firecrawl → pwright 兜底） |
+| `km_import.py fetch <url>` | 抓取 URL（Firecrawl；失败需手动 store） |
 | `km_import.py store --title ... --content-file F` | 存储（推荐用文件导入） |
 | `km_search.py <query>` | 搜索 |
 | `km_stats.py [--json]` | 统计 |
@@ -130,6 +130,5 @@ OKF 用标准 markdown 链接建立关联：
 
 ## 依赖
 
-- `_shared/pwright.py`：Playwright 网页抓取
 - `_shared/git.py`：git 同步
 - 远程仓库：`git@github.com:shunchengGit/knowledge.git`

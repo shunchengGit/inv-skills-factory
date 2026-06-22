@@ -14,7 +14,7 @@ Skills 管理和开发仓库，通过软链接将技能按场景（profile）部
 
 ```
 custom-skills/                  # 技能源码（扁平结构）
-  _shared/                      #   共享工具模块（dotenv/proxy/pwright/git）
+  _shared/                      #   共享工具模块（dotenv/proxy/git）
   inv-stock-data/               #   数据层
   inv-valuation-engine/         #   估值引擎
   inv-qarp-strategy/            #   操作决策
