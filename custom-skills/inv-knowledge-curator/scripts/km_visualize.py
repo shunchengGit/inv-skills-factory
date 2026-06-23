@@ -204,7 +204,6 @@ def build_graph(max_nodes: int = 200) -> dict:
     return {
         "nodes": nodes,
         "edges": edges,
-        "bodies": bodies,
         "types": types,
         "palette": _TYPE_PALETTE,
         "stats": {
@@ -522,9 +521,15 @@ function showDetail(nid){
   tagsEl.innerHTML = d.data.tags?.length
     ? d.data.tags.map(t=>`<span class="tag">${t}</span>`).join("") : "—";
 
-  const bodyText = B.bodies[nid]||"";
+  // 详情面板：显示描述和元信息（完整正文在 entries/ 原始文件中）
   const bodyEl = document.getElementById("detail-body");
-  bodyEl.innerHTML = renderMD(bodyText);
+  var desc = d.data.description||"";
+  var res = d.data.resource||"";
+  var conn = d.data.connections||0;
+  bodyEl.innerHTML = '<p style="font-size:14px;line-height:1.8;white-space:pre-wrap">' + desc + '</p>'
+    + '<p style="color:var(--muted);font-size:12px;margin-top:12px">'
+    + '连接数: ' + conn + ' | 来源: ' + (res.length>60?res.slice(0,57)+'...':res||'—') + '</p>'
+    + '<p style="color:var(--muted);font-size:11px;margin-top:4px">完整内容见 entries/ 目录原始文件</p>';
 
   const bl = backlinks[nid]||[];
   const blSec = document.getElementById("detail-backlinks");
