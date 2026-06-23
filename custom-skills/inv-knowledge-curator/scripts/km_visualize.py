@@ -369,9 +369,11 @@ const connected = B.edges.length > 0;
 const HAS_CYTOSCAPE = typeof cytoscape !== "undefined";
 document.title = `知识图谱 — ${B.nodes.length} 节点`;
 
+console.log('HAS_CYTOSCAPE:', HAS_CYTOSCAPE, 'nodes:', B.nodes.length, 'edges:', B.edges.length);
+
 if (!HAS_CYTOSCAPE) {
   document.getElementById("graph").innerHTML =
-    '<div class="graph-hint"><b>⚠ CDN 未加载</b><br><span style="font-size:12px">请切换到列表视图</span></div>';
+    '<div class="graph-hint"><b>⚠ Cytoscape.js 未加载</b><br><span style="font-size:12px">请切换到列表视图</span></div>';
   document.querySelector('[data-view="table"]').click();
 }
 
@@ -431,7 +433,7 @@ const cy = HAS_CYTOSCAPE ? cytoscape({
     { selector:".dim", style:{"opacity":.08} },
     { selector:".hidden", style:{"display":"none"} },
   ],
-  layout: { name: connected?"cose":"grid", animate:false, padding:30, ...(connected?{}:{rows:Math.ceil(Math.sqrt(B.nodes.length))}) },
+  layout: { name: connected?"cose":"grid", animate:true, padding:30, ...(connected?{}:{rows:Math.ceil(Math.sqrt(B.nodes.length))}) },
   wheelSensitivity: .2,
 });
 
@@ -453,7 +455,7 @@ document.getElementById("search").addEventListener("input",e=>{
 if (HAS_CYTOSCAPE) {
 document.getElementById("layout").addEventListener("change",e=>{
   const name = e.target.value;
-  const opts = { name, animate:false, padding:30 };
+  const opts = { name, animate:true, padding:30 };
   if (name==="grid") opts.rows = Math.ceil(Math.sqrt(cy.nodes(":visible").length||1));
   cy.layout(opts).run();
 });
@@ -623,12 +625,12 @@ function renderMD(text) {
   return html;
 }
 
-// Auto-init: 等布局完成后再显示，避免节点还在(0,0)位置看起来像白屏
+// Auto-init: cy.ready 确保 Cytoscape 初始化完成后再显示
 if (B.nodes.length) {
-  let inited = false;
-  cy.one('layoutstop', () => { if (!inited) { inited = true; showDetail(B.nodes[0].data.id); } });
-  // 兜底：3秒后还没完成布局也强制显示
-  setTimeout(() => { if (!inited) { inited = true; showDetail(B.nodes[0].data.id); cy.fit(); } }, 3000);
+  cy.ready(() => {
+    cy.fit(null, 30);
+    showDetail(B.nodes[0].data.id);
+  });
 }
 """
 
