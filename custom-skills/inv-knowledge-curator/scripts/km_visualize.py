@@ -334,20 +334,20 @@ function showDetail(nid){
   const content=document.getElementById('detail-content');content.hidden=false;
 
   const badge=document.getElementById('detail-type');
-  badge.textContent=d.data.type;badge.style.background=d.data.color;
+  badge.textContent=d.type;badge.style.background=d.color;
 
-  document.getElementById('detail-title').textContent=d.data.label;
-  document.getElementById('detail-description').textContent=d.data.description||'—';
+  document.getElementById('detail-title').textContent=d.label;
+  document.getElementById('detail-description').textContent=d.description||'—';
 
   const resEl=document.getElementById('detail-resource');resEl.innerHTML='';
-  const resource=d.data.resource||'';
+  const resource=d.resource||'';
   if(/^https?:\/\//.test(resource)){
     const a=document.createElement('a');a.href=resource;a.target='_blank';a.rel='noopener';
     a.textContent=resource.length>80?resource.slice(0,77)+'...':resource;resEl.appendChild(a);
   }else{resEl.textContent=resource||'—';}
 
   const tagsEl=document.getElementById('detail-tags');
-  tagsEl.innerHTML=d.data.tags?.length?d.data.tags.map(t=>'<span class="tag">'+t+'</span>').join(''):'—';
+  tagsEl.innerHTML=d.tags?.length?d.tags.map(t=>'<span class="tag">'+t+'</span>').join(''):'—';
 
   // Detail body: render markdown from bundle bodies
   const body=B.bodies[nid]||'';
