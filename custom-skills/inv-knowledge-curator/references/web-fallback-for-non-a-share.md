@@ -2,7 +2,7 @@
 
 ## 问题
 
-本地研报 PDF 目录（`~/.inv-knowledge/res/pdfs`）以 A 股/港股券商研报为主。对于美股（如 TSM、AAPL）或台股（如 2330.TW），本地 PDF 通常为空，`km_import_report.py list` 返回无匹配。
+本地研报 PDF 目录（`~/.inv-knowledge/res`）以 A 股/港股券商研报为主。对于美股（如 TSM、AAPL）或台股（如 2330.TW），本地 PDF 通常为空，`km_import.py store` 返回无匹配。
 
 ## 降级策略
 

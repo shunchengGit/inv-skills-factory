@@ -16,7 +16,7 @@
 from pathlib import Path
 import re
 
-base = Path.home() / ".inv-report"
+base = Path.home() / ".inv-knowledge" / "res"
 for subdir in sorted(base.iterdir()):
     if not subdir.is_dir() or subdir.name.startswith('.'):
         continue
@@ -65,7 +65,7 @@ archive 命令不会自动更新 Index.md 元数据和目录条目，归档后�
 from pathlib import Path
 import re
 
-base = Path.home() / ".inv-report"
+base = Path.home() / ".inv-knowledge" / "res"
 subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
 
 # 统计

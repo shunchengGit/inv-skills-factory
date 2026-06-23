@@ -5,7 +5,7 @@ from __future__ import annotations
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""知识库统计工具：输出知识库整体统计信息，含 OKF type 分布。
+"""知识库统计工具：输出知识库整体统计信息，含 OKF v0.2 type/source_type 分布。
 
 用法:
   uv run km_stats.py
@@ -16,18 +16,18 @@ import argparse
 import json
 import sys
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import parse_index, _read_frontmatter
+from knowledge import parse_index, _read_frontmatter, ENTRIES_DIR
 
 _DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 
 
 def _get_knowledge_dir() -> Path:
+    import os
     env = os.environ.get("INV_KNOWLEDGE_ROOT", "").strip()
     return Path(env).expanduser() if env else _DEFAULT_KNOWLEDGE_DIR
 
@@ -43,63 +43,42 @@ def cmd_stats() -> dict:
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
         }
 
-    categories, _ = parse_index(KNOWLEDGE_DIR)
+    entries, _ = parse_index(KNOWLEDGE_DIR)
 
-    all_entries: list[dict] = []
     type_counts: Counter = Counter()
+    source_type_counts: Counter = Counter()
     tag_counts: Counter = Counter()
     timestamps: list[str] = []
     with_resource = 0
     without_resource = 0
 
-    for cat, entries in categories.items():
-        for entry in entries:
-            file_path = KNOWLEDGE_DIR / entry["path"]
-            fm = _read_frontmatter(file_path) if file_path.exists() else {}
+    for entry in entries:
+        file_path = KNOWLEDGE_DIR / entry["path"]
+        fm = _read_frontmatter(file_path) if file_path.exists() else {}
 
-            entry_type = fm.get("type") or "Unknown"
-            type_counts[entry_type] += 1
+        etype = entry.get("type") or "Unknown"
+        type_counts[etype] += 1
 
-            entry_tags = fm.get("tags", "")
-            if isinstance(entry_tags, str):
-                entry_tags = [t.strip().strip("\"'") for t in entry_tags.strip("[]").split(",") if t.strip()]
-            for t in entry_tags:
-                tag_counts[t] += 1
+        stype = entry.get("source_type") or fm.get("source_type") or "unknown"
+        source_type_counts[stype] += 1
 
-            ts = fm.get("timestamp", "")
-            if ts:
-                timestamps.append(ts[:10])  # date part
+        for t in entry.get("tags", []):
+            tag_counts[t] += 1
 
-            if fm.get("resource"):
-                with_resource += 1
-            else:
-                without_resource += 1
+        ts = entry.get("timestamp") or fm.get("timestamp", "")
+        if ts:
+            timestamps.append(ts[:10])
 
-            all_entries.append({
-                "title": entry["title"],
-                "path": entry["path"],
-                "category": cat,
-                "type": entry_type,
-                "description": fm.get("description", ""),
-                "timestamp": ts,
-                "mtime": file_path.stat().st_mtime if file_path.exists() else 0,
-            })
+        if entry.get("resource") or fm.get("resource"):
+            with_resource += 1
+        else:
+            without_resource += 1
 
     # 按 mtime 排序
-    all_entries.sort(key=lambda x: x["mtime"], reverse=True)
-
-    # 分类统计
-    cat_stats = {}
-    for cat, entries in categories.items():
-        cat_types = Counter()
-        for e in entries:
-            file_path = KNOWLEDGE_DIR / e["path"]
-            fm = _read_frontmatter(file_path) if file_path.exists() else {}
-            cat_types[fm.get("type") or "Unknown"] += 1
-        cat_stats[cat] = {
-            "count": len(entries),
-            "types": dict(cat_types),
-        }
+    sorted_entries = sorted(entries, key=lambda e: (
+        (KNOWLEDGE_DIR / e["path"]).stat().st_mtime
+        if (KNOWLEDGE_DIR / e["path"]).exists() else 0
+    ), reverse=True)
 
     # 时间范围
     earliest = min(ts for ts in timestamps) if timestamps else None
@@ -107,10 +86,9 @@ def cmd_stats() -> dict:
 
     return {
         "success": True,
-        "total_entries": len(all_entries),
-        "total_categories": len(categories),
-        "categories": cat_stats,
+        "total_entries": len(entries),
         "type_distribution": dict(type_counts),
+        "source_type_distribution": dict(source_type_counts),
         "top_tags": dict(tag_counts.most_common(15)),
         "resource_coverage": {
             "with_resource": with_resource,
@@ -119,14 +97,14 @@ def cmd_stats() -> dict:
         },
         "time_range": {"earliest": earliest, "latest": latest},
         "recent_imports": [
-            {"title": e["title"], "category": e["category"], "type": e["type"], "timestamp": e["timestamp"]}
-            for e in all_entries[:10]
+            {"title": e["title"], "type": e["type"], "source_type": e["source_type"], "timestamp": e["timestamp"]}
+            for e in sorted_entries[:10]
         ],
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="知识库统计工具")
+    parser = argparse.ArgumentParser(description="知识库统计工具 (OKF v0.2)")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -141,24 +119,25 @@ def main():
 
         print("知识库统计")
         print("=" * 40)
-        print(f"总条目: {result['total_entries']} | 分类: {result['total_categories']}")
+        print(f"总条目: {result['total_entries']}")
 
         print(f"\n类型分布:")
         for t, c in result.get("type_distribution", {}).items():
             bar = "█" * min(30, c * 2)
-            print(f"  {t:<12s} {c:>3d}  {bar}")
+            print(f"  {t:<14s} {c:>3d}  {bar}")
 
-        print(f"\n分类分布:")
-        for cat, info in result.get("categories", {}).items():
-            types_str = " ".join(f"{t}:{c}" for t, c in info["types"].items())
-            print(f"  {cat:<16s} {info['count']:>3d} 条  ({types_str})")
+        print(f"\n来源分布:")
+        for t, c in result.get("source_type_distribution", {}).items():
+            icon = {"url": "🔗", "pdf": "📄", "note": "📝"}.get(t, "")
+            bar = "█" * min(30, c * 2)
+            print(f"  {icon} {t:<12s} {c:>3d}  {bar}")
 
         tr = result.get("time_range", {})
         if tr["earliest"]:
             print(f"\n时间范围: {tr['earliest']} ~ {tr['latest']}")
 
         rc = result.get("resource_coverage", {})
-        print(f"来源覆盖: {rc['with_resource']}/{result['total_entries']} 有链接 ({rc['coverage_pct']}%)")
+        print(f"来源覆盖: {rc['with_resource']}/{result['total_entries']} 有 resource ({rc['coverage_pct']}%)")
 
         top_tags = result.get("top_tags", {})
         if top_tags:
@@ -168,7 +147,7 @@ def main():
 
         print(f"\n最近导入:")
         for e in result["recent_imports"]:
-            print(f"  [{e['type']}] {e['title']} ({e['category']})")
+            print(f"  [{e['type']}] {e['title']} ({e['source_type']})")
 
     if not result.get("success"):
         sys.exit(1)

@@ -2,11 +2,11 @@
 
 ## 适用场景
 
-1. 用户直接提供 PDF 路径（常见于 `~/Downloads/`），文件不在 `INV_KNOWLEDGE_ROOT + "res"` 研报库中
+1. 用户直接提供 PDF 路径（常见于 `~/Downloads/`），文件不在 `INV_KNOWLEDGE_ROOT / "res"` 研报库中
 2. PDF 是专家电话会议纪要（expert call transcript）、路演纪要、邀请函，而非标准卖方研报
 3. 一次提供多份 PDF（5-10份），需要批量提取、去重、综合
 
-## 直接 PyMuPDF 提取（绕过 km_import_report.py）
+## 直接 PyMuPDF 提取（绕过 km_import.py）
 
 当文件不在研报库时，直接用 PyMuPDF 提取，无需先 index：
 
@@ -166,7 +166,7 @@ grep -n "HSBC\|JPMorgan\|Deutsche\|UBS" /tmp/tencent_reports_extracted.txt
 
 ## 行业调研纪要批量浏览工作流
 
-适用场景：用户给出一个**目录路径**（如 `/Users/xxx/.inv-report/行业研究-互联网`），问"这说的是啥"，而非指定具体标的代码。目录下通常是**行业调研纪要**（industry tour takeaways），覆盖多家公司、多位专家，不是单一公司深度研报。
+适用场景：用户给出一个**目录路径**（如 `/Users/xxx/.inv-knowledge/res/行业研究-互联网`），问"这说的是啥"，而非指定具体标的代码。目录下通常是**行业调研纪要**（industry tour takeaways），覆盖多家公司、多位专家，不是单一公司深度研报。
 
 ### 与标准研报的核心差异
 

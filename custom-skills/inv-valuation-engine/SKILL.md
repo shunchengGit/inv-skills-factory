@@ -35,22 +35,7 @@ commands:
 5. 脚本返回后，先检查 `data_gaps`，明确缺口和置信度影响。
 6. 定量判断只按 `references/scoring-rules.md` 执行，定性解释再用 `references/master-frameworks.md`。
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点。
-8. **若用户本地存在该标的券商研报 PDF**（默认目录或子目录见 `skills/inv-research-analyzer/SKILL.md`）：应把 **`inv-research-analyzer`** 作为**重要参考之一**——先 `list` / `extract` 梳理近半年卖方**共识、分歧、盈利预测区间、隐含假设与资本配置/分红**叙述，再运行本技能脚本；不得用卖方目标价直接代替本技能的五档结论。
-
-## 重要参考：本地券商研报（`inv-research-analyzer`）
-
-- **定位**：卖方 PDF 提供**叙事、一致预期区间、风险清单与隐含假设**，用于补充和校验你在「增长假设」「护城河叙事」「资本开支与股东回报」等定性环节的论据；**定量五档结论仍以本技能脚本 + `references/scoring-rules.md` 为准**。
-- **何时必须引用**：用户已整理 `~/.inv-report`（或子文件夹如标的简称）且任务涉及**中长期价值判断**时，应在输出「关键依据」「核心假设」「风险与失效条件」中**单列一小节「卖方研报摘要（近半年窗口）」**，注明文件名日期窗口与券商来源。
-- **衔接方式**：用 `inv-research-analyzer` 的 `scripts/research_pdf.py` 获取卖方观点：
-  ```bash
-  # 第一步：读 Index.md 确定子文件夹名（如 微软、腾讯控股）
-  # 第二步：提取文本
-  python3 {researchDir}/scripts/research_pdf.py extract --folder <子文件夹名>
-  # 或按关键词提取
-  python3 {researchDir}/scripts/research_pdf.py extract --contains <公司简称或代码>
-  ```
-  重点关注：一致评级、目标价区间、核心看多/看空论据、风险提示。与本技能 `valuation_snapshot` / `valuation_report` 的**数据时点**对照，冲突时**优先财报与行情事实**，卖方仅作假设参考。
-- **边界**：卖方存在乐观偏差；研报**不构成**本技能的独立数据源替代 Yahoo/AkShare；价位判断不因「买入」评级而自动升级。
+8. **查阅知识库**（`inv-knowledge-curator`）：通过 `/km_search` 查找该标的相关条目，LLM 自行判断哪些资料可用（Article/Reference/Analysis/Synthesis/pdf）。若有原始 PDF 资源，可通过 `/km_import res` 提取原文。定量结论仍以 `scoring-rules.md` 为准。
 
 ## 数据源说明（新增）
 - 所有数据统一通过 `inv-stock-data` CLI 获取，不直接调用 yfinance/AkShare。
@@ -86,7 +71,7 @@ commands:
 5. 若不同指标的数据时点不一致，必须明确标注各自日期，并优先采用最近一期且口径一致的数据。
 6. 定量阈值以 `references/scoring-rules.md` 为唯一标准来源，主文件不重复定义冲突阈值。
 7. 定性框架用于解释和修正结论置信度，不覆盖明显失真的定量结论。
-8. 缺少数据时可使用内置手动计算脚本 `{baseDir}/scripts/valuation_manual_compute.py`，从 inv-stock-data `financials` + 研报数据补全核心指标。
+8. 缺少数据时可使用内置手动计算脚本 `{baseDir}/scripts/valuation_manual_compute.py`，从 inv-stock-data `financials` + 知识库已有数据补全核心指标。
 9. 所有结论都要写明核心假设、风险条件和适用边界，不把估值结论表达成确定性预测。
 
 ## 必要输入
@@ -121,12 +106,12 @@ commands:
 
 ## 执行流程
 1. 确认标的类型和适用估值口径。
-2. **若存在本地券商 PDF**：按 `inv-research-analyzer` 抽取并归纳近半年卖方观点（可与下一步并行，但须在终稿中体现对照）。
+2. **查阅知识库**：`/km_search` 查该标的相关条目，LLM 自行判断哪些资料可用（可与下一步并行）。
 3. 优先用 `cs_stock_all` 一次获取全量数据（snapshot + financial + financials），避免多次跨进程调用触发限流。然后标注数据时点。
 4. 检查关键数据是否齐全；缺失、过旧或无法更新时先列出缺口。
 5. 按公司类型选择框架，不强行套用全部方法。
 6. 读取 `references/scoring-rules.md` 对照阈值完成定量判断。
-7. 结合 `references/master-frameworks.md` 做定性校验，解释应享有溢价或折价的原因；**与卖方研报共识/分歧交叉验证**（若有）。
+7. 结合 `references/master-frameworks.md` 做定性校验，解释应享有溢价或折价的原因；**与知识库中已有分析交叉验证**（若有）。
 8. 输出五档结论、关键假设、风险条件、数据时点和操作参考。
 
 ## 多源数据整合分析框架（四层验证法）
@@ -136,7 +121,7 @@ commands:
 | 层级 | 回答的问题 | 数据来源 | 作用 |
 |------|------------|---------|------|
 | **数据层** | 事实是什么 | 实时行情（Yahoo Finance/inv-stock-data）+ 财务快照 | 锚定事实，确定估值锚点 |
-| **研报层** | 卖方怎么看 | 本地券商PDF（inv-research-analyzer） | 校验假设，发现一致预期与关键分歧 |
+| **知识层** | 已有资料怎么说 | inv-knowledge-curator（/km_search） | 校验假设，发现共识与分歧 |
 | **竞争层** | 护城河有多深 | Porter五力 / 行业数据 | 验证长期竞争优势是否结构性 |
 | **操作层** | 具体怎么做 | 前三层结论 + 位置/波动判断 | 落到价格区间、仓位、打脸条件 |
 

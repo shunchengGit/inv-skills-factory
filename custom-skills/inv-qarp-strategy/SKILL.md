@@ -151,8 +151,8 @@ commands:
 
 ### 9.1 对新标的：三阶段
 
-**阶段一（并行）**：A. `valuation_snapshot.py <代码> --output json` + B. 读 Index.md → `research_pdf.py extract --folder <子文件夹>` → 结构化整理（若无本地研报则 Web 降级）
-**阶段二**：检查 yfinance/研报覆盖缺口，必要时 Agent WebFetch 补充
+**阶段一（并行）**：A. `valuation_snapshot.py <代码> --output json` + B. 遵循 inv-knowledge-curator 的 /km_search 查阅知识库已有资料 → 结构化整理（若知识库无则 Web 降级）
+**阶段二**：检查数据/知识覆盖缺口，必要时 Agent WebFetch 补充
 **阶段三（顺序）**：五档结论 → 选股闸门 → 估值纪律 → 买入必答 6 问 → 组合检查 → 结论 + 机会成本对比
 
 ### 9.2 对已有持仓：五步检查

@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import parse_index, _read_frontmatter
+from knowledge import parse_index, _read_frontmatter, ENTRIES_DIR
 
 _DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 
@@ -52,6 +52,11 @@ _TYPE_PALETTE = {
     "Metric": "#f59e0b",
     "Playbook": "#ef4444",
     "Note": "#94a3b8",
+}
+_SOURCE_TYPE_ICONS = {
+    "url": "🔗",
+    "pdf": "📄",
+    "note": "📝",
 }
 _DEFAULT_COLOR = "#94a3b8"
 
@@ -84,19 +89,18 @@ def _extract_links(body: str, entry_path: str, all_paths: set[str]) -> list[str]
 
 
 def build_graph(max_nodes: int = 200) -> dict:
-    """构建图谱数据。"""
-    categories, _indexed = parse_index(KNOWLEDGE_DIR)
-    if not categories:
+    """构建图谱数据。从 entries/ 扁平目录读取所有 OKF 条目。"""
+    entries_list, _indexed = parse_index(KNOWLEDGE_DIR)
+    if not entries_list:
         return {"nodes": [], "edges": [], "bodies": {}, "types": [], "palette": _TYPE_PALETTE}
 
     # 构建 path → entry 映射
     all_paths: set[str] = set()
     entries: dict[str, dict] = {}
-    for cat, cat_entries in categories.items():
-        for e in cat_entries:
-            p = e["path"]
-            all_paths.add(p)
-            entries[p] = e
+    for e in entries_list:
+        p = e["path"]
+        all_paths.add(p)
+        entries[p] = e
 
     # 限制数量
     if len(entries) > max_nodes:
@@ -126,15 +130,22 @@ def build_graph(max_nodes: int = 200) -> dict:
             pass
 
         entry_type = fm.get("type") or entry.get("type") or "Article"
+        source_type = fm.get("source_type") or entry.get("source_type") or ""
         color = _TYPE_PALETTE.get(entry_type, _DEFAULT_COLOR)
+        icon = _SOURCE_TYPE_ICONS.get(source_type, "")
+
+        label = entry["title"]
+        if icon:
+            label = f"{icon} {label}"
 
         nodes.append({
             "data": {
                 "id": nid,
-                "label": entry["title"],
+                "label": label,
                 "type": entry_type,
+                "source_type": source_type,
                 "description": fm.get("description") or entry.get("description", ""),
-                "resource": fm.get("resource") or entry.get("url", ""),
+                "resource": fm.get("resource") or entry.get("resource", ""),
                 "tags": _parse_tags(fm.get("tags", "")),
                 "color": color,
                 "size": 26 + min(64, len(body) // 300),
@@ -146,7 +157,7 @@ def build_graph(max_nodes: int = 200) -> dict:
     # 构建边
     edges: list[dict] = []
     seen_edges: set[tuple[str, str]] = set()
-    for path, entry in entries.items():
+    for path in entries:
         file_path = KNOWLEDGE_DIR / path
         if not file_path.exists():
             continue
@@ -174,6 +185,21 @@ def build_graph(max_nodes: int = 200) -> dict:
                 },
             })
 
+    # 统计每个节点的连接数
+    conn_count: dict[str, int] = {}
+    for e in edges:
+        conn_count[e["data"]["source"]] = conn_count.get(e["data"]["source"], 0) + 1
+        conn_count[e["data"]["target"]] = conn_count.get(e["data"]["target"], 0) + 1
+
+    orphans = sum(1 for n in nodes if conn_count.get(n["data"]["id"], 0) == 0)
+
+    # 更新节点大小：连接越多越大
+    for n in nodes:
+        c = conn_count.get(n["data"]["id"], 0)
+        base = 20 if c == 0 else (32 if c >= 3 else 26)
+        n["data"]["size"] = base + min(40, n["data"]["size"] - 26)
+        n["data"]["connections"] = c
+
     types = sorted({n["data"]["type"] for n in nodes})
     return {
         "nodes": nodes,
@@ -181,6 +207,11 @@ def build_graph(max_nodes: int = 200) -> dict:
         "bodies": bodies,
         "types": types,
         "palette": _TYPE_PALETTE,
+        "stats": {
+            "total_nodes": len(nodes),
+            "total_edges": len(edges),
+            "orphans": orphans,
+        },
     }
 
 
@@ -672,6 +703,9 @@ def generate_html(graph: dict, output_path: Path) -> None:
     edge_count = len(graph["edges"])
     connected = edge_count > 0
 
+    stats = graph.get("stats", {})
+    orphans = stats.get("orphans", 0)
+
     html = (
         _HTML
         .replace("__CSS__", _CSS)
@@ -679,8 +713,9 @@ def generate_html(graph: dict, output_path: Path) -> None:
         .replace("__DATA__", json.dumps(graph, ensure_ascii=False))
         .replace("__NODES__", str(node_count))
         .replace("__EDGES__", str(edge_count))
-        .replace("__BADGE_CLASS__", "badge-ok" if connected else "badge-warn")
-        .replace("__CONN_LABEL__", "已关联" if connected else "无关联")
+        .replace("__ORPHANS__", str(orphans))
+        .replace("__BADGE_CLASS__", "badge-ok" if orphans < max(1, node_count//3) else "badge-warn")
+        .replace("__CONN_LABEL__", f"{edge_count} 关联, {orphans} 孤立" if orphans > 0 else "全关联")
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8")

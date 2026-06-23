@@ -223,7 +223,7 @@ curl -s "https://qt.gtimg.cn/q=hk00700" | iconv -f gb2312 -t utf-8
 **关键检查**：snapshot 返回的 `earnings_growth` 对互联网平台公司（PDD、BABA、TCEHY 等）通常基于 GAAP 单季数据，严重失真。**不得直接填入增速假设**，需从研报提取 Normalized/Non-GAAP 增速。
 
 #### 2. 从本地券商 PDF 提取核心财务假设
-加载并遵循 `inv-research-analyzer/SKILL.md`，用 `research_pdf.py list --code {TICKER}` 定位近半年研报，然后 `extract` 获取：
+加载并遵循 `inv-knowledge-curator/SKILL.md`，用 `km_import.py --pdf <路径> --target <标的>` 获取：
 - **Non-GAAP 净利润** 及增速（通常标注为"调整后"/"经调整"/"Non-GAAP"）
 - **一致预期 EPS**（FY1/FY2，RMB 或 USD 口径）
 - **SOTP 分部估值**（国内业务 PE + 海外业务 P/GMV 或 DCF）

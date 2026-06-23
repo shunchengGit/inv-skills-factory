@@ -8,10 +8,11 @@ from __future__ import annotations
 #   "PyYAML>=6.0",
 # ]
 # ///
-"""知识库完整性检查：死链、孤立文件、URL 可达性、重复检测、OKF合规、路径校验、交叉关联。
+"""知识库完整性检查：OKF v0.2 合规、死链、孤立文件、URL 可达性、重复检测、
+PDF 配对、标签治理、时效预警、交叉关联、图谱过期。
 
 用法:
-  uv run km_lint.py                           # 全量检查（含交叉关联建议）
+  uv run km_lint.py                           # 全量检查
   uv run km_lint.py --skip-url-check          # 跳过 URL 可达性
   uv run km_lint.py --fix                     # 修复死链/孤立 + 重建索引 + 自动建立交叉关联
   uv run km_lint.py --check-duplicates        # 含重复检测
@@ -23,14 +24,21 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 from proxy import detect_proxy
+from git import sync as _git_sync, is_repo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import parse_index, validate_okf, validate_bundle_paths, regenerate_indexes, find_cross_references
+from knowledge import (
+    parse_index, validate_okf, regenerate_index, find_cross_references,
+    regenerate_tag_indexes, find_backlinks,
+    _read_frontmatter, ENTRIES_DIR, RES_DIR_NAME,
+)
 
 _DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 
@@ -42,16 +50,44 @@ def _get_knowledge_dir() -> Path:
 
 KNOWLEDGE_DIR = _get_knowledge_dir()
 
+# ─── 死链检查 ──────────────────────────────────────────────
 
-def check_dead_links(categories: dict[str, list[dict]]) -> list[dict]:
-    """检查 Index.md 引用的文件是否存在。"""
+
+def check_dead_links(entries: list[dict]) -> list[dict]:
+    """检查交叉引用链接指向的文件是否存在。"""
     dead = []
-    for _cat, entries in categories.items():
-        for entry in entries:
-            file_path = KNOWLEDGE_DIR / entry["path"]
-            if not file_path.exists():
-                dead.append({"title": entry["title"], "path": entry["path"]})
+    LINK_RE = re.compile(r"\]\(([^)]+)\)")
+    for entry in entries:
+        file_path = KNOWLEDGE_DIR / entry["path"]
+        if not file_path.exists():
+            continue
+        try:
+            text = file_path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        for m in LINK_RE.finditer(text):
+            target = m.group(1)
+            if "://" in target or target.startswith("#"):
+                continue
+            target = target.split("#")[0]
+            if not target or not target.endswith(".md"):
+                continue
+            # 解析相对路径
+            resolved = (file_path.parent / target).resolve()
+            try:
+                resolved.relative_to(KNOWLEDGE_DIR)
+            except ValueError:
+                continue
+            if not resolved.exists():
+                dead.append({
+                    "source": entry["path"],
+                    "target": target,
+                    "title": entry.get("title", ""),
+                })
     return dead
+
+
+# ─── URL 可达性 ────────────────────────────────────────────
 
 
 def check_url_reachable(url: str, proxies: dict | None) -> dict | None:
@@ -69,27 +105,23 @@ def check_url_reachable(url: str, proxies: dict | None) -> dict | None:
     return None
 
 
-def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> tuple[list[dict], list[dict]]:
-    """检查所有知识条目 frontmatter 中的 URL 可达性。"""
+def check_urls(entries: list[dict], skip: bool = False) -> tuple[list[dict], list[dict]]:
+    """检查 source_type=url 条目中 resource URL 的可达性。"""
     if skip:
         return [], []
 
     proxy_url = detect_proxy()
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
 
-    # 收集所有 md 文件和对应 URL
     tasks = []
-    for _cat, entries in categories.items():
-        for entry in entries:
-            file_path = KNOWLEDGE_DIR / entry["path"]
-            if file_path.exists():
-                fm_url = _read_frontmatter_url(file_path)
-                if fm_url:
-                    tasks.append((entry["path"], fm_url))
+    for entry in entries:
+        if entry.get("source_type") != "url":
+            continue
+        url = entry.get("resource", "")
+        if url and url.startswith("http"):
+            tasks.append((entry["path"], url))
 
     dead_urls = []
-    missing_urls = []
-
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {}
         for path, url in tasks:
@@ -101,32 +133,32 @@ def check_urls(categories: dict[str, list[dict]], skip: bool = False) -> tuple[l
             if result:
                 dead_urls.append({"path": path, **result})
 
-    # 检查缺少 url 的 frontmatter
-    for _cat, entries in categories.items():
-        for entry in entries:
-            file_path = KNOWLEDGE_DIR / entry["path"]
-            if file_path.exists() and not _read_frontmatter_url(file_path):
-                missing_urls.append({"path": entry["path"]})
+    # 检查缺少 resource 的条目（OKF v0.2 不允许）
+    missing_urls = []
+    for entry in entries:
+        if not entry.get("resource"):
+            missing_urls.append({"path": entry["path"], "title": entry.get("title", "")})
 
     return dead_urls, missing_urls
 
 
-def _read_frontmatter_url(file_path: Path) -> str | None:
-    """从 md 文件的 YAML frontmatter 读取 url/resource 字段（兼容新旧格式）。"""
-    from knowledge import _read_frontmatter
-    fm = _read_frontmatter(file_path)
-    return fm.get("resource") or fm.get("url") or None
+# ─── 孤立文件 ──────────────────────────────────────────────
 
 
 def check_orphans(indexed_paths: set[str]) -> list[dict]:
-    """检查存在但未被 Index.md 引用的 md 文件。"""
+    """检查 entries/ 下存在但未被索引引用的文件。"""
+    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
+    if not entries_dir.is_dir():
+        return []
+
     orphans = []
-    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.name in ("index.md", "log.md"):
+    for md_file in entries_dir.glob("*.md"):
+        if md_file.name == "index.md":
+            continue
+        if md_file.name.startswith("."):
             continue
         rel = str(md_file.relative_to(KNOWLEDGE_DIR))
         if rel not in indexed_paths:
-            # 尝试读标题
             title = ""
             try:
                 first_lines = md_file.read_text(encoding="utf-8").splitlines()
@@ -140,91 +172,312 @@ def check_orphans(indexed_paths: set[str]) -> list[dict]:
     return orphans
 
 
-def check_duplicates(categories: dict[str, list[dict]]) -> list[dict]:
-    """检查重复条目（基于 URL 或标题相似度）。"""
-    seen_urls: dict[str, list[dict]] = {}
-    seen_titles: dict[str, list[dict]] = {}
+# ─── 重复检测 ──────────────────────────────────────────────
+
+
+def check_duplicates(entries: list[dict]) -> list[dict]:
+    """检查重复条目（基于 resource 或标题相似度）。"""
+    from difflib import SequenceMatcher
+
+    seen_resources: dict[str, list[dict]] = {}
     duplicates = []
 
-    for cat, entries in categories.items():
-        for entry in entries:
-            url = entry.get("url", "")
-            title = entry.get("title", "").lower()
+    for entry in entries:
+        resource = entry.get("resource", "")
+        title = entry.get("title", "").lower()
 
-            # URL 重复
-            if url and url != "local":
-                if url in seen_urls:
-                    duplicates.append({
-                        "type": "url_duplicate",
-                        "url": url,
-                        "entries": seen_urls[url] + [entry],
-                    })
-                else:
-                    seen_urls[url] = [entry]
+        # resource 重复
+        if resource and resource != "manual":
+            if resource in seen_resources:
+                duplicates.append({
+                    "type": "resource_duplicate",
+                    "resource": resource,
+                    "entries": [{"title": e["title"], "path": e["path"]} for e in seen_resources[resource]] + [{"title": entry["title"], "path": entry["path"]}],
+                })
+            else:
+                seen_resources[resource] = [entry]
 
-            # 标题相似（简单包含关系）
-            if title:
-                for existing_title, existing_entries in seen_titles.items():
-                    if title in existing_title or existing_title in title:
-                        if title != existing_title:  # 避免完全相同的
-                            duplicates.append({
-                                "type": "title_similar",
-                                "title1": title,
-                                "title2": existing_title,
-                                "entries": existing_entries + [entry],
-                            })
-                if title not in seen_titles:
-                    seen_titles[title] = [entry]
+    # 标题相似检测
+    for i in range(len(entries)):
+        for j in range(i + 1, len(entries)):
+            a, b = entries[i], entries[j]
+            if not a.get("title") or not b.get("title"):
+                continue
+            sim = SequenceMatcher(None, a["title"].lower(), b["title"].lower()).ratio()
+            if sim > 0.85:
+                duplicates.append({
+                    "type": "title_similar",
+                    "similarity": round(sim, 2),
+                    "entry1": {"title": a["title"], "path": a["path"]},
+                    "entry2": {"title": b["title"], "path": b["path"]},
+                })
 
     return duplicates
 
 
-def check_old_format() -> list[dict]:
-    """检查是否还有旧格式条目（url/imported/category frontmatter）。"""
+# ─── OKF 合规 + 内容质量 ───────────────────────────────────
+
+
+def check_okf_compliance() -> list[dict]:
+    """检查所有条目是否符合 OKF v0.2。"""
+    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
+    if not entries_dir.is_dir():
+        return []
+
     issues = []
-    if not KNOWLEDGE_DIR.exists():
-        return issues
-
-    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.name in ("index.md", "log.md"):
+    for md_file in sorted(entries_dir.glob("*.md")):
+        if md_file.name == "index.md" or md_file.name.startswith("."):
             continue
-        if md_file.name in ("index.md", "log.md", "knowledge-graph.html"):
-            continue
+        rel = str(md_file.relative_to(KNOWLEDGE_DIR))
 
+        okf_result = validate_okf(md_file)
+        if not okf_result["valid"]:
+            for e in okf_result["errors"]:
+                issues.append({"path": rel, "issue": f"okf:{e}"})
+        for w in okf_result.get("warnings", []):
+            issues.append({"path": rel, "issue": f"okf_warn:{w}"})
+
+        # 内容质量
         try:
-            fm = _read_frontmatter(md_file)
-            rel = str(md_file.relative_to(KNOWLEDGE_DIR))
-
-            # 旧格式标志：有 imported 或 category 字段，且没有 type 字段
-            has_old = ("imported" in fm or "category" in fm)
-            has_type = "type" in fm
-            if has_old and not has_type:
-                issues.append({
-                    "path": rel,
-                    "issue": "old_format",
-                    "hint": "运行 km_migrate_to_okf.py --apply 迁移",
-                })
+            content = md_file.read_text(encoding="utf-8")
+            if len(content.strip()) < 200:
+                issues.append({"path": rel, "issue": "content_too_short", "chars": len(content.strip())})
+                continue
+            if "## 摘要" not in content and "## Summary" not in content:
+                issues.append({"path": rel, "issue": "missing_summary"})
+            else:
+                # 检查摘要是否为空（只有标题没有内容）
+                for tag_name in ("摘要", "Summary"):
+                    m = re.search(rf"## {tag_name}\s*\n(.*?)(?:\n##|\Z)", content, re.DOTALL)
+                    if m and len(m.group(1).strip()) < 30:
+                        issues.append({"path": rel, "issue": "empty_summary"})
+                        break
+            if "## 关键要点" not in content and "## Key Points" not in content:
+                issues.append({"path": rel, "issue": "missing_key_points"})
+            else:
+                for tag_name in ("关键要点", "Key Points"):
+                    m = re.search(rf"## {tag_name}\s*\n(.*?)(?:\n##|\Z)", content, re.DOTALL)
+                    if m and m.group(1).strip().count("- ") < 2:
+                        issues.append({"path": rel, "issue": "empty_key_points"})
+                        break
         except Exception:
             pass
 
     return issues
 
 
+# ─── PDF 配对检查 ──────────────────────────────────────────
+
+
+def check_pdf_entry_pairing() -> list[dict]:
+    """检查 PDF 与知识条目的配对关系。
+
+    1. res/ 下 PDF 缺少对应 entries/ 条目 → 警告
+    2. entries/ 中 source_type=pdf 但 resource 指向的 PDF 不存在 → 警告
+    """
+    issues = []
+
+    res_dir = KNOWLEDGE_DIR / RES_DIR_NAME
+    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
+
+    # 收集所有 source_type=pdf 的条目及其 resource 引用
+    pdf_resources: set[str] = set()
+    if entries_dir.is_dir():
+        for md_file in entries_dir.glob("*.md"):
+            if md_file.name == "index.md" or md_file.name.startswith("."):
+                continue
+            fm = _read_frontmatter(md_file)
+            if fm.get("source_type") == "pdf":
+                resource = fm.get("resource", "")
+                pdf_resources.add(resource)
+
+    # 检查 res/ 下的 PDF 是否都有对应条目
+    if res_dir.is_dir():
+        for pdf_file in sorted(res_dir.rglob("*.pdf")):
+            if pdf_file.name.startswith("."):
+                continue
+            rel = str(pdf_file.relative_to(KNOWLEDGE_DIR))
+            # 检查是否有 entry 引用了此 PDF 或其所在目录
+            parent_dir = str(pdf_file.parent.relative_to(KNOWLEDGE_DIR)) + "/"
+            found = any(
+                rel in r or parent_dir in r
+                for r in pdf_resources
+            )
+            if not found:
+                issues.append({
+                    "path": rel,
+                    "issue": "pdf_no_entry",
+                    "hint": f"PDF 缺少对应的知识条目，运行 /km_import --pdf --target --folder {pdf_file.parent.name}",
+                })
+
+    # 检查 source_type=pdf 的条目 resource 是否指向存在的 PDF
+    if entries_dir.is_dir():
+        for md_file in entries_dir.glob("*.md"):
+            if md_file.name == "index.md" or md_file.name.startswith("."):
+                continue
+            fm = _read_frontmatter(md_file)
+            if fm.get("source_type") != "pdf":
+                continue
+            resource = fm.get("resource", "")
+            rel = str(md_file.relative_to(KNOWLEDGE_DIR))
+            resource_clean = resource.rstrip("/")
+            if resource_clean.startswith("res/"):
+                target_dir = KNOWLEDGE_DIR / resource.rstrip("/")
+                if not target_dir.is_dir() or not any(target_dir.rglob("*.pdf")):
+                    issues.append({
+                        "path": rel,
+                        "issue": "pdf_resource_missing",
+                        "resource": resource,
+                        "hint": "resource 指向的 PDF 目录不存在或为空",
+                    })
+
+    return issues
+
+
+# ─── 标签治理 ──────────────────────────────────────────────
+
+
+def check_tag_governance() -> list[dict]:
+    """检测标签质量问题：相似标签、低频标签、格式不规范。"""
+    from difflib import SequenceMatcher
+    from knowledge import get_all_tags
+
+    tag_counts = get_all_tags(KNOWLEDGE_DIR)
+    if not tag_counts:
+        return []
+
+    issues = []
+    tags = list(tag_counts.keys())
+
+    # 相似标签检测
+    for i in range(len(tags)):
+        for j in range(i + 1, len(tags)):
+            sim = SequenceMatcher(None, tags[i].lower(), tags[j].lower()).ratio()
+            if sim > 0.8 and sim < 1.0:
+                issues.append({
+                    "issue": "similar_tags",
+                    "tag1": tags[i],
+                    "tag2": tags[j],
+                    "similarity": round(sim, 2),
+                    "count1": tag_counts[tags[i]],
+                    "count2": tag_counts[tags[j]],
+                    "hint": "考虑合并或区分这两个标签",
+                })
+
+    # 低频标签（仅使用1次）
+    for tag, count in tag_counts.items():
+        if count == 1:
+            issues.append({
+                "issue": "low_frequency_tag",
+                "tag": tag,
+                "hint": "该标签仅使用1次，考虑合并到更通用的标签",
+            })
+
+    return issues
+
+
+# ─── 时效预警 ──────────────────────────────────────────────
+
+
+def check_stale_entries() -> list[dict]:
+    """标记超过 183 天的 stale 条目。"""
+    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
+    if not entries_dir.is_dir():
+        return []
+
+    today = date.today()
+    cutoff = today - timedelta(days=183)
+    stale = []
+
+    for md_file in sorted(entries_dir.glob("*.md")):
+        if md_file.name == "index.md" or md_file.name.startswith("."):
+            continue
+        fm = _read_frontmatter(md_file)
+        ts = fm.get("timestamp", "")
+        if not ts:
+            continue
+        try:
+            ts_date = date.fromisoformat(ts[:10])
+        except ValueError:
+            continue
+        if ts_date < cutoff:
+            rel = str(md_file.relative_to(KNOWLEDGE_DIR))
+            days_ago = (today - ts_date).days
+            stale.append({
+                "path": rel,
+                "title": fm.get("title", ""),
+                "timestamp": ts[:10],
+                "days_ago": days_ago,
+                "issue": "stale_entry",
+                "hint": f"该条目已 {days_ago} 天未更新，可能已过时",
+            })
+
+    return stale
+
+
+# ─── 交叉引用密度 ──────────────────────────────────────────
+
+
+def check_cross_reference_density() -> list[dict]:
+    """检测孤立节点（0 交叉引用）。"""
+    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
+    if not entries_dir.is_dir():
+        return []
+
+    LINK_RE = re.compile(r"\]\(([^)]+)\)")
+    isolated = []
+
+    for md_file in sorted(entries_dir.glob("*.md")):
+        if md_file.name == "index.md" or md_file.name.startswith("."):
+            continue
+        try:
+            text = md_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        # 统计出链
+        out_links = 0
+        for m in LINK_RE.finditer(text):
+            target = m.group(1)
+            if "://" in target or target.startswith("#"):
+                continue
+            if target.endswith(".md"):
+                out_links += 1
+
+        fm = _read_frontmatter(md_file)
+        rel = str(md_file.relative_to(KNOWLEDGE_DIR))
+
+        if out_links == 0:
+            isolated.append({
+                "path": rel,
+                "title": fm.get("title", ""),
+                "issue": "no_cross_references",
+                "hint": "该条目没有任何交叉引用，搜索召回率可能偏低",
+            })
+
+    return isolated
+
+
+# ─── 图谱过期 ──────────────────────────────────────────────
+
+
 def check_graph_staleness() -> list[dict]:
-    """检查知识图谱是否过期（比最新条目旧）。"""
+    """检查知识图谱是否过期。"""
     graph_file = KNOWLEDGE_DIR / "knowledge-graph.html"
     if not graph_file.exists():
         return [{"path": "knowledge-graph.html", "issue": "graph_missing", "hint": "运行 km_visualize.py"}]
 
     graph_mtime = graph_file.stat().st_mtime
     stale = []
-    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.name in ("index.md", "log.md"):
-            continue
-        if md_file.name in ("index.md", "log.md"):
-            continue
-        if md_file.stat().st_mtime > graph_mtime:
-            stale.append(str(md_file.relative_to(KNOWLEDGE_DIR)))
+    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
+    if entries_dir.is_dir():
+        for md_file in entries_dir.glob("*.md"):
+            if md_file.name == "index.md":
+                continue
+            if md_file.name.startswith("."):
+                continue
+            if md_file.stat().st_mtime > graph_mtime:
+                stale.append(str(md_file.relative_to(KNOWLEDGE_DIR)))
 
     if stale:
         return [{
@@ -236,151 +489,160 @@ def check_graph_staleness() -> list[dict]:
     return []
 
 
-def check_content_quality() -> list[dict]:
-    """检查内容质量问题（空文件、过短内容、OKF 合规性等）。"""
-    issues = []
-    if not KNOWLEDGE_DIR.exists():
-        return issues
-
-    # 旧格式检测
-    issues.extend(check_old_format())
-
-    for md_file in KNOWLEDGE_DIR.rglob("*.md"):
-        if md_file.name in ("index.md", "log.md"):
-            continue
-        if md_file.name in ("index.md", "log.md"):
-            continue
-
-        try:
-            content = md_file.read_text(encoding="utf-8")
-            rel = str(md_file.relative_to(KNOWLEDGE_DIR))
-
-            # OKF 合规检查
-            okf_result = validate_okf(md_file)
-            if not okf_result["valid"]:
-                for e in okf_result["errors"]:
-                    issues.append({"path": rel, "issue": f"okf:{e}"})
-            for w in okf_result.get("warnings", []):
-                issues.append({"path": rel, "issue": f"okf_warn:{w}"})
-
-            # 检查空内容
-            if len(content.strip()) < 200:
-                issues.append({"path": rel, "issue": "content_too_short", "chars": len(content.strip())})
-                continue
-
-            # 检查缺少关键章节
-            if "## 摘要" not in content and "## Summary" not in content:
-                issues.append({"path": rel, "issue": "missing_summary"})
-
-            if "## 关键要点" not in content and "## Key Points" not in content:
-                issues.append({"path": rel, "issue": "missing_key_points"})
-
-        except Exception:
-            pass
-
-    return issues
+# ─── 主检查函数 ────────────────────────────────────────────
 
 
 def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) -> dict:
     """执行完整 lint 检查。"""
     if not KNOWLEDGE_DIR.exists():
         return {
-            "dead_links": [],
-            "dead_urls": [],
-            "missing_urls": [],
-            "orphans": [],
-            "duplicates": [],
-            "quality_issues": [],
             "total_entries": 0,
             "total_issues": 1,
             "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
         }
 
-    categories, indexed_paths = parse_index(KNOWLEDGE_DIR)
-    total = sum(len(e) for e in categories.values())
+    entries, indexed_paths = parse_index(KNOWLEDGE_DIR)
 
-    dead_links = check_dead_links(categories)
-    dead_urls, missing_urls = check_urls(categories, skip=skip_url_check)
+    dead_links = check_dead_links(entries)
+    dead_urls, missing_urls = check_urls(entries, skip=skip_url_check)
     orphans = check_orphans(indexed_paths)
 
     duplicates = []
     if check_duplicates_flag:
-        duplicates = check_duplicates(categories)
+        duplicates = check_duplicates(entries)
 
-    quality_issues = check_content_quality()
-    path_issues = validate_bundle_paths(KNOWLEDGE_DIR)
+    okf_issues = check_okf_compliance()
+    pdf_pairing = check_pdf_entry_pairing()
+    tag_issues = check_tag_governance()
+    stale_entries = check_stale_entries()
+    isolated_entries = check_cross_reference_density()
     graph_issues = check_graph_staleness()
     cross_refs = find_cross_references(KNOWLEDGE_DIR)
 
     total_issues = (
         len(dead_links) + len(dead_urls) + len(missing_urls) +
-        len(orphans) + len(duplicates) + len(quality_issues) +
-        len(path_issues) + len(graph_issues)
+        len(orphans) + len(duplicates) + len(okf_issues) +
+        len(pdf_pairing) + len(tag_issues) + len(stale_entries) +
+        len(isolated_entries) + len(graph_issues)
     )
 
     return {
+        "total_entries": len(entries),
+        "total_issues": total_issues,
+        "summary": {
+            "okf_errors": len(okf_issues),
+            "dead_links": len(dead_links),
+            "orphans": len(orphans),
+            "empty_summary": sum(1 for i in okf_issues if i.get("issue") == "empty_summary"),
+            "empty_key_points": sum(1 for i in okf_issues if i.get("issue") == "empty_key_points"),
+            "missing_summary": sum(1 for i in okf_issues if i.get("issue") == "missing_summary"),
+            "missing_key_points": sum(1 for i in okf_issues if i.get("issue") == "missing_key_points"),
+            "content_too_short": sum(1 for i in okf_issues if i.get("issue") == "content_too_short"),
+            "no_cross_refs": len(isolated_entries),
+            "stale": len(stale_entries),
+            "pdf_no_entry": len([i for i in pdf_pairing if i.get("issue") == "pdf_no_entry"]),
+        },
         "dead_links": dead_links,
         "dead_urls": dead_urls,
         "missing_urls": missing_urls,
         "orphans": orphans,
         "duplicates": duplicates,
-        "quality_issues": quality_issues,
-        "path_issues": path_issues,
+        "okf_compliance": okf_issues,
+        "pdf_pairing": pdf_pairing,
+        "tag_governance": tag_issues,
+        "stale_entries": stale_entries,
+        "isolated_entries": isolated_entries,
         "graph_issues": graph_issues,
         "cross_references": cross_refs,
-        "total_entries": total,
-        "total_issues": total_issues,
     }
 
 
+# ─── 修复函数 ──────────────────────────────────────────────
+
+
+def build_pdf_pending_plan(knowledge_dir: Path, pdf_pairing: list[dict]) -> list[dict]:
+    """构建待导入 PDF 清单，供 LLM 驱动批量 /km_import res。
+
+    输出格式包含足够信息，LLM 可直接按 target 分组后逐个调用
+    km_import.py res --file <path> --target <folder> 完成导入。
+    """
+    pending = []
+    for item in pdf_pairing:
+        if item.get("issue") != "pdf_no_entry":
+            continue
+        path = item["path"]  # e.g., res/ASML/xxx.pdf
+        pdf_path = knowledge_dir / path
+        if not pdf_path.exists():
+            continue
+        pending.append({
+            "path": path,
+            "target": pdf_path.parent.name,
+            "filename": pdf_path.name,
+            "size_bytes": pdf_path.stat().st_size,
+        })
+    # 按 target 分组
+    grouped = {}
+    for p in pending:
+        grouped.setdefault(p["target"], []).append(p)
+    # 返回分组后的清单，每组含该 target 的全部待导入 PDF
+    result = []
+    for target, items in sorted(grouped.items()):
+        result.append({
+            "target": target,
+            "count": len(items),
+            "files": [{"path": i["path"], "filename": i["filename"]} for i in items],
+        })
+    return result
+
+
 def fix_dead_links(dead_links: list[dict]) -> list[dict]:
-    """自动修复死链：从各分类的 index.md 中移除引用不存在的条目。"""
+    """自动修复死链：从 entries/index.md 中移除引用不存在的条目。"""
     fixed = []
     for item in dead_links:
-        path = item["path"]
-        title = item["title"]
-        for idx_file in KNOWLEDGE_DIR.rglob("index.md"):
-            content = idx_file.read_text(encoding="utf-8")
-            if path not in content:
+        path = item.get("source", item.get("path", ""))
+        title = item.get("title", "")
+        idx_file = KNOWLEDGE_DIR / ENTRIES_DIR / "index.md"
+        if not idx_file.exists():
+            continue
+        content = idx_file.read_text(encoding="utf-8")
+        if path not in content:
+            continue
+        new_lines = []
+        for line in content.splitlines():
+            if path in line and title and title in line:
                 continue
-            new_lines = []
-            for line in content.splitlines():
-                if path in line and f"[{title}]" in line:
-                    continue
-                new_lines.append(line)
-            idx_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-            fixed.append({"path": path, "title": title, "action": "removed_from_index"})
+            new_lines.append(line)
+        idx_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        fixed.append({"path": path, "title": title, "action": "removed_from_index"})
     return fixed
 
 
 def fix_orphans(orphans: list[dict]) -> list[dict]:
-    """自动修复孤立文件：将未被索引引用的文件加入对应分类的 index.md。"""
+    """自动修复孤立文件：将未被索引引用的文件加入 entries/index.md。"""
     fixed = []
+    idx_file = KNOWLEDGE_DIR / ENTRIES_DIR / "index.md"
+    idx_file.parent.mkdir(parents=True, exist_ok=True)
+
+    existing_content = idx_file.read_text(encoding="utf-8") if idx_file.exists() else ""
+
     for item in orphans:
         path = item["path"]
         title = item["title"]
-        category = path.split("/")[0] if "/" in path else "_unsorted"
-        cat_dir = KNOWLEDGE_DIR / category
-        cat_dir.mkdir(parents=True, exist_ok=True)
-        idx_file = cat_dir / "index.md"
-
-        if idx_file.exists():
-            content = idx_file.read_text(encoding="utf-8")
-            if path in content:
-                continue
+        if path in existing_content:
+            continue
 
         try:
             with open(idx_file, "a", encoding="utf-8") as f:
-                f.write(f"- [{title}]({path}) — local\n")
+                f.write(f"- [{title}]({path}) — \n")
         except (OSError, PermissionError) as e:
             print(f"Warning: cannot write to index {idx_file}: {e}", file=sys.stderr)
             continue
-        fixed.append({"path": path, "title": title, "action": "added_to_index", "category": category})
+        fixed.append({"path": path, "title": title, "action": "added_to_index"})
     return fixed
 
 
 def fix_missing_urls(missing_urls: list[dict]) -> list[dict]:
-    """自动修复缺失 URL：在 frontmatter 中添加 url: null 标记。"""
+    """自动修复缺失 resource：标记 source_type=note, resource=manual。"""
     fixed = []
     for item in missing_urls:
         path = item["path"]
@@ -388,66 +650,68 @@ def fix_missing_urls(missing_urls: list[dict]) -> list[dict]:
         if not file_path.exists():
             continue
         content = file_path.read_text(encoding="utf-8")
-        if "url:" in content:
+        if "resource:" in content:
             continue
-        # 在 frontmatter 中插入 url: null
         if content.startswith("---"):
             parts = content.split("---", 2)
             if len(parts) >= 3:
                 fm = parts[1].strip()
                 body = parts[2]
-                new_fm = fm + "\nurl: null"
+                new_fm = fm + "\nresource: manual\nsource_type: note"
                 new_content = f"---\n{new_fm}\n---{body}"
                 file_path.write_text(new_content, encoding="utf-8")
-                fixed.append({"path": path, "action": "added_url_null"})
+                fixed.append({"path": path, "action": "added_resource_and_source_type"})
     return fixed
 
 
-def _write_cross_references(refs: list[dict], top_n: int = 5) -> list[dict]:
-    """将 Top-N 交叉关联写入 markdown 文件。
-
-    在正文末尾添加或更新「## 关联」节，避免重复写入已存在的关联。
-    返回 [{source, target, score, action}, ...]
-    """
+def _write_cross_references(refs: list[dict], top_n: int = 20) -> list[dict]:
+    """将 Top-N 交叉关联双向写入 markdown 文件（A→B 同时 B→A）。"""
     applied = []
+    seen = set()
     for ref in refs[:top_n]:
         src_path = KNOWLEDGE_DIR / ref["source"]
         tgt_path = KNOWLEDGE_DIR / ref["target"]
         if not src_path.exists() or not tgt_path.exists():
             continue
 
-        try:
-            text = src_path.read_text(encoding="utf-8")
-        except Exception:
-            continue
+        # 双向：src → tgt
+        for direction in [(src_path, tgt_path, ref['target_title'], ref['target']),
+                          (tgt_path, src_path, ref['source_title'], ref['source'])]:
+            writer, target, link_title, link_path = direction
+            key = (str(writer.relative_to(KNOWLEDGE_DIR)), link_path)
+            if key in seen:
+                continue
+            seen.add(key)
 
-        # 检查是否已有该关联
-        link_md = f"[{ref['target_title']}]({ref['target']})"
-        if link_md in text:
-            continue
+            try:
+                text = writer.read_text(encoding="utf-8")
+            except Exception:
+                continue
 
-        # 在正文末尾追加关联
-        if "## 关联" not in text:
-            text = text.rstrip() + f"\n\n## 关联\n- {link_md}\n"
-        else:
-            # 追加到已有关联节
-            text = text.rstrip() + f"\n- {link_md}\n"
+            link_md = f"[{link_title}]({link_path})"
+            if link_md in text:
+                continue
 
-        src_path.write_text(text, encoding="utf-8")
-        applied.append({
-            "source": ref["source"],
-            "target": ref["target"],
-            "score": ref["score"],
-            "action": "linked",
+            if "## 关联" not in text:
+                text = text.rstrip() + f"\n\n## 关联\n- {link_md} — {ref.get('reason', '自动关联')}\n"
+            else:
+                text = text.rstrip() + f"\n- {link_md} — {ref.get('reason', '自动关联')}\n"
+
+            writer.write_text(text, encoding="utf-8")
+            applied.append({
+                "source": str(writer.relative_to(KNOWLEDGE_DIR)),
+                "target": link_path,
+                "score": ref["score"],
+                "action": "linked",
         })
 
     return applied
 
 
 def main():
-    parser = argparse.ArgumentParser(description="知识库完整性检查（含交叉关联发现）")
+    parser = argparse.ArgumentParser(description="知识库完整性检查 (OKF v0.2)")
     parser.add_argument("--skip-url-check", action="store_true", help="跳过 URL 可达性检查")
-    parser.add_argument("--fix", action="store_true", help="自动修复发现的问题（死链、孤立文件、缺失 URL）")
+    parser.add_argument("--fix", action="store_true", help="自动修复发现的问题")
     parser.add_argument("--check-duplicates", action="store_true", help="检查重复条目")
     args = parser.parse_args()
 
@@ -455,22 +719,44 @@ def main():
 
     if args.fix:
         fix_actions = {}
-        if result["dead_links"]:
+        if result.get("dead_links"):
             fix_actions["dead_links_fixed"] = fix_dead_links(result["dead_links"])
-        if result["orphans"]:
+        if result.get("orphans"):
             fix_actions["orphans_fixed"] = fix_orphans(result["orphans"])
-        if result["missing_urls"]:
+        if result.get("missing_urls"):
             fix_actions["missing_urls_fixed"] = fix_missing_urls(result["missing_urls"])
 
-        # 重建所有 index.md（修死链+孤立后）
-        index_result = regenerate_indexes(KNOWLEDGE_DIR)
-        fix_actions["indexes_rebuilt"] = index_result
+        # PDF 导入计划 — 不自动导入，但生成结构化清单供 LLM 驱动
+        pdf_pairing = result.get("pdf_pairing", [])
+        pdf_pending = build_pdf_pending_plan(KNOWLEDGE_DIR, pdf_pairing)
+        if pdf_pending:
+            fix_actions["pdf_pending"] = pdf_pending
+
+        # 重建索引 + 标签索引
+        index_result = regenerate_index(KNOWLEDGE_DIR)
+        fix_actions["index_rebuilt"] = index_result
+        tag_index_result = regenerate_tag_indexes(KNOWLEDGE_DIR)
+        fix_actions["tag_indexes_rebuilt"] = tag_index_result
 
         # 自动建立交叉关联
-        cross_refs = find_cross_references(KNOWLEDGE_DIR)
+        cross_refs = result.get("cross_references", [])
         linked = _write_cross_references(cross_refs)
         if linked:
             fix_actions["cross_references_added"] = linked
+
+        # 重建图谱
+        try:
+            from km_visualize import cmd_visualize
+            graph_result = cmd_visualize()
+            fix_actions["graph_rebuilt"] = graph_result
+        except Exception:
+            pass
+
+        # git push
+        if fix_actions and is_repo(KNOWLEDGE_DIR):
+            push_result = _git_sync(KNOWLEDGE_DIR, "chore: lint --fix 自动修复")
+            fix_actions["git_push"] = {"success": push_result["success"],
+                                       "message": push_result.get("files_changed", "") or push_result.get("error", "")}
 
         # 重新 lint 确认修复结果
         if fix_actions:

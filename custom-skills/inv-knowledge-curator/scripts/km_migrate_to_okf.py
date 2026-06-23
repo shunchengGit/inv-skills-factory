@@ -1,29 +1,36 @@
 #!/usr/bin/env python3
-"""将旧格式知识条目批量迁移为 OKF v0.1 格式。
+"""将旧格式知识条目批量迁移为 OKF v0.2 格式。
 
-旧格式:
+旧格式 (v0.1):
   ---
   url: https://...
   imported: 2026-05-27
   category: investing
   ---
 
-OKF v0.1:
+OKF v0.2:
   ---
   type: Article
   title: xxx
   description: xxx
   timestamp: 2026-05-27T00:00:00+08:00
   resource: https://...
+  source_type: url
   ---
 
+v0.1 -> v0.2 变更:
+  - resource 从推荐升级为必需
+  - 新增 source_type 字段 (url/pdf/note)
+  - 条目路径从 investing/*.md -> entries/*.md
+
 用法:
-  python3 km_migrate_to_okf.py           # 预览变更（dry-run）
+  python3 km_migrate_to_okf.py           # 预览变更 (dry-run)
   python3 km_migrate_to_okf.py --apply   # 执行迁移
 """
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from datetime import datetime, timezone, timedelta
@@ -31,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from knowledge import validate_okf, now_iso
+from knowledge import validate_okf, now_iso, ENTRIES_DIR
 
 _DEFAULT_KNOWLEDGE_DIR = Path.home() / ".inv-knowledge"
 
@@ -48,7 +55,7 @@ FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 
 
 def parse_old_frontmatter(text: str) -> tuple[dict, str]:
-    """解析旧格式 frontmatter，返回 (fm_dict, body_text)。"""
+    """Parse old format frontmatter, return (fm_dict, body_text)."""
     m = FRONTMATTER_RE.match(text)
     if not m:
         return {}, text
@@ -62,37 +69,33 @@ def parse_old_frontmatter(text: str) -> tuple[dict, str]:
 
 
 def extract_title(body: str, file_path: Path) -> str:
-    """从正文提取标题。"""
+    """Extract title from body text."""
     for line in body.splitlines():
         stripped = line.strip()
         if stripped.startswith("# "):
             title = stripped[2:].strip()
             if title:
                 return title
-    # fallback: 文件名
     return file_path.stem
 
 
 def extract_description(body: str, title: str) -> str:
-    """从正文第一段提取描述。"""
+    """Extract description from first paragraph."""
     lines = body.splitlines()
     skip_headers = True
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
-        # 跳过头、摘要标记、HTML 注释
         if stripped.startswith("#") or stripped.startswith("<!--"):
             continue
-        if stripped.startswith("## 摘要"):
+        if stripped.startswith("##"):
             skip_headers = False
             continue
         if skip_headers and stripped.startswith("##"):
             continue
-        # 跳过列表、引用、链接
         if stripped.startswith(("- ", "* ", "[", "|", ">", "```")):
             continue
-        # 清理 markdown 标记
         desc = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", stripped)
         desc = re.sub(r"\*\*([^*]+)\*\*", r"\1", desc)
         desc = re.sub(r"`([^`]+)`", r"\1", desc)
@@ -104,7 +107,7 @@ def extract_description(body: str, title: str) -> str:
 
 
 def migrate_file(file_path: Path, dry_run: bool = True) -> dict:
-    """迁移单个文件。"""
+    """Migrate a single file to OKF v0.2."""
     rel = str(file_path.relative_to(KNOWLEDGE_DIR))
     try:
         text = file_path.read_text(encoding="utf-8")
@@ -113,14 +116,20 @@ def migrate_file(file_path: Path, dry_run: bool = True) -> dict:
 
     old_fm, body = parse_old_frontmatter(text)
 
-    # 检查是否已是 OKF 格式
+    # Already OKF v0.2?
+    if "type" in old_fm and "timestamp" in old_fm and "source_type" in old_fm:
+        return {"path": rel, "status": "skip", "reason": "已是 OKF v0.2 格式"}
+
+    # Already OKF v0.1 (needs source_type added)?
     if "type" in old_fm and "timestamp" in old_fm:
-        return {"path": rel, "status": "skip", "reason": "已是 OKF 格式"}
+        is_v01 = True
+    else:
+        is_v01 = False
 
     title = extract_title(body, file_path)
     description = extract_description(body, title)
 
-    # 时间戳
+    # Timestamp
     imported = old_fm.get("imported", "")
     if imported:
         try:
@@ -129,22 +138,36 @@ def migrate_file(file_path: Path, dry_run: bool = True) -> dict:
         except ValueError:
             timestamp = now_iso()
     else:
-        timestamp = now_iso()
+        timestamp = old_fm.get("timestamp", "") or now_iso()
 
-    # 构建 OKF frontmatter
-    resource = old_fm.get("url", "")
+    # Build OKF v0.2 frontmatter
+    resource = old_fm.get("url") or old_fm.get("resource", "")
+
+    # Infer source_type
+    if "source_type" in old_fm:
+        source_type = old_fm["source_type"]
+    elif resource.startswith("http"):
+        source_type = "url"
+    elif "pdf" in resource.lower() or "report" in resource.lower():
+        source_type = "pdf"
+    else:
+        source_type = "note"
+
     tags = old_fm.get("tags", "")
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
 
     lines = [
         "---",
-        f"type: Article",
+        f"type: {old_fm.get('type', 'Article')}",
         f"title: {title}",
         f"description: {description}",
         f"timestamp: {timestamp}",
     ]
     if resource:
         lines.append(f"resource: {resource}")
+    else:
+        lines.append("resource: manual")
+    lines.append(f"source_type: {source_type}")
     if tag_list:
         lines.append(f"tags: [{', '.join(tag_list)}]")
     lines.append("---")
@@ -154,9 +177,8 @@ def migrate_file(file_path: Path, dry_run: bool = True) -> dict:
     if not dry_run:
         file_path.write_text(new_text, encoding="utf-8")
 
-    # 验证
+    # Validate
     if dry_run:
-        # 临时写文件验证
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as f:
             f.write(new_text)
@@ -180,9 +202,9 @@ def main():
     dry_run = "--apply" not in sys.argv
 
     if dry_run:
-        print("🔍 DRY-RUN 模式（预览变更，不实际写入）\n")
+        print("DRY-RUN 模式 (预览变更，不实际写入)\n")
     else:
-        print("⚠️  MIGRATE 模式（将实际写入文件）\n")
+        print("MIGRATE 模式 (将实际写入文件)\n")
         print("   按 Ctrl+C 取消...")
         try:
             import time
@@ -192,30 +214,37 @@ def main():
             return
 
     results = []
-    for md_file in sorted(KNOWLEDGE_DIR.rglob("*.md")):
-        if md_file.parent.name == "index":
-            continue
-        if md_file.name in ("index.md", "log.md", "README.md"):
-            continue
-        if md_file.suffix == ".bak":
-            continue
+    # Scan both entries/ and old category directories
+    scan_dirs = [KNOWLEDGE_DIR / ENTRIES_DIR]
+    for d in sorted(KNOWLEDGE_DIR.iterdir()):
+        if d.is_dir() and d.name not in (ENTRIES_DIR, "res", "index", "reports") and not d.name.startswith("."):
+            scan_dirs.append(d)
 
-        r = migrate_file(md_file, dry_run=dry_run)
-        icon = {"preview": "🔍", "migrated": "✅", "skip": "⏭️", "error": "❌"}.get(r["status"], "?")
-        title = r.get("title", "")[:40]
-        desc = r.get("description", "")[:50]
-        print(f"  {icon} {r['status']:8s} | {title:<40s} | {desc}")
-        results.append(r)
+    for scan_dir in scan_dirs:
+        if not scan_dir.is_dir():
+            continue
+        for md_file in sorted(scan_dir.glob("*.md")):
+            if md_file.name in ("index.md", "log.md", "README.md"):
+                continue
+            if md_file.suffix == ".bak":
+                continue
+
+            r = migrate_file(md_file, dry_run=dry_run)
+            icon = {"preview": "preview", "migrated": "migrated", "skip": "skip", "error": "error"}.get(r["status"], "?")
+            title = r.get("title", "")[:40]
+            desc = r.get("description", "")[:50]
+            print(f"  {icon:8s} | {title:<40s} | {desc}")
+            results.append(r)
 
     migrated = sum(1 for r in results if r["status"] in ("preview", "migrated"))
     skipped = sum(1 for r in results if r["status"] == "skip")
     errors = sum(1 for r in results if r["status"] == "error")
     invalid = sum(1 for r in results if r["status"] in ("preview", "migrated") and not r["valid"])
 
-    print(f"\n{'─' * 60}")
+    print(f"\n{'=' * 60}")
     print(f"总计: {len(results)} | 需迁移: {migrated} | 已是OKF: {skipped} | 错误: {errors}")
     if invalid:
-        print(f"⚠  {invalid} 个条目迁移后 OKF 校验不通过")
+        print(f"WARNING: {invalid} 个条目迁移后 OKF 校验不通过")
     if dry_run:
         print(f"\n确认无误后运行: python3 km_migrate_to_okf.py --apply")
 

@@ -47,7 +47,7 @@
 from pathlib import Path
 import re
 
-base = Path.home() / ".inv-report"
+base = Path.home() / ".inv-knowledge" / "res"
 subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
 
 folder_counts = {}
@@ -108,7 +108,7 @@ from pathlib import Path
 import re
 from datetime import datetime
 
-base = Path.home() / ".inv-report"
+base = Path.home() / ".inv-knowledge" / "res"
 subdirs = sorted([d for d in base.iterdir() if d.is_dir() and not d.name.startswith('.')])
 
 # 提取每个 PDF 的日期前缀

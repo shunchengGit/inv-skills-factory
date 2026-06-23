@@ -35,9 +35,7 @@ cp .env.example .env
 | 变量 | 默认值 | 用途 |
 |------|--------|------|
 | `INV_KNOWLEDGE_REPO_URL` | `git@github.com:shunchengGit/inv-knowledge.git` | 知识库远程仓库 |
-| `INV_REPORT_REPO_URL` | `git@github.com:shunchengGit/inv-report.git` | 研报库远程仓库 |
 | `INV_KNOWLEDGE_ROOT` | `~/.inv-knowledge` | 知识库本地目录 |
-| `RESEARCH_PDF_ROOT` | `~/.inv-report` | 研报库本地目录 |
 | `DEPLOY_SKILLS_DIR` | `inv-skills` | 部署目标子目录名 |
 
 **交互规则**：对每个变量，如果用户已填写（非空、非注释），跳过。如果未填写，询问用户是否使用默认值或输入自定义值。不要一次性列出所有变量让用户填——逐个引导，逐个确认。
@@ -79,7 +77,7 @@ python3 .claude/skills/project-init/scripts/init_report.py
 ✅ 初始化完成
   .env:         已配置 (5/5 变量)
   知识库:       ~/.inv-knowledge (XX 个条目)
-  研报库:       ~/.inv-report (XX 个文件夹)
+  研报库（res/）: ~/.inv-knowledge/res (XX 个文件夹)
   SSH:          OK
 ```
 
