@@ -633,8 +633,7 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>知识图谱</title>
-<script src="https://cdn.bootcdn.net/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"
-  onerror="this.onerror=null;this.src='https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js'"></script>
+<script>__CYTOSCAPE_JS__</script>
 <style>__CSS__</style>
 </head>
 <body>
@@ -697,6 +696,40 @@ _HTML = r"""<!DOCTYPE html>
 </html>"""
 
 
+
+_cytoscape_js_cache = None
+
+
+def _get_cytoscape_js():
+    """获取 Cytoscape.js（优先本地缓存，再从 CDN 下载）。"""
+    global _cytoscape_js_cache
+    if _cytoscape_js_cache:
+        return _cytoscape_js_cache
+
+    cache_path = Path("/tmp/cytoscape-3.28.1.min.js")
+    cdn_urls = [
+        "https://cdn.bootcdn.net/ajax/libs/cytoscape/3.28.1/cytoscape.min.js",
+        "https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js",
+    ]
+
+    if cache_path.exists():
+        _cytoscape_js_cache = cache_path.read_text(encoding="utf-8")
+        return _cytoscape_js_cache
+
+    import urllib.request
+    for url in cdn_urls:
+        try:
+            js = urllib.request.urlopen(url, timeout=15).read().decode("utf-8")
+            cache_path.write_text(js, encoding="utf-8")
+            _cytoscape_js_cache = js
+            print(f"# Cytoscape.js 已下载并缓存 ({len(js)} bytes)", file=sys.stderr)
+            return js
+        except Exception:
+            continue
+
+    return "console.warn('Cytoscape.js 加载失败，图谱不可用');var cytoscape=null;"
+
+
 def generate_html(graph: dict, output_path: Path) -> None:
     """生成自包含 HTML。"""
     node_count = len(graph["nodes"])
@@ -706,9 +739,12 @@ def generate_html(graph: dict, output_path: Path) -> None:
     stats = graph.get("stats", {})
     orphans = stats.get("orphans", 0)
 
+    cytoscape_js = _get_cytoscape_js()
+
     html = (
         _HTML
         .replace("__CSS__", _CSS)
+        .replace("__CYTOSCAPE_JS__", cytoscape_js)
         .replace("__JS__", _JS)
         .replace("__DATA__", json.dumps(graph, ensure_ascii=False))
         .replace("__NODES__", str(node_count))
