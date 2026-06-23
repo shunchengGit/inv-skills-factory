@@ -633,8 +633,8 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>知识图谱</title>
-<script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"
-  onerror="this.onerror=null;this.src='https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js'"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"
+  onerror="this.onerror=null;this.src='https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js'"></script>
 <style>__CSS__</style>
 </head>
 <body>
