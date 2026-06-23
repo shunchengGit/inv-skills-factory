@@ -366,16 +366,7 @@ hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 _JS = r"""
 const B = window.BUNDLE;
 const connected = B.edges.length > 0;
-const HAS_CYTOSCAPE = typeof cytoscape !== "undefined";
 document.title = `知识图谱 — ${B.nodes.length} 节点`;
-
-console.log('HAS_CYTOSCAPE:', HAS_CYTOSCAPE, 'nodes:', B.nodes.length, 'edges:', B.edges.length);
-
-if (!HAS_CYTOSCAPE) {
-  document.getElementById("graph").innerHTML =
-    '<div class="graph-hint"><b>⚠ Cytoscape.js 未加载</b><br><span style="font-size:12px">请切换到列表视图</span></div>';
-  document.querySelector('[data-view="table"]').click();
-}
 
 // ── Indexes ──
 const nodeIdx = {}; B.nodes.forEach(n => nodeIdx[n.data.id] = n.data);
@@ -417,8 +408,8 @@ types.forEach(t => {
 const layoutSelect = document.getElementById("layout");
 if (!connected) layoutSelect.value = "grid";
 
-// cytoscape 不可用时提供空壳对象
-const cy = HAS_CYTOSCAPE ? cytoscape({
+// ── Cytoscape 初始化
+var cy = cytoscape({
   container: document.getElementById("graph"),
   elements: [...B.nodes, ...B.edges],
   style: [
@@ -435,14 +426,10 @@ const cy = HAS_CYTOSCAPE ? cytoscape({
   ],
   layout: { name: connected?"cose":"grid", animate:true, padding:30, ...(connected?{}:{rows:Math.ceil(Math.sqrt(B.nodes.length))}) },
   wheelSensitivity: .2,
-});
+});;
 
-cy.on("tap","node",evt=>showDetail(evt.target.id()));
+	cy.on("tap","node",evt=>showDetail(evt.target.id()));
 cy.on("tap",evt=>{if(evt.target===cy)clearSelection()});
-}) : { // cytoscape 降级
-  on(){}, elements(){return{unselect(){}}}, getElementById(){},
-  nodes(){return{filter:()=>({length:0})}}, fit(){}, animate(){}, layout(){run(){}}, batch(fn){fn()}, zoom(){return 1}
-};
 
 // ── Search ──
 let searchQ = "";
@@ -452,7 +439,7 @@ document.getElementById("search").addEventListener("input",e=>{
 });
 
 // ── Layout ──
-if (HAS_CYTOSCAPE) {
+
 document.getElementById("layout").addEventListener("change",e=>{
   const name = e.target.value;
   const opts = { name, animate:true, padding:30 };
@@ -477,7 +464,6 @@ document.querySelectorAll(".view-toggle button").forEach(btn=>{
 
 // ── Filters ──
 function applyFilters(){
-  if (!HAS_CYTOSCAPE) return;
   cy.batch(()=>{
     cy.nodes().forEach(n=>{
       const d = n.data();
