@@ -22,7 +22,7 @@ custom-skills/                  # 技能源码（扁平结构）
   inv-topic-researcher/         #   投资主题研究
   inv-hk-ipo-analysis/          #   港股IPO打新分析
   inv-portfolio-tracker/        #   持仓管理
-  inv-knowledge-curator/        #   知识库 + 研报/资源管理（v3：3进3出1底座）
+  inv-knowledge-curator/        #   知识库 + 研报/资源管理（v3：km_import/km_search/km_lint/km_graph）
 
 .claude/skills/                 # harness 技能（非业务）
   skill-creator/                #   创建/优化技能
