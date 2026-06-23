@@ -623,8 +623,13 @@ function renderMD(text) {
   return html;
 }
 
-// Auto-init
-if (B.nodes.length) showDetail(B.nodes[0].data.id);
+// Auto-init: 等布局完成后再显示，避免节点还在(0,0)位置看起来像白屏
+if (B.nodes.length) {
+  let inited = false;
+  cy.one('layoutstop', () => { if (!inited) { inited = true; showDetail(B.nodes[0].data.id); } });
+  // 兜底：3秒后还没完成布局也强制显示
+  setTimeout(() => { if (!inited) { inited = true; showDetail(B.nodes[0].data.id); cy.fit(); } }, 3000);
+}
 """
 
 _HTML = r"""<!DOCTYPE html>
