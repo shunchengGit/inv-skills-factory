@@ -9,7 +9,7 @@ trigger:
   - 采集并整理
   - research
 dependencies:
-  - inv-research-analyzer
+  - inv-knowledge-curator
   - inv-portfolio-tracker
 ---
 
@@ -30,7 +30,7 @@ dependencies:
 
 ```
 ┌─ 第 0 层：本地已有 ──────────────────────────────────────┐
-│  inv-research-analyzer（券商研报 PDF）                     │
+│  inv-knowledge-curator（券商研报 PDF）                     │
 │  知识库 km_search（知识库已有条目，外部工具）                │
 │  能回答：卖方怎么看？我们之前收集了什么？                    │
 ├─ 第 1 层：一手源 ─────────────────────────────────────────┤

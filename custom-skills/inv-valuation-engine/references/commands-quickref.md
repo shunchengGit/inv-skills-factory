@@ -1,6 +1,6 @@
 # 估值脚本快速命令参考
 
-路径中 `{baseDir}` = 本技能目录，`{stockDir}` = `{baseDir}/../inv-stock-data`，`{researchDir}` = `{baseDir}/../inv-research-analyzer`。
+路径中 `{baseDir}` = 本技能目录，`{stockDir}` = `{baseDir}/../inv-stock-data`，`{researchDir}` = `{baseDir}/../inv-knowledge-curator`。
 
 ```bash
 # ===== 代理设置说明 =====

@@ -19,11 +19,10 @@ custom-skills/                  # 技能源码（扁平结构）
   inv-valuation-engine/         #   估值引擎
   inv-qarp-strategy/            #   操作决策
   inv-porter-five-forces/       #   五力分析
-  inv-research-analyzer/        #   研报分析
   inv-topic-researcher/         #   投资主题研究
   inv-hk-ipo-analysis/          #   港股IPO打新分析
   inv-portfolio-tracker/        #   持仓管理
-  inv-knowledge-curator/        #   个人知识管理
+  inv-knowledge-curator/        #   知识库 + 研报/资源管理（v3：3进3出1底座）
 
 .claude/skills/                 # harness 技能（非业务）
   skill-creator/                #   创建/优化技能
@@ -40,19 +39,22 @@ openspec/                       # OpenSpec 变更管理
 ## 技能依赖关系
 
 ```
-inv-stock-data（数据层）────────────────────────────┐
-  ↑                                                │
+inv-knowledge-curator（知识库 + 研报管理）──────────┐
+  ↑  提供 /km_search, /km_import, /km_lint         │
   ├── inv-valuation-engine（估值引擎）              │
   │     ↑                                          │
   │     └── inv-qarp-strategy（操作决策）           │
+  ├── inv-topic-researcher（信息采集框架）          │
+  ├── inv-qarp-strategy（操作决策）                 │
+  └── inv-stock-data（数据层）                     │
+
+inv-stock-data（数据层）────────────────────────────┐
+  ├── inv-valuation-engine（估值引擎）              │
   ├── inv-porter-five-forces（五力分析）            │
   └── inv-portfolio-tracker（持仓管理）             │
 
 inv-topic-researcher（信息采集框架）─┐
-  ├── inv-research-analyzer（本地研报）
   └── inv-portfolio-tracker（持仓管理）
-
-inv-knowledge-curator（知识库，独立）
 ```
 
 ## 技术栈
@@ -80,9 +82,11 @@ python3 .claude/skills/skill-linter/scripts/lint_skills.py
 
 | 变量 | 用途 | 默认值 |
 |------|------|--------|
-| `INV_KNOWLEDGE_REPO_URL` | inv-knowledge-curator 远程仓库 | `git@github.com:shunchengGit/inv-knowledge.git` |
-| `INV_KNOWLEDGE_ROOT` | 知识库本地根目录 | `~/.inv-knowledge` |
+| `INV_KNOWLEDGE_REPO_URL` | 知识库 Git 远程仓库（研报/资源均在此） | `git@github.com:shunchengGit/inv-knowledge.git` |
+| `INV_KNOWLEDGE_ROOT` | 知识库本地目录 | `~/.inv-knowledge` |
 | `DEPLOY_SKILLS_DIR` | 部署目标子目录名 | `inv-skills` |
+
+> `INV_REPORT_REPO_URL` 和 `RESEARCH_PDF_ROOT` 已删除。研报库已合并到知识库的 `res/` 目录。
 
 ## 新建 Skill
 
@@ -96,3 +100,4 @@ touch custom-skills/<prefix>-<name>/SKILL.md
 - 技能命名必须遵循 `{前缀}-{语义名}` 格式
 - `_shared/` 中的模块供所有技能复用，不要放业务逻辑
 - harness 技能（`.claude/skills/`）与业务技能（`custom-skills/`）隔离
+- 其他技能引用知识库能力时用 `/km_search` `/km_import` 等命令，不硬编码脚本路径

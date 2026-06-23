@@ -27,7 +27,7 @@ triggers:
 
 ### 第一步：读取招股书PDF
 
-IPO prospectus 提取复用 `inv-research-analyzer` 的 PyMuPDF venv 模式。详见 `references/hk-ipo-prospectus-extraction-patterns.md`，包含关键词地图、定向提取、全文搜索三种模式的完整代码。
+IPO prospectus 提取复用 `inv-knowledge-curator` 的 PyMuPDF venv 模式。详见 `references/hk-ipo-prospectus-extraction-patterns.md`，包含关键词地图、定向提取、全文搜索三种模式的完整代码。
 
 ### 第二步：提取关键信息
 

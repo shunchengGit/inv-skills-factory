@@ -105,4 +105,4 @@
 ## 关联
 
 - 本文件为 `inv-stock-data` 技能的参考资料，在使用 `snapshot` / `financial` 子命令后必须过此校验。
-- 其他投资技能（`inv-valuation-engine`、`inv-research-analyzer` 等）在引用 inv-stock-data 数据时也应遵循此清单。
+- 其他投资技能（`inv-valuation-engine`、`inv-knowledge-curator` 等）在引用 inv-stock-data 数据时也应遵循此清单。

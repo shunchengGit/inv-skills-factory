@@ -29,7 +29,7 @@
 
 增量信息获取优先级：
 1. yfinance info + financials + history（已覆盖 90% 需求）
-2. 本地券商研报 PDF（inv-research-analyzer）
+2. 本地券商研报 PDF（inv-knowledge-curator）
 3. Agent WebFetch / browser_navigate 直抓特定页面（仅当上述不够时）
 4. web_search（最后手段，预期低效）
 

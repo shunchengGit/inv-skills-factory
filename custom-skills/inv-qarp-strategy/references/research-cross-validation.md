@@ -39,5 +39,5 @@
 ## 无本地研报时的降级路径
 
 当 `~/.inv-knowledge/res/Index.md` 无匹配时，按以下优先级降级：
-1. **Web 降级**：按 `inv-research-analyzer` 的 `references/web-fallback-for-non-a-share.md` 执行（Yahoo Finance 分析师数据、搜狗微信搜索、Brave Search）
+1. **Web 降级**：按 `inv-knowledge-curator` 的 `references/web-fallback-for-non-a-share.md` 执行（Yahoo Finance 分析师数据、搜狗微信搜索、Brave Search）
 2. **标注信息缺口**：在输出模板的"卖方研报摘要"中明确标注"无本地研报，已走 Web 降级 / 无可用研报"，并说明对分析完整性的影响
