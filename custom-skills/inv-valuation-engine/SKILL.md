@@ -35,7 +35,7 @@ commands:
 5. 脚本返回后，先检查 `data_gaps`，明确缺口和置信度影响。
 6. 定量判断只按 `references/scoring-rules.md` 执行，定性解释再用 `references/master-frameworks.md`。
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点。
-8. **查阅知识库**（`inv-knowledge-curator`）：通过 `/km_search` 查找该标的相关条目，LLM 自行判断哪些资料可用（Article/Reference/Analysis/Synthesis/pdf）。若有原始 PDF 资源，可通过 `/km_import res` 提取原文。定量结论仍以 `scoring-rules.md` 为准。
+8. **查阅知识库**（`inv-knowledge-curator`）：通过 L2 深度探索查找该标的相关条目——多角度搜索、跟随 cross_refs、按类型（Reference 优先）分层读取。LLM 自行判断哪些资料可用（Article/Reference/Analysis/Synthesis/pdf）。若有原始 PDF 资源，可通过 `/km_import res` 提取原文。定量结论仍以 `scoring-rules.md` 为准。
 
 ## 数据源说明（新增）
 - 所有数据统一通过 `inv-stock-data` CLI 获取，不直接调用 yfinance/AkShare。
@@ -106,12 +106,12 @@ commands:
 
 ## 执行流程
 1. 确认标的类型和适用估值口径。
-2. **查阅知识库**：`/km_search` 查该标的相关条目，LLM 自行判断哪些资料可用（可与下一步并行）。
+2. **查阅知识库（L2 深度探索）**：按 `inv-knowledge-curator` 的 [深度挖掘协议](#) L2 标准执行——多角度搜索（标的/估值/风险 ≥3 个角度）→ 跟随 cross_refs ≥1 层 → 标签导航收尾。**必须先完成深度搜索，不可跳过或与下一步并行。** Reference 类条目优先读取（作为数据锚点），Analysis/Synthesis 次之（定性校验）。若知识库无记录，按 4.5 格式输出知识缺口。
 3. 优先用 `cs_stock_all` 一次获取全量数据（snapshot + financial + financials），避免多次跨进程调用触发限流。然后标注数据时点。
 4. 检查关键数据是否齐全；缺失、过旧或无法更新时先列出缺口。
 5. 按公司类型选择框架，不强行套用全部方法。
 6. 读取 `references/scoring-rules.md` 对照阈值完成定量判断。
-7. 结合 `references/master-frameworks.md` 做定性校验，解释应享有溢价或折价的原因；**与知识库中已有分析交叉验证**（若有）。
+7. 结合 `references/master-frameworks.md` 做定性校验，解释应享有溢价或折价的原因；**与知识库中已有分析交叉验证**：逐一对照评分结论与知识库条目中的判断，标注共识/分歧。特别注意：若知识库中多份研报的盈利预测/估值假设与自建假设差异 >5pp，必须分析根源并说明采用理由。
 8. 输出五档结论、关键假设、风险条件、数据时点和操作参考。
 
 ## 多源数据整合分析框架（四层验证法）
@@ -121,7 +121,7 @@ commands:
 | 层级 | 回答的问题 | 数据来源 | 作用 |
 |------|------------|---------|------|
 | **数据层** | 事实是什么 | 实时行情（Yahoo Finance/inv-stock-data）+ 财务快照 | 锚定事实，确定估值锚点 |
-| **知识层** | 已有资料怎么说 | inv-knowledge-curator（/km_search） | 校验假设，发现共识与分歧 |
+| **知识层** | 已有资料怎么说 | inv-knowledge-curator（L2 深度探索：多角度搜索 → cross_refs 跟随 ≥1层 → 按 Reference/Analysis/Synthesis 分层读取） | 校验假设，发现共识与分歧；输出知识覆盖度矩阵 |
 | **竞争层** | 护城河有多深 | Porter五力 / 行业数据 | 验证长期竞争优势是否结构性 |
 | **操作层** | 具体怎么做 | 前三层结论 + 位置/波动判断 | 落到价格区间、仓位、打脸条件 |
 

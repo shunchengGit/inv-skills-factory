@@ -148,7 +148,7 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 
 - **数据层统一**：本技能是所有投资相关技能的**唯一数据层**。`inv-valuation-engine`、`inv-qarp-strategy`、`inv-porter-five-forces` 通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。
 - **价值投资估值**：本技能只提供事实数据；五档估值结论请走 `inv-valuation-engine`。
-- **知识库查询**：已有分析/资源请走 **`inv-knowledge-curator`** 的 `/km_search`；本技能提供**行情与财务事实**，交叉验证时以**披露与行情时点**为准。
+- **知识库查询**：已有分析/资源请走 **`inv-knowledge-curator`** 的深度搜索（`/km_search` + cross_refs 遍历 + 标签导航）；本技能提供**行情与财务事实**，交叉验证时以**披露与行情时点**为准。深度交叉验证建议：用知识库 cross_refs 链发现关联条目，双向追踪"谁引用了这条数据"。
 - **Yahoo 子命令大全**（期权、评级、search 等）：可用 Python `yfinance` 直接调用，详见 `references/yfinance-advanced-usage.md`。
 - **Yahoo Finance Web 降级方案**：当所有 yfinance API 端点均失败时，用 Agent WebFetch 抓取 Yahoo Finance 网页获取价格/PE/52周范围等数据，详见 `references/yahoo-browser-fallback.md`。
 - **QQ Finance 实时行情降级方案**：当 AkShare 东财源因代理失败、新浪返回空时，用 QQ Finance API（`qt.gtimg.cn`）获取 A 股/港股盘中实时价格，详见 `references/qq-finance-realtime-api.md`。
