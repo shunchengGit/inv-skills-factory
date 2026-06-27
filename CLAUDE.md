@@ -22,7 +22,7 @@ custom-skills/                  # 技能源码（扁平结构）
   inv-topic-researcher/         #   投资主题研究
   inv-hk-ipo-analysis/          #   港股IPO打新分析
   inv-portfolio-tracker/        #   持仓管理
-  inv-knowledge-curator/        #   知识库 + 研报/资源管理（v3：km_import/km_search/km_lint/km_graph）
+  inv-knowledge-curator/        #   知识库 + 研报/资源管理（v3.2：km_import{store/res/read}/km_lint/km_graph；4 脚本，检索/统计交 LLM）
 
 .claude/skills/                 # harness 技能（非业务）
   skill-creator/                #   创建/优化技能
@@ -39,17 +39,19 @@ openspec/                       # OpenSpec 变更管理
 ## 技能依赖关系
 
 ```
-inv-knowledge-curator（知识库 + 研报管理）──────────┐
-  ↑  提供 /km_search, /km_import, /km_lint         │
+inv-knowledge-curator（知识库 + 研报管理，v3.2）────┐
+  ↑  提供 /km_search, /km_import, /km_lint, /km_graph, km_import read │
+  │  脚本只管确定性 IO；检索/统计/关联/综合交 LLM                    │
+  │  下游读原始研报走 km_import read（只读，无副作用）              │
   ├── inv-valuation-engine（估值引擎）              │
   │     ↑                                          │
-  │     └── inv-qarp-strategy（操作决策）           │
-  ├── inv-topic-researcher（信息采集框架）          │
-  ├── inv-qarp-strategy（操作决策）                 │
+  │     └── inv-qarp-strategy（操作决策，深度+原始研报读取）│
+  ├── inv-topic-researcher（信息采集框架，深度集成）│
+  ├── inv-qarp-strategy（操作决策，深度+原始研报读取）│
   └── inv-porter-five-forces（五力分析，只读）      │
 
 
-inv-stock-data（数据层）────────────────────────────┐
+inv-stock-data（数据层，纯数据源不依赖知识库）──────┐
   ├── inv-valuation-engine（估值引擎）              │
   ├── inv-porter-five-forces（五力分析）            │
   └── inv-portfolio-tracker（持仓管理）             │
@@ -57,6 +59,8 @@ inv-stock-data（数据层）─────────────────
 inv-topic-researcher（信息采集框架）─┐
   └── inv-portfolio-tracker（持仓管理）
 ```
+
+> **知识库只读约定**：除 inv-knowledge-curator 自身外，下游技能对知识库均为**只读**（`/km_search` + `km_import read`），不调用 `/km_import` 写入。研判入库由知识库主流程统一负责，避免多入口污染。inv-qarp-strategy 是知识库最重消费方（L2 深度搜索 + 原始研报回溯流入三道闸门/买入必答）。
 
 ## 技术栈
 
@@ -102,3 +106,5 @@ touch custom-skills/<prefix>-<name>/SKILL.md
 - `_shared/` 中的模块供所有技能复用，不要放业务逻辑
 - harness 技能（`.claude/skills/`）与业务技能（`custom-skills/`）隔离
 - 其他技能引用知识库能力时用 `/km_search` `/km_import` 等命令，不硬编码脚本路径
+- **知识库只读约定**：下游技能对知识库只读（`/km_search` 检索 + `km_import read` 读原始研报 PDF），不调用 `/km_import store/res` 写入。研判入库由知识库主流程统一负责
+- `km_import read --file <res/下PDF路径> --pages edges` 是读原始研报的唯一只读入口（无 git push/索引重建副作用）；`km_import res` 是导入（有副作用），勿混用
