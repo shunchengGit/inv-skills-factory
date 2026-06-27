@@ -2,12 +2,11 @@
 name: inv-knowledge-curator
 description: AI投资知识库：3进3出1底座，OKF v0.2。脚本管确定性IO，检索/关联/综合交LLM。用于知识管理、资源分析时
 version: 3.2.0
-trigger: [知识管理, 收藏文章, 笔记整理, 研报分析, 券商研报, 研报提取, 财报分析, 资源入库, km_init, km_import, km_search, km_stats, km_lint, km_graph]
+trigger: [知识管理, 收藏文章, 笔记整理, 研报分析, 券商研报, 研报提取, 财报分析, 资源入库, km_init, km_import, km_search, km_lint, km_graph]
 commands:
   - /km_init - 初始化知识库（LLM 流程：bash git clone + 建目录）
   - /km_import - 导入：丢链接(LLM用firecrawl抓取→总结→入库) / 丢资源文件(归档→提取→总结→入库) / 记笔记
   - /km_search - 搜（LLM 流程：读 index.md + grep entries + 跟随链接）
-  - /km_stats - 统计（LLM 流程：读 index.md 口算）
   - /km_lint - 健康度检查与修复（脚本）
   - /km_graph - 知识图谱（脚本）
 ---
@@ -388,9 +387,9 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 **已交 LLM 的能力**（无脚本）：
 - 初始化 `/km_init` → LLM bash `git clone` + `mkdir`
 - 搜索 `/km_search` → LLM 读 `entries/index.md` + `grep entries/*.md`
-- 统计 `/km_stats` → LLM 读 index 口算
 - 关联发现 → LLM 导入时手动建（不再用确定性词袋规则自动补）
 - 综合 `/合` → LLM inline 聚合
+- 统计概览 → 不再单独设命令；用户问起时 LLM 读 `entries/index.md` 口算，或跑 `/km_lint`（其 summary 含条目数/type分布/stale 等统计）
 
 ---
 
