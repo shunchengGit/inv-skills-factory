@@ -38,7 +38,7 @@ commands:
 
 ## 一、估值框架（五档结论）
 
-估值定量框架（公司类型识别、定量阈值、结论生成规则）以 `inv-valuation-engine` 的 `references/scoring-rules.md` 为权威标准，本技能只补充 QARP 特有的约束。
+估值定量框架（公司类型识别、定量阈值、结论生成规则）以 `inv-valuation-engine/references/scoring-rules.md` 为权威标准，本技能只补充 QARP 特有的约束。
 
 ### 1.1 QARP 安全边际要求
 
@@ -154,7 +154,7 @@ commands:
 
 ### 9.1 对新标的：三阶段
 
-**阶段一（并行）**：A. `valuation_snapshot.py <代码> --output json` + B. 按 `inv-knowledge-curator` 深度挖掘协议 L2 标准深度搜索知识库（见其 `references/deep-mining-protocol.md`）——多角度搜索（标的/估值/风险/行业 ≥3 个角度）→ 跟随条目 `## 关联` 链 ≥1 层 → 标签导航收尾 → **原始资源回溯**。搜索结果须按 `references/research-cross-validation.md` 的映射表结构化输出：共识观点（行业/TAM/竞争）→ 第一道闸门；财务趋势→ 第二道闸门；盈利预测区间→ 估值纪律 3.3；核心风险/隐含假设→ 买入必答。若知识库无记录，按 4.5 格式输出知识缺口。
+**阶段一（并行）**：A. `valuation_snapshot.py <代码> --output json` + B. 按 `inv-knowledge-curator` 深度挖掘协议 L2 标准深度搜索知识库（见 `inv-knowledge-curator/references/deep-mining-protocol.md`）——多角度搜索（标的/估值/风险/行业 ≥3 个角度）→ 跟随条目 `## 关联` 链 ≥1 层 → 标签导航收尾 → **原始资源回溯**。搜索结果须按 `references/research-cross-validation.md` 的映射表结构化输出：共识观点（行业/TAM/竞争）→ 第一道闸门；财务趋势→ 第二道闸门；盈利预测区间→ 估值纪律 3.3；核心风险/隐含假设→ 买入必答。若知识库无记录，按 4.5 格式输出知识缺口。
 
 **原始资源回溯触发条件**（L2 第 6 步）：当条目摘要缺量化数据（如毛利率驱动分解、关税敏感度测算）、需验证具体数字、或缺风险段落措辞时，读条目 frontmatter `resource` 字段 → `km_import.py read --file {resource} --pages edges` 回溯 res/ 原始研报首尾页。`read` 为只读子命令，无副作用。
 
@@ -184,10 +184,10 @@ commands:
 
 ## 参考文件
 
-- `inv-valuation-engine` 的 `references/scoring-rules.md`：定量阈值、行业口径、五档结论映射（权威标准）
-- `inv-valuation-engine` 的 `references/master-frameworks.md`：大师框架的适用范围、判断逻辑和注意事项
-- `inv-valuation-engine` 的 `references/internet-platform-valuation.md`：互联网平台公司 GAAP 净利润失真、Normalized 利润计算、SOTP 分部估值
-- `inv-valuation-engine` 的 `references/us-hk-data-workaround.md`：美股/港股 data_gaps 手动补全流程
+- `inv-valuation-engine/references/scoring-rules.md`：定量阈值、行业口径、五档结论映射（权威标准）
+- `inv-valuation-engine/references/master-frameworks.md`：大师框架的适用范围、判断逻辑和注意事项
+- `inv-valuation-engine/references/internet-platform-valuation.md`：互联网平台公司 GAAP 净利润失真、Normalized 利润计算、SOTP 分部估值
+- `inv-valuation-engine/references/us-hk-data-workaround.md`：美股/港股 data_gaps 手动补全流程
 - `inv-valuation-engine` 的 `scripts/valuation_snapshot.py`：估值快照
 - `inv-valuation-engine` 的 `scripts/valuation_report.py`：五档估值报告
 - `inv-valuation-engine` 的 `scripts/valuation_compare.py`：多股比较
