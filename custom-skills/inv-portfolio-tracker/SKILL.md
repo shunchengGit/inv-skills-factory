@@ -3,7 +3,7 @@ name: inv-portfolio-tracker
 description: 管理投资组合持仓主数据，更新持仓/现金，支持 T1-T4 自动化日报/周报流程。用于跟踪持仓变化、生成投资组合报告时
 category: invest
 tags: [portfolio, holdings, tracking, daily-report, cron]
-version: 1.2.0
+version: 1.3.0
 trigger:
   - 持仓管理
   - 投资组合
@@ -14,36 +14,36 @@ trigger:
 
 # Portfolio Tracker
 
-## Purpose
+## 用途
 
-Manage the user's investment portfolio master data and understand the automated daily/weekly reporting workflow.
+管理用户投资组合持仓主数据，理解自动化日报/周报流程。
 
-## When to Load This Skill
+## 何时加载本技能
 
-**Load this skill FIRST when the user asks to:**
-- Update portfolio holdings / 更新持仓 / 更新仓位
-- Change share counts / 调整股数 / 增减持
-- Update cash balances / 更新现金 / 现金变动
-- Add or remove stocks from portfolio / 新增或删除标的
-- Review portfolio constraints / 检查纪律 / 检查仓位
+**用户要求以下操作时优先加载本技能：**
+- 更新持仓 / 更新仓位
+- 调整股数 / 增减持
+- 更新现金 / 现金变动
+- 新增或删除标的
+- 检查纪律 / 检查仓位
 
-**Always load `inv-stock-data` alongside this skill for price fetching.**
-- Portfolio updates require current prices → use `inv-stock-data` snapshot
-- Do NOT attempt to update PORTFOLIO.md without loading this skill first
+**必须同时加载 `inv-stock-data` 获取行情：**
+- 持仓更新需要现价 → 用 `inv-stock-data snapshot`
+- 不要在未加载本技能前更新 PORTFOLIO.md
 
-## Master Data Source
+## 主数据源
 
-- **File**: `~/.hermes/memories/PORTFOLIO.md`
-- **Role**: Single source of truth for all holdings, share counts, cash balances, and 仓位%
-- **Do NOT** maintain portfolio data elsewhere without updating this file
-- **Always read this file first** before answering portfolio-related questions
+- **文件**：`~/.hermes/memories/PORTFOLIO.md`
+- **定位**：所有持仓、股数、现金、仓位% 的唯一真实来源
+- 不要在他处维护持仓数据而不更新此文件
+- 回答持仓相关问题前**先读此文件**
 
-## File Structure
+## 文件结构
 
-- `当前持仓`: Table with columns — 标的, 代码, 市场, 板块, 股数, 价格, 币种, 市值(万CNY), 仓位, PE, 52w位, 核心风险, 备注
-- `调仓记录`: Chronological log of all trades and cash movements
-- `纪律检查`: Portfolio constraint checks (single stock limit, cash ≥2%, sector ≤40%). **Constraint values are user-defined in USER.md — always read latest USER.md rather than hardcoding limits here.**
-- `数据缺口说明`: Known data gaps and workarounds
+- `当前持仓`：表格，列 — 标的, 代码, 市场, 板块, 股数, 价格, 币种, 市值(万CNY), 仓位, PE, 52w位, 核心风险, 备注
+- `调仓记录`：所有交易和现金变动的时序日志
+- `纪律检查`：组合约束检查（单只上限、现金 ≥2%、行业 ≤40%）。**约束值由 USER.md 定义——始终读最新 USER.md，不在此硬编码限额**
+- `数据缺口说明`：已知数据缺口与应对
 
 ## 输出持仓概览格式（给用户看时必须遵守）
 
@@ -59,82 +59,85 @@ Manage the user's investment portfolio master data and understand the automated 
 - 备注列可精简（涨跌幅 + 风险标记，如 "🔴透支""🟡高位"）
 - 表格下方跟 纪律检查 + 关键关注，用简洁的关键点列出
 
-## Automated Reporting Workflow (T1–T4)
+## 自动化报告流程（T1–T4）
 
-Defined in `~/.hermes/memories/CRONTASK.md`:
+定义在 `~/.hermes/memories/CRONTASK.md`：
 
-| Task | Time | Cron | Output |
+| Task | 时间 | Cron | 输出 |
 |------|------|------|--------|
 | T1 持仓晨报 | 工作日 08:30 | `30 8 * * 1-5` | 当日 `YYYY-MM-DD.md` + 飞书 |
 | T2 日常回顾 | 每日 22:30 | `30 22 * * *` | 当日 `YYYY-MM-DD.md` + 飞书 |
 | T3 周中回顾 | 周三 21:00 | `0 21 * * 3` | 当日主记录 + 飞书 |
 | T4 周复盘 | 周日 21:00 | `0 21 * * 0` | `YYYY-MM-DD-weekly-review.md` + 飞书 |
 
-- **Skill used**: `inv-stock-data` (snapshot/price/PE data) + `inv-portfolio-tracker` (portfolio structure & workflow)
-- **Key rule**: All `inv-stock-data snapshot` calls must be parallel via `&` and `wait`
-- **Delivery**: Via cron delivery to Feishu; do NOT manually call message/send
+- **使用技能**：`inv-stock-data`（snapshot/price/PE）+ `inv-portfolio-tracker`（组合结构与流程）
+- **关键规则**：所有 `inv-stock-data snapshot` 调用必须用 `&` 并行 + `wait`
+- **投递**：经 cron 投递到飞书；不要手动调 message/send
 
-## Updating Portfolio Data
+## 行情刷新流程（无调仓）
 
-When the user reports a cash change or trade:
+当用户说"更新持仓/行情"且无调仓时，直接运行内置脚本：
 
-1. **Load `inv-stock-data`** for current prices (if price-dependent)
-2. **Read** `PORTFOLIO.md` first
-3. **Calculate all changes in one code block** — compute every holding's new 市值, 仓位%, total assets, cash%, sector concentrations. This avoids cascading rounding errors from incremental patches.
-   - **CRITICAL**: Before calculating, verify cash amounts with the user if there's ANY ambiguity. Cash errors propagate to ALL position percentages.
-4. **Apply all patches in sequence**: holdings table → cash → 调仓记录 → 纪律检查 → QARP check → 数据缺口
-5. **Re-read the file** after patching to catch duplicates or formatting breaks (especially `||` from table row mismatches)
-6. **Add QARP check entry** for any new stock (买入理由/逻辑检查/打脸条件/估值检查/结论)
+```bash
+python3 {baseDir}/scripts/qq_update_portfolio.py --write
+```
 
-### Table Row Patching Rules (CRITICAL)
+纯 QQ Finance 方案，~0.4秒完成，覆盖 A股/港股/美股/ETF。脚本自动完成：拉取行情 → 计算市值/仓位/行业集中度 → 更新 PORTFOLIO.md 的「当前持仓」「纪律检查」「数据缺口说明」三个 section。
 
-When updating the holdings table via `patch`:
-- **Start with `| `** (pipe + space) — NOT `||`
-- **End with ` |`** (space + pipe)
-- **Verify after EVERY patch**: Re-read the file and visually confirm no `||` patterns exist
-- **Example of CORRECT replacement**:
+字段索引详见 `references/qq-finance-batch-update.md`。
+
+## 调仓更新流程（有买卖/现金变动）
+
+用户报告 trade（买/卖）或现金变动时（含多笔同时变更）：
+
+1. **加载 `inv-stock-data`** 获取现价（涉及价格时）
+2. **读 `PORTFOLIO.md`** 先于一切
+3. **在一个代码块内算清所有变动** — 计算每只持仓的新市值、仓位%、总资产、现金%、行业集中度。避免增量 patch 导致的级联取整误差
+   - **关键**：计算前若有任何歧义，先与用户确认现金金额。现金错误会传播到所有仓位%
+4. **按顺序应用 patch**：持仓表 → 现金 → 调仓记录 → 纪律检查 → QARP check → 数据缺口
+5. **patch 后重读文件**，捕捉重复行或格式破损（尤其是表格行错位产生的 `||`）
+6. **新增 QARP check 条目**（买入理由/逻辑检查/打脸条件/估值检查/结论）
+
+✅ 完成：PORTFOLIO.md 持仓表/现金/调仓记录/纪律检查/QARP check 全部更新，无 `||` 破损、无重复行，现金已与用户确认
+
+### 表格行 patch 规则（关键）
+
+通过 `patch` 更新持仓表时：
+- **以 `| ` 开头**（管道符+空格）— 不是 `||`
+- **以 ` |` 结尾**（空格+管道符）
+- **每次 patch 后验证**：重读文件，目视确认无 `||` 模式
+- **正确示例**：
   ```
   | 微软 | MSFT | US | 软件与服务 | **70** | **$386.66** | USD | **18.32** | **18.3%** | ...
   ```
-- **Example of WRONG replacement** (note the `||` at start):
+- **错误示例**（注意开头的 `||`）：
   ```
   || 微软 | MSFT | US | 软件与服务 | **70** | **$386.66** | USD | **18.32** | **18.3%** | ...
   ```
+- **重复行清理**：若 `patch` 替换的文本与另一行（尤其现金行）重叠，旧行可能残留，必须重读清理
 
-### Cash-only changes
+### 纯现金变动
 
-Adding cash without changing stock positions **dilutes all stock 仓位% proportionally**. Recalculate every position's percentage against the new total asset base.
+不加仓只加现金会**按比例稀释所有持仓仓位%**。按新的总资产基数重算每个仓位。
 
-### Cash verification protocol
+### 现金核对协议
 
-Cash is the single most error-prone field in portfolio updates. A miscalculation here cascades through **all** downstream numbers (total assets, every position's 仓位%, industry concentrations, discipline checks).
+现金是持仓更新中最易错的字段。此处算错会级联到**所有**下游数字（总资产、每个仓位%、行业集中度、纪律检查）。
 
-**When user reports cash changes:**
-1. **Explicitly confirm EACH currency amount** — do NOT infer from prior records or assume you understand shorthand like "38,500+6,800" means 45,300 total.
-2. **Repeat back the confirmed amounts** before calculating: "确认：港币现金 45,300 HKD，人民币现金 20,000 CNY，对吗？"
-3. **Only then** compute total cash in CNY and recalculate all 仓位%
-4. **Verify the math**: total_cash = (hkd_amount * hkd_cny_rate) + rmb_amount. Round to 2 decimal places.
+**用户报告现金变动时：**
+1. **逐币种显式确认金额** — 不要从历史记录推断，不要假设 "38,500+6,800" 表示合计 45,300
+2. **计算前复述确认金额**："确认：港币现金 45,300 HKD，人民币现金 20,000 CNY，对吗？"
+3. **确认后再**算 CNY 总现金并重算所有仓位%
+4. **验证算式**：total_cash = (hkd_amount * hkd_cny_rate) + rmb_amount，保留 2 位小数
 
-**Common cash error patterns to avoid:**
-- Misreading "A+B" as a single number (e.g., 38,500+6,800 → mistakenly using 83,800)
-- Forgetting to convert HKD to CNY before adding to RMB cash
-- Using stale cash figures from prior sessions when user has already made changes
+**常见现金错误模式：**
+- 把 "A+B" 误读为单数字（如 38,500+6,800 → 误用 83,800）
+- 忘记把 HKD 转 CNY 就加到 RMB 现金
+- 用历史会话的旧现金数（用户已变更）
 
-## Batch Update Workflow (Multiple Changes at Once)
+### 计算模板（代码块）
 
-When the user reports multiple changes simultaneously (e.g., new stock + share increase + cash changes):
-
-1. **Read** `PORTFOLIO.md` first
-2. **Fetch prices** for any new/changed tickers via `inv-stock-data`
-3. **Calculate all changes in one code block** — compute every holding's new 市值, 仓位%, total assets, cash%, sector concentrations. This avoids cascading rounding errors from incremental patches.
-   - **CRITICAL**: Before calculating, verify cash amounts with the user if there's ANY ambiguity. Cash errors propagate to ALL position percentages.
-4. **Apply all patches in sequence**: holdings table → cash → 调仓记录 → 纪律检查 → QARP check → 数据缺口
-5. **Re-read the file** after patching to catch duplicates or formatting breaks (especially `||` from table row mismatches)
-6. **Add QARP check entry** for any new stock (买入理由/逻辑检查/打脸条件/估值检查/结论)
-
-### Key Calculations (Code Block Pattern)
-
-Use `execute_code` with this template:
+用 `execute_code` 按此模板：
 
 ```python
 # 汇率 (from PORTFOLIO.md header)
@@ -169,41 +172,12 @@ auto = sum(auto holdings mv)
 # - 行业 <= 40%
 ```
 
-### New Stock Entry Template
+### 新增标的模板
 
-When adding a new stock to the holdings table and QARP check:
+向持仓表和 QARP check 添加新标的时：
 
-- Holdings row: fill all columns including PE, 52w位, 核心风险, 备注
-- QARP check: 买入理由 / 逻辑检查 / 打脸条件 / 估值检查 / 组合检查 / 结论
-- If PE > 100x or stock is speculative, mark as 🔴卫星仓位 and set a stop-loss level
-
-## Quick Update Workflow (行情刷新，无调仓)
-
-当用户说"更新持仓/行情"且无调仓时，直接运行内置脚本：
-
-```bash
-python3 ~/.hermes/skills/inv-skills/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
-```
-
-纯 QQ Finance 方案，~0.4秒完成，覆盖 A股/港股/美股/ETF。脚本自动完成：拉取行情 → 计算市值/仓位/行业集中度 → 更新 PORTFOLIO.md 的「当前持仓」「纪律检查」「数据缺口说明」三个 section。
-
-字段索引详见 `references/qq-finance-batch-update.md`。
-
-## Manual Trade Update Workflow (有调仓)
-
-When the user reports a trade (buy/sell) or cash change:
-
-1. **Load `inv-stock-data`** for current prices
-2. **Read** `PORTFOLIO.md`
-3. **Calculate in one code block**: new market values, position weights, total assets, cash%, sector concentrations
-4. **Apply patches in sequence**: holdings table → cash → 调仓记录 → 纪律检查 → QARP check
-5. **Re-read and verify**: Check for `||`, duplicate rows, broken tables
-6. **Update 数据缺口说明** with new price data
-
-### Key Calculations (Code Block Pattern)
-
-Use `execute_code` with this template:
-  - **Replacement verification**: After any table patch, immediately re-read the affected lines and visually confirm no `||` patterns exist.
-  - **Duplicate rows after patch**: If a `patch` replaces text that overlaps with another row (especially the cash row), old rows may persist. Always re-read and clean up duplicates.
+- 持仓行：填满所有列，含 PE、52w位、核心风险、备注
+- QARP check：买入理由 / 逻辑检查 / 打脸条件 / 估值检查 / 组合检查 / 结论
+- 若 PE > 100x 或标的投机性强，标记 🔴卫星仓位 并设止损位
 
 > 更完整的常见错误、字段位置、限流降级等踩坑记录见 `references/common-pitfalls.md`。
