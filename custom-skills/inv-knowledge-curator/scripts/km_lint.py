@@ -35,8 +35,8 @@ from git import sync as _git_sync, is_repo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from knowledge import (
-    parse_index, validate_okf, regenerate_index, find_cross_references,
-    regenerate_tag_indexes, find_backlinks,
+    parse_index, validate_okf, regenerate_index,
+    regenerate_tag_indexes,
     _read_frontmatter, ENTRIES_DIR, RES_DIR_NAME,
 )
 
@@ -517,7 +517,6 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
     stale_entries = check_stale_entries()
     isolated_entries = check_cross_reference_density()
     graph_issues = check_graph_staleness()
-    cross_refs = find_cross_references(KNOWLEDGE_DIR)
 
     total_issues = (
         len(dead_links) + len(dead_urls) + len(missing_urls) +
@@ -553,7 +552,6 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
         "stale_entries": stale_entries,
         "isolated_entries": isolated_entries,
         "graph_issues": graph_issues,
-        "cross_references": cross_refs,
     }
 
 
@@ -664,50 +662,6 @@ def fix_missing_urls(missing_urls: list[dict]) -> list[dict]:
     return fixed
 
 
-def _write_cross_references(refs: list[dict], top_n: int = 20) -> list[dict]:
-    """将 Top-N 交叉关联双向写入 markdown 文件（A→B 同时 B→A）。"""
-    applied = []
-    seen = set()
-    for ref in refs[:top_n]:
-        src_path = KNOWLEDGE_DIR / ref["source"]
-        tgt_path = KNOWLEDGE_DIR / ref["target"]
-        if not src_path.exists() or not tgt_path.exists():
-            continue
-
-        # 双向：src → tgt
-        for direction in [(src_path, tgt_path, ref['target_title'], ref['target']),
-                          (tgt_path, src_path, ref['source_title'], ref['source'])]:
-            writer, target, link_title, link_path = direction
-            key = (str(writer.relative_to(KNOWLEDGE_DIR)), link_path)
-            if key in seen:
-                continue
-            seen.add(key)
-
-            try:
-                text = writer.read_text(encoding="utf-8")
-            except Exception:
-                continue
-
-            link_md = f"[{link_title}]({link_path})"
-            if link_md in text:
-                continue
-
-            if "## 关联" not in text:
-                text = text.rstrip() + f"\n\n## 关联\n- {link_md} — {ref.get('reason', '自动关联')}\n"
-            else:
-                text = text.rstrip() + f"\n- {link_md} — {ref.get('reason', '自动关联')}\n"
-
-            writer.write_text(text, encoding="utf-8")
-            applied.append({
-                "source": str(writer.relative_to(KNOWLEDGE_DIR)),
-                "target": link_path,
-                "score": ref["score"],
-                "action": "linked",
-        })
-
-    return applied
-
-
 def main():
     parser = argparse.ArgumentParser(description="知识库完整性检查 (OKF v0.2)")
     parser.add_argument("--skip-url-check", action="store_true", help="跳过 URL 可达性检查")
@@ -737,12 +691,6 @@ def main():
         fix_actions["index_rebuilt"] = index_result
         tag_index_result = regenerate_tag_indexes(KNOWLEDGE_DIR)
         fix_actions["tag_indexes_rebuilt"] = tag_index_result
-
-        # 自动建立交叉关联
-        cross_refs = result.get("cross_references", [])
-        linked = _write_cross_references(cross_refs)
-        if linked:
-            fix_actions["cross_references_added"] = linked
 
         # 重建图谱
         try:

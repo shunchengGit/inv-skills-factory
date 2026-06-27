@@ -1,23 +1,21 @@
 ---
 name: inv-knowledge-curator
-description: AI投资知识库：3进(链接/资源/笔记) 3出(搜/串/合) 1底座(图谱)。OKF v0.2标记来源。用于知识管理、资源分析时
-version: 3.1.0
-trigger: [知识管理, 收藏文章, 笔记整理, 研报分析, 券商研报, 研报提取, 财报分析, 资源入库, km_init, km_import, km_note, km_search, km_related, km_synthesize, km_stats, km_lint, km_graph]
+description: AI投资知识库：3进3出1底座，OKF v0.2。脚本管确定性IO，检索/关联/综合交LLM。用于知识管理、资源分析时
+version: 3.2.0
+trigger: [知识管理, 收藏文章, 笔记整理, 研报分析, 券商研报, 研报提取, 财报分析, 资源入库, km_init, km_import, km_search, km_stats, km_lint, km_graph]
 commands:
-  - /km_init - 初始化知识库
-  - /km_import - 导入：丢链接(抓取→总结→入库) / 丢资源文件(归档→提取→总结→入库)
-  - /km_note - 记笔记→格式化→入库
-  - /km_search - 搜：关键词/标签/类型过滤
-  - /km_related - 串：关联条目
-  - /km_synthesize - 合：聚合分析
-  - /km_stats - 统计
-  - /km_lint - 健康度检查与修复
-  - /km_graph - 知识图谱
+  - /km_init - 初始化知识库（LLM 流程：bash git clone + 建目录）
+  - /km_import - 导入：丢链接(LLM用firecrawl抓取→总结→入库) / 丢资源文件(归档→提取→总结→入库) / 记笔记
+  - /km_search - 搜（LLM 流程：读 index.md + grep entries + 跟随链接）
+  - /km_stats - 统计（LLM 流程：读 index.md 口算）
+  - /km_lint - 健康度检查与修复（脚本）
+  - /km_graph - 知识图谱（脚本）
 ---
 
-# inv-knowledge-curator v3
+# inv-knowledge-curator v3.2
 
 > **3 进 3 出 1 底座。** 扁平存储，frontmatter + 全文检索，不依赖目录层级。
+> **脚本/LLM 分工**：脚本只做确定性 IO（git/PDF提取/索引重建/图谱生成/合规校验）；检索、统计、关联发现、综合分析全交 LLM（读 `entries/index.md` + `grep entries/*.md` + 跟随 markdown 链接）。
 
 ## 仓库结构
 
@@ -134,53 +132,55 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 - **description** 含具体数据和结论，不可留空或填"XX相关知识的整理"——description 是搜索召回的核心字段
 - 写摘要（3-5句）+ 关键要点（3-7条），不可留空
 - tags 至少包含 1 标的 + 2 分析维度
-- `km_search` 找 ≥2 个已有条目，建交叉关联（每条 ≥2 个，写明相关原因）
-- **交叉引用密度**：导入后每 5-10 条新条目，运行一次 `km_lint --fix --skip-url-check` 自动补全双向链接
-- `km_import.py store` 存入 `entries/{slug}.md`（自动更新 index/log/图谱+git push）
+- **关联由 LLM 建立并写入**：导入时 LLM 自行搜索已有条目（读 `entries/index.md` + `grep entries/*.md`），找 ≥2 个建交叉关联，写明相关原因。`km_lint --fix` 不再自动补关联（确定性词袋规则已移除），仅做密度检查
+- `km_import.py store` 存入 `entries/{slug}.md`（自动更新 index/log + git push）
 - 去重：标题相同 或 标题相似>80%且resource相同 → 拒绝入库
 - stale 条目（>183天）定期 review 是否需要更新或归档
 
 ## /km_import <url> — 丢链接
 
-`km_import.py fetch <url>` 抓取 → LLM 读内容写摘要+要点+标签 → 建关联 → store
+LLM 用 `firecrawl_scrape` MCP 工具抓取 URL → 读内容写摘要+要点+标签 → 搜索已有条目建关联 → `km_import.py store`
 
 ## /km_import res — 丢资源文件
 
 ```
 1. LLM 看文件名判断归属（腾讯控股、福耀玻璃、行业研究-互联网...）
-2. km_import.py res --file {路径} --target {归属}  归档到 res/ + 提取原文
+2. km_import.py res --file {路径} --target {归属}  归档到 res/ + 提取原文（pymupdf）
 3. LLM 读原文，用中文写摘要+要点+tags
 4. km_import.py store 存入 entries/
 ```
 
 > `res/` 不限于研报，可存放财报、公告等任何资源文件。pymupdf venv 首次自动安装。
 
-## /km_note — 记笔记
+## /km_import note — 记笔记（折叠进 /km_import）
 
-LLM 对话流程：用户口述 → 格式化+打标签 → 找关联 → `km_import.py store --resource manual --source_type note`
+LLM 对话流程：用户口述 → 格式化+打标签 → 搜索已有条目建关联 → `km_import.py store --resource manual --source_type note`
 
 ---
 
 # 三、3 出（检索与分析）
 
-## /km_search <query> — 搜
+## /km_search <query> — 搜（LLM 流程，无脚本）
 
-`km_search.py <query>` 多词加权评分搜索，同时搜索 `entries/` 和 `res/`。结果含 `res_files`（匹配的资源文件）、`score`（综合评分）、`match_detail`（命中位置）、`cross_refs`（交叉引用）、`suggested_tags`（建议标签）。
+LLM 直接操作，不依赖脚本评分：
+1. 读 `entries/index.md`（按 type 分组的全量条目清单，含 title/description）→ 一句话定位候选
+2. `grep -rl "<关键词>" entries/*.md` 按命中文件精筛；按 frontmatter 的 `type`/`source_type`/`tags`/`timestamp` 过滤
+3. `grep` 也覆盖 `res/`（`res/index.md` 列出所有资源文件）
 
 **LLM 搜索策略**（让 LLM 总能找到相关内容）：
 
 1. **多角度搜索**：同一个标的用不同关键词搜 — 中文名"腾讯"、代码"0700"、英文"tencent"、行业"互联网"
-2. **过滤链**：全搜→看 `summary`→`--type`/`--source_type`/`--after`/`--before` 精准过滤
-3. **跟随交叉引用**：命中条目后，读其 `cross_refs` 发现关联条目（"串"的快捷方式）
-4. **标签导航**：无结果时看 `suggested_tags`，用 `--tag` 过滤；也可直接读 `entries/by-tag/{tag}.md` 浏览该标签下所有条目
+2. **过滤链**：全搜 → 读命中条目 frontmatter → 按 type/source_type/tags/timestamp 精准过滤
+3. **跟随交叉引用**：命中条目后，读其正文 `## 关联` 段的 markdown 链接，跳到关联条目（"串"的快捷方式）
+4. **标签导航**：无结果时读 `entries/by-tag/{tag}.md` 浏览该标签下所有条目
 5. **放宽搜索**：零结果时缩短关键词（"福耀玻璃利润趋势"→"福耀"）
-6. **双向追踪**：每个搜索结果含 `cross_refs`（引用了谁），通过 `km_lint --fix` 可自动回链（谁引用了我）
+6. **双向追踪**：想知道"谁引用了我关注的条目"，用 `grep -rl "条目slug.md" entries/*.md` 反查
 
-| 出口 | 调用 | 说明 |
+| 出口 | 方式 | 说明 |
 |------|------|------|
-| **搜** | `km_search.py <query>` | 多词加权评分，返回 summary/score/match_detail/cross_refs/suggested_tags |
-| **串** | LLM 流程 | 读条目→提取实体→搜索+`km_lint cross_references`→关联图 |
-| **合** | LLM 流程 | 搜索→读匹配条目→聚合共识/分歧/时间线/缺口→可选 store 为新 Synthesis |
+| **搜** | LLM 读 index + grep | 多角度 + 过滤 + 跟随链接 + 标签导航 |
+| **串** | LLM inline | 读条目→提取实体→grep 搜索扩展→读关联链→输出关联图（无独立命令） |
+| **合** | LLM inline | 搜索→读匹配条目→聚合共识/分歧/时间线/缺口→可选 `store` 为新 Synthesis（无独立命令） |
 
 ---
 
@@ -193,8 +193,8 @@ LLM 对话流程：用户口述 → 格式化+打标签 → 找关联 → `km_im
 **适用场景**：快速过滤、数据补充、非核心环节的旁路查询。
 
 ```
-km_search.py <query> --limit 10
-→ 读 top 3-5 条结果的 title + description
+读 entries/index.md（全量条目清单，含 title + description）
+→ 按关键词定位 top 3-5 条候选
 → 不跟随引用，不深度展开
 ```
 
@@ -203,24 +203,23 @@ km_search.py <query> --limit 10
 **适用场景**：估值分析、QARP 选股闸门、持仓检查。**这是估值和决策类分析的默认最低深度。**
 
 ```
-1. 多角度搜索（≥3 个角度）
-   km_search.py "<标的>"          # 标的直达
-   km_search.py "<标的> 估值"     # 估值维度
-   km_search.py "<标的> 风险"     # 风险维度
-   km_search.py "<行业> 趋势"     # 行业维度
+1. 多角度搜索（≥3 个角度）—— LLM 读 index.md + grep entries/*.md
+   grep -rl "<标的>" entries/*.md          # 标的直达
+   grep -rl "<标的> 估值" entries/*.md     # 估值维度
+   grep -rl "<标的> 风险" entries/*.md     # 风险维度
+   grep -rl "<行业> 趋势" entries/*.md     # 行业维度
 
 2. 过滤链
-   → 读 summary，按需加 --type/--source_type/--after 精准过滤
+   → 读命中条目 frontmatter，按 type/source_type/tags/timestamp 精准过滤
 
-3. 跟随 cross_refs（≥1 层）
-   → 命中条目后，读其 cross_refs 发现关联条目
-   → 对每条高关联条目，再读其 cross_refs（第 2 层）
+3. 跟随关联链（≥1 层）
+   → 命中条目后，读其正文 ## 关联 段的 markdown 链接，跳到关联条目
+   → 对每条高关联条目，再读其关联链（第 2 层）
    → 同一标的的 Reference 类条目优先读取（数据锚点）
    → 注意时效：aging（91-183天）标注，stale（>183天）跳过
 
 4. 标签导航收尾
-   → 读 suggested_tags，用 --tag 补充搜索遗漏维度
-   → 或直接读 entries/by-tag/{tag}.md 浏览该标签下所有条目
+   → 读 entries/by-tag/{tag}.md 浏览该标签下所有条目，补充遗漏维度
 
 5. 按类型分层读取
    → Reference 优先（年报/财报数据锚点）
@@ -234,16 +233,16 @@ km_search.py <query> --limit 10
 
 ```
 L2 全部步骤 +
-  6. 系统遍历关联（/km_related）
-     → 对 L2 发现的 3-5 个核心条目，逐一跑 /km_related 逻辑
-     → 实体提取 → 搜索扩展 → 交叉引用发现
+  6. 系统遍历关联（LLM inline）
+     → 对 L2 发现的 3-5 个核心条目，逐一做相关性分析
+     → 实体提取 → grep 搜索扩展 → 读关联链发现间接关联
 
-  7. 聚合分析（/km_synthesize）
+  7. 聚合分析（LLM inline）
      → 收集所有匹配条目 → 识别共识/分歧/时间线/信息缺口
-     → 可选：store 为新的 Synthesis 条目
+     → 可选：km_import.py store 为新的 Synthesis 条目
 
   8. 双向回链查询
-     → km_lint.py cross_references 查找"谁引用了我关注的条目"
+     → grep -rl "<关注条目slug>.md" entries/*.md 查找"谁引用了我关注的条目"
      → 发现 L2 搜索遗漏的间接关联
 
   9. 知识缺口评估（结构化输出）
@@ -257,8 +256,8 @@ L2 全部步骤 +
 | # | 检查项 | 通过标准 |
 |---|--------|---------|
 | 1 | 多关键词覆盖 | ≥3 个不同角度搜索过 |
-| 2 | cross_refs 跟随 | ≥1 层引用链已追踪 |
-| 3 | 标签导航收尾 | suggested_tags 或 by-tag/ 已浏览 |
+| 2 | 关联链跟随 | ≥1 层 `## 关联` 链接已追踪 |
+| 3 | 标签导航收尾 | `entries/by-tag/{tag}.md` 已浏览 |
 | 4 | Reference 锚点 | 若库中有该标的 Reference 条目，必须已读取 |
 | 5 | 时效标注 | aging/stale 条目已标注时效风险 |
 | 6 | 知识缺口输出 | 说明知识库缺少什么维度的信息 |
@@ -291,7 +290,8 @@ L2 全部步骤 +
 |--------|:---:|
 | OKF 合规（resource, source_type 等） | ❌ |
 | 死链 / 孤立文件 / 图谱过期 | ✅ |
-| 缺失 resource / 重建 index.md / 重建 by-tag/ / 双向交叉关联 | ✅ |
+| 缺失 resource / 重建 index.md / 重建 by-tag/ | ✅ |
+| 交叉引用密度（只读检查，关联由 LLM 导入时建立） | ❌ |
 | 资源配对 / URL 可达 / 重复检测 / 标签治理 / 时效预警 / 内容质量 | ❌ |
 
 ---
@@ -329,8 +329,8 @@ delegate_task(
 
 | 方式 | 适用场景 | 注意 |
 |------|---------|------|
-| `km_import.py store`（无 --content-file） | 单条或少量导入 | ✅ 自动更新 index/图谱/git push。传 `--content` 或 stdin，不要传 `--content-file`——**`--content-file` 会导致双重 frontmatter**（脚本生成自己的 frontmatter 追加到文件已有 frontmatter 后）。CLI 传 description 含 `$` 符号时用单引号 |
-| `write_file` 直写 entries/（含完整OKF frontmatter） | 批量导入（subagent）或避免shell转义问题 | 写入后必须运行 `km_lint --fix --skip-url-check` 重建索引和图谱。**这是推荐的批量写入方式**——避免双重frontmatter和shell `$` 转义两个问题 |
+| `km_import.py store`（无 --content-file） | 单条或少量导入 | ✅ 自动更新 index/log/git push。传 `--content` 或 stdin，不要传 `--content-file`——**`--content-file` 会导致双重 frontmatter**（脚本生成自己的 frontmatter 追加到文件已有 frontmatter 后）。CLI 传 description 含 `$` 符号时用单引号 |
+| `write_file` 直写 entries/（含完整OKF frontmatter） | 批量导入（subagent）或避免shell转义问题 | 写入后必须运行 `km_lint --fix --skip-url-check` 重建索引/标签/图谱。**这是推荐的批量写入方式**——避免双重frontmatter和shell `$` 转义两个问题 |
 
 **安全拦截降级**：当 subagent 内 `km_import.py store` 被 Hermes 安全策略阻止时，改为 `write_file()` 直接写 `~/.inv-knowledge/entries/{slug}.md`。全部写入完成后在主会话运行 `km_lint.py --fix --skip-url-check` 统一重建索引、标签、图谱和 git push。
 
@@ -375,15 +375,21 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 
 # 八、脚本
 
+> 原则：只保留确定性 IO 脚本。检索/统计/初始化/关联发现/综合分析交 LLM。
+
 | 脚本 | 用途 |
 |------|------|
-| `km_init.py` | 拉取仓库，创建 entries/res 目录 |
-| `km_import.py fetch/store/res` | URL 抓取 + 条目存储 + 资源导入 |
-| `km_search.py` | 全文搜索 |
-| `km_stats.py` | 统计 |
-| `km_lint.py` | 健康度检查与修复 |
-| `km_visualize.py` | 知识图谱 |
-| `km_migrate_to_okf.py` | v0.1→v0.2 迁移 |
+| `knowledge.py` | 共享 OKF 引擎：frontmatter 解析、索引/标签重建、合规校验（被其他脚本 import，不直接调用） |
+| `km_import.py store/res` | 条目存储（git push + index/log 更新）+ 资源导入（pymupdf PDF 提取 + MD5 归档） |
+| `km_lint.py` | 健康度检查与修复（确定性检查 + index/by-tag/图谱重建 + git push） |
+| `km_visualize.py` | 知识图谱（Cytoscape HTML，确定性数据构建） |
+
+**已交 LLM 的能力**（无脚本）：
+- 初始化 `/km_init` → LLM bash `git clone` + `mkdir`
+- 搜索 `/km_search` → LLM 读 `entries/index.md` + `grep entries/*.md`
+- 统计 `/km_stats` → LLM 读 index 口算
+- 关联发现 → LLM 导入时手动建（不再用确定性词袋规则自动补）
+- 综合 `/合` → LLM inline 聚合
 
 ---
 
@@ -391,12 +397,13 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 
 | 场景 | 表现 | 处理 |
 |------|------|------|
-| 知识库不存在 | `请先运行 km_init.py` | 运行 `km_init` |
+| 知识库不存在 | `请先运行 km_init.py` | LLM 用 bash：`git clone <INV_KNOWLEDGE_REPO_URL> ~/.inv-knowledge` + `mkdir -p entries res` |
 | km_import res: 文件不存在 | `# 文件不存在` | 确认路径 |
 | km_import res: 缺少 --target | `请指定 --target` | 先读 `res/` 确认已有文件夹 |
 | km_import res: PDF 损坏/扫描件 | `跳过无法打开` / 文本为空 | 跳过或告知用户 |
 | km_import res: 目标已存在 | MD5 相同→跳过，不同→加后缀 | 自动处理 |
-| km_import fetch: Firecrawl 未启动 | `Firecrawl 抓取失败` | 检查 `localhost:3672`，或手动 store |
+| 抓取 URL 失败 | firecrawl_scrape MCP 返回空/反爬 | LLM 换 `waitFor`/`proxy`，或手动粘贴正文 store |
+| LLM 搜索无结果 | grep/index 无命中 | 缩短关键词（"福耀玻璃利润趋势"→"福耀"）；读 `entries/by-tag/{tag}.md` 浏览 |
 | km_import store: 重复入库 | `疑似重复入库` | 告知用户，如需更新先删旧条目 |
 | km_import store: 内容太短 | `content 过短` | 检查输入是否截断 |
 | km_import store: --description 自动提取错误 | 从frontmatter误取`title: xxx` | 始终显式传 `--description`，不依赖`_auto_description` |
@@ -417,11 +424,10 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 `km_lint.py --fix --skip-url-check` 自动处理：
 - 清除死链、修复孤立文件、补全缺失 resource
 - 重建 `entries/index.md` 和 `entries/by-tag/` 标签索引
-- 自动发现并双向写入交叉关联（同标的+共享标签+关键词重叠）
 - 重建知识图谱
 - 修复后再次 lint 验证
 
-导入 5-10 条新条目后建议运行一次，保持交叉引用密度。
+> 交叉关联**不再自动写入**（确定性词袋规则已移除，质量差）。关联由 LLM 导入时手动建立，`km_lint` 仅做密度检查（`no_cross_refs` 计数）。导入 5-10 条后跑一次 `--fix` 重建索引/标签/图谱即可。
 
 ## 依赖
 

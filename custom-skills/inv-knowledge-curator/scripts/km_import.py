@@ -8,19 +8,17 @@ from __future__ import annotations
 #   "html2text>=2024.2.26",
 # ]
 # ///
-"""知识导入：URL 抓取 + 资源文件导入 + 知识条目存储。
+"""知识导入：资源文件导入 + 知识条目存储。
 
 子命令:
-  fetch       - 抓取 URL 内容（Firecrawl）
   store       - 存储知识条目（OKF v0.2）
   res         - 导入资源文件：归档到 res/ + 提取文本
-  categories  - source_type 统计
+
+URL 抓取改由 LLM 用 firecrawl_scrape MCP 工具完成，不再内置 fetch 子命令。
 
 用法:
-  uv run km_import.py fetch <url>
   uv run km_import.py store --title "标题" --resource ... --source_type url --content-file /tmp/x.md
   uv run km_import.py res --file ~/xxx.pdf --target 腾讯控股
-  uv run km_import.py categories
 """
 
 import argparse
@@ -54,82 +52,6 @@ def _get_knowledge_dir() -> Path:
 
 KNOWLEDGE_DIR = _get_knowledge_dir()
 REPO_BRANCH = "master"
-FIRECRAWL_URL = "http://localhost:3672/v1/scrape"
-
-
-# ─── fetch 子命令 ─────────────────────────────────────────
-
-
-def _firecrawl_scrape(url: str) -> dict | None:
-    """Firecrawl adapter 抓取，返回 {title, content} 或 None。"""
-    import requests
-
-    try:
-        r = requests.post(
-            FIRECRAWL_URL,
-            json={"url": url},
-            timeout=30,
-        )
-        if r.status_code != 200:
-            return None
-        data = r.json().get("data", {})
-        content = data.get("markdown") or data.get("content", "")
-        title = data.get("metadata", {}).get("title", "")
-        if not content or len(content) < 500:
-            return None
-        if "请稍候" in content or "Just a moment" in content or "Checking your browser" in content:
-            return None
-        return {"title": title, "content": content}
-    except Exception:
-        return None
-
-
-def cmd_fetch(url: str) -> dict:
-    """抓取 URL 内容（Firecrawl）。失败时返回错误，由用户手动 store。"""
-    result = _firecrawl_scrape(url)
-    if result:
-        return {
-            "success": True,
-            "source": "firecrawl",
-            "title": result["title"],
-            "content": result["content"],
-            "url": url,
-        }
-
-    return {
-        "success": False,
-        "error": "Firecrawl 抓取失败，请手动 store",
-        "url": url,
-    }
-
-
-# ─── categories 子命令 ────────────────────────────────────
-
-
-def cmd_categories() -> dict:
-    """列出所有 source_type 统计和标签分布。"""
-    from knowledge import get_all_tags
-
-    stats = {"total": 0, "source_types": {}, "top_tags": {}}
-
-    entries_dir = KNOWLEDGE_DIR / ENTRIES_DIR
-    if entries_dir.is_dir():
-        from knowledge import _read_frontmatter
-        for md_file in sorted(entries_dir.glob("*.md")):
-            if md_file.name == "index.md" or md_file.name.startswith("."):
-                continue
-            fm = _read_frontmatter(md_file)
-            st = fm.get("source_type") or "unknown"
-            stats["source_types"][st] = stats["source_types"].get(st, 0) + 1
-            stats["total"] += 1
-
-        tag_counts = get_all_tags(KNOWLEDGE_DIR)
-        stats["top_tags"] = dict(tag_counts.most_common(20))
-
-    return {
-        "success": True,
-        **stats,
-    }
 
 
 # ─── store 子命令 ─────────────────────────────────────────
@@ -566,9 +488,6 @@ def main():
     p_res.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
     p_res.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
 
-    p_fetch = sub.add_parser("fetch", help="抓取 URL 内容")
-    p_fetch.add_argument("url")
-
     p_store = sub.add_parser("store", help="存储知识条目（OKF v0.2 格式）")
     p_store.add_argument("--title", required=True)
     p_store.add_argument("--resource", required=True, help="来源 URL 或文件路径（OKF v0.2 必需）")
@@ -581,8 +500,6 @@ def main():
     p_store.add_argument("--min-content-length", type=int, default=100, help="内容最小长度校验（默认 100 字符）")
     p_store.add_argument("--tags", default="", help="标签列表，逗号分隔。示例: python,async,performance")
 
-    sub.add_parser("categories", help="列出 source_type 统计和标签分布")
-
     args = parser.parse_args()
 
     if not args.command:
@@ -591,8 +508,6 @@ def main():
 
     if args.command == "res":
         sys.exit(cmd_res(args))
-    elif args.command == "fetch":
-        result = cmd_fetch(args.url)
     elif args.command == "store":
         content = args.content
         if hasattr(args, 'content_file') and args.content_file:
@@ -615,8 +530,6 @@ def main():
             entry_type=getattr(args, 'type', 'Article'),
             description=getattr(args, 'description', ''),
         )
-    elif args.command == "categories":
-        result = cmd_categories()
     else:
         parser.print_help()
         sys.exit(1)
