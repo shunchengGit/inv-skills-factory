@@ -205,98 +205,13 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 
 # 四、深度挖掘协议（下游技能必读）
 
-> 以下三个深度等级供下游技能（估值引擎/QARP策略/主题研究）选择使用。不是每次查询都需要 L3——根据任务性质选择，**但估值和决策类分析默认最低 L2**。
+> 三个深度等级（L1 快速检索 / L2 深度探索 / L3 全库挖掘）供下游技能（估值引擎/QARP策略/主题研究）选择。**估值和决策类分析默认最低 L2**。完整协议见 `references/deep-mining-protocol.md`。
 
-## 4.1 L1 快速检索（30 秒）
+- **L1 快速检索**（30秒）：读 `entries/index.md` 定位 top 3-5 候选，不跟随引用
+- **L2 深度探索**（3-5分钟，估值/决策默认）：多角度 grep ≥3 角度 → frontmatter 过滤 → 跟随 `## 关联` 链 ≥1 层 → 标签导航 → 按类型分层读取
+- **L3 全库挖掘**（5-10分钟，主题研究默认）：L2 + 系统遍历关联 + 聚合分析 + 双向回链 + 知识缺口评估
 
-**适用场景**：快速过滤、数据补充、非核心环节的旁路查询。
-
-```
-读 entries/index.md（全量条目清单，含 title + description）
-→ 按关键词定位 top 3-5 条候选
-→ 不跟随引用，不深度展开
-```
-
-## 4.2 L2 深度探索（估值/决策默认，3-5 分钟）
-
-**适用场景**：估值分析、QARP 选股闸门、持仓检查。**这是估值和决策类分析的默认最低深度。**
-
-```
-1. 多角度搜索（≥3 个角度）—— LLM 读 index.md + grep entries/*.md
-   grep -rl "<标的>" entries/*.md          # 标的直达
-   grep -rl "<标的> 估值" entries/*.md     # 估值维度
-   grep -rl "<标的> 风险" entries/*.md     # 风险维度
-   grep -rl "<行业> 趋势" entries/*.md     # 行业维度
-
-2. 过滤链
-   → 读命中条目 frontmatter，按 type/source_type/tags/timestamp 精准过滤
-
-3. 跟随关联链（≥1 层）
-   → 命中条目后，读其正文 ## 关联 段的 markdown 链接，跳到关联条目
-   → 对每条高关联条目，再读其关联链（第 2 层）
-   → 同一标的的 Reference 类条目优先读取（数据锚点）
-   → 注意时效：aging（91-183天）标注，stale（>183天）跳过
-
-4. 标签导航收尾
-   → 读 entries/by-tag/{tag}.md 浏览该标签下所有条目，补充遗漏维度
-
-5. 按类型分层读取
-   → Reference 优先（年报/财报数据锚点）
-   → Analysis/Synthesis 次之（已有分析结论）
-   → Article 最后（外部信息，需交叉验证）
-```
-
-## 4.3 L3 全库挖掘（主题研究默认，5-10 分钟）
-
-**适用场景**：主题研究（`/research`）、行业全景扫描、首次覆盖深度分析。
-
-```
-L2 全部步骤 +
-  6. 系统遍历关联（LLM inline）
-     → 对 L2 发现的 3-5 个核心条目，逐一做相关性分析
-     → 实体提取 → grep 搜索扩展 → 读关联链发现间接关联
-
-  7. 聚合分析（LLM inline）
-     → 收集所有匹配条目 → 识别共识/分歧/时间线/信息缺口
-     → 可选：km_import.py store 为新的 Synthesis 条目
-
-  8. 双向回链查询
-     → grep -rl "<关注条目slug>.md" entries/*.md 查找"谁引用了我关注的条目"
-     → 发现 L2 搜索遗漏的间接关联
-
-  9. 知识缺口评估（结构化输出）
-     → 逐项评估覆盖度（见下方检查清单）
-```
-
-## 4.4 深度搜索检查清单
-
-每次 L2/L3 结束时，LLM 自查：
-
-| # | 检查项 | 通过标准 |
-|---|--------|---------|
-| 1 | 多关键词覆盖 | ≥3 个不同角度搜索过 |
-| 2 | 关联链跟随 | ≥1 层 `## 关联` 链接已追踪 |
-| 3 | 标签导航收尾 | `entries/by-tag/{tag}.md` 已浏览 |
-| 4 | Reference 锚点 | 若库中有该标的 Reference 条目，必须已读取 |
-| 5 | 时效标注 | aging/stale 条目已标注时效风险 |
-| 6 | 知识缺口输出 | 说明知识库缺少什么维度的信息 |
-
-## 4.5 知识缺口输出格式
-
-当知识库覆盖不足时，下游技能应结构化输出缺口（而非简单标注"知识库无记录"）：
-
-```
-## 知识库覆盖度
-| 维度 | 状态 | 已有条目数 | 最晚时点 | 缺口说明 |
-|------|:--:|:--:|---------|---------|
-| 财务数据 | ✅ | 3 | 2026-Q1 | — |
-| 竞争格局 | ⚠ | 1 | 2025-Q3 | 缺少 Porter 五力分析条目 |
-| 管理层评价 | ❌ | 0 | — | 无管理层相关条目 |
-| 卖方研报 | ✅ | 5 | 2026-05 | — |
-| 风险分析 | ⚠ | 1 | 2025-12 | 缺少地缘风险维度 |
-
-→ 降级决策：{L3 全库挖掘已完成，缺口无可避免 / Web 降级补充 {维度}}
-```
+L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输出（详见 reference）。
 
 ---
 # 五、1 底座 + 健康度
@@ -340,68 +255,13 @@ L2 全部步骤 +
 
 # 七、批量导入（Subagent 工作流）
 
-当有多份 PDF（如批量研报）需要一次性入库时，使用 `delegate_task` 派发 subagent 并行处理。
+当有多份 PDF（如批量研报）需要一次性入库时，使用 `delegate_task` 派发 subagent 并行处理。完整工作流（派发模板、写库方式选择、subagent 格式硬规则、垃圾条目清理）见 `references/batch-import.md`。
 
-## 7.1 Subagent 派发模板
-
-```
-delegate_task(
-  context="知识库路径 ~/.inv-knowledge/。脚本路径 ~/.hermes/skills/.../scripts/。
-   待处理文件列表（精确到文件名）：
-   - res/腾讯控股/2026-05-13-xxx.pdf
-   - res/腾讯控股/2026-05-14-yyy.pdf
-   ...
-  ",
-  goal="读取上述 PDF，创建并写入 OKF 条目到 ~/.inv-knowledge/entries/。每个公司至少1条。",
-  toolsets=["terminal","file"]
-)
-```
-
-## 7.2 写库方式选择
-
-| 方式 | 适用场景 | 注意 |
-|------|---------|------|
-| `km_import.py store`（无 --content-file） | 单条或少量导入 | ✅ 自动更新 index/log/git push。传 `--content` 或 stdin，不要传 `--content-file`——**`--content-file` 会导致双重 frontmatter**（脚本生成自己的 frontmatter 追加到文件已有 frontmatter 后）。CLI 传 description 含 `$` 符号时用单引号 |
-| `write_file` 直写 entries/（含完整OKF frontmatter） | 批量导入（subagent）或避免shell转义问题 | 写入后必须运行 `km_lint --fix --skip-url-check` 重建索引/标签/图谱。**这是推荐的批量写入方式**——避免双重frontmatter和shell `$` 转义两个问题 |
-
-**安全拦截降级**：当 subagent 内 `km_import.py store` 被 Hermes 安全策略阻止时，改为 `write_file()` 直接写 `~/.inv-knowledge/entries/{slug}.md`。全部写入完成后在主会话运行 `km_lint.py --fix --skip-url-check` 统一重建索引、标签、图谱和 git push。
-
-**推荐批量导入工作流**：
-1. 归档：`km_import.py res --file {path} --target {target}` 或直接 `cp`
-2. 写条目：subagent 内用 `write_file()` 直接写 `~/.inv-knowledge/entries/{slug}.md`（含完整 OKF frontmatter: type/title/description/timestamp/resource/source_type/tags）
-3. 重建：主会话运行 `km_lint.py --fix --skip-url-check`（重建索引/标签/图谱/git push）
-
-## 7.3 Subagent 格式硬规则（必遵守）
-
-派发 subagent 时必须在 context 中写明以下规则，否则会产出垃圾条目：
-
-```
-CRITICAL RULES:
-1. 每条条目 25-50 行 MAX。禁止倾倒 PDF 原文
-2. 格式：YAML frontmatter + ## 摘要（段落） + ## 关键要点（bullet list）
-3. frontmatter 中 type 只能是：Analysis/Article/Reference/Synthesis/Note（5选1）
-4. description 字段：一句含具体数据的结论，禁止空泛
-5. tags 不含特殊字符（/ \ : * ? " < > |），否则标签索引文件创建失败
-6. 禁止包含 PDF disclaimer/boilerplate 文本
-7. 如果多份同标的研报，可合并为一条多投行综合条目（更高效）
-```
-
-**为什么 size matters**：25-50 行的干净条目（如福耀玻璃UBS快评）与 1500+ 行的原始PDF倾倒（如上一轮subagent产物）的质量差异天壤之别。LLM必须理解：入库的是"知识条目"（提炼后的摘要），不是"PDF备份"。
-
-## 7.4 垃圾条目清理
-
-批量导入后，立即检查并删除以下垃圾：
-
-```
-# 1. PDF 免责声明标题（文件名来自 PDF 页脚文本）
-grep -l "^--- page [0-9]" ~/.inv-knowledge/entries/*.md  # 原始PDF文本倾倒
-# 2. 超大条目（>200行 = PDF原文倾倒）
-wc -l ~/.inv-knowledge/entries/*.md | sort -rn | head
-# 3. 无 frontmatter 字段的幽灵条目
-grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
-```
-
-识别后直接 `rm` 删除，重新派发 subagent 处理。
+核心要点：
+- **推荐写法**：subagent 内 `write_file()` 直写含完整 OKF frontmatter 的条目 → 主会话 `km_lint.py --fix --skip-url-check` 统一重建索引/标签/图谱/git push
+- **避免** `--content-file`（双重 frontmatter）、shell `$` 转义（用单引号或 write_file）
+- **subagent 硬规则**：每条 25-50 行 MAX，禁止倾倒 PDF 原文
+- 批量后立即跑垃圾清理 grep（PDF 免责声明标题 / >200 行 / 无 frontmatter 幽灵条目）
 
 ---
 
