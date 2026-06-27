@@ -39,6 +39,13 @@
    → Reference 优先（年报/财报数据锚点）
    → Analysis/Synthesis 次之（已有分析结论）
    → Article 最后（外部信息，需交叉验证）
+
+6. 原始资源回溯（条目摘要不足时触发）
+   → 对高优先级条目（Reference 类 / 决策关键数据点），读其 frontmatter `resource` 字段拿 PDF 路径
+   → 当条目摘要不足以支撑当前决策（缺量化数据 / 需验证具体数字 / 缺风险段落措辞）时，
+     调 `km_import.py read --file {resource路径} --pages edges` 读原始研报首尾页
+   → 标注"已回溯原始研报 {path}"，回溯所得细节并入结构化输出
+   → 注意：`read` 是只读子命令，不触发归档/索引重建/git push，可安全反复调用
 ```
 
 ## L3 全库挖掘（主题研究默认，5-10 分钟）

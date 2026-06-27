@@ -5,17 +5,19 @@ from __future__ import annotations
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""知识导入：资源文件导入 + 知识条目存储。
+"""知识导入：资源文件导入 + 知识条目存储 + 只读 PDF 提取。
 
 子命令:
   store       - 存储知识条目（OKF v0.2）
   res         - 导入资源文件：归档到 res/ + 提取文本
+  read        - 只读提取已归档 PDF 文本（无副作用，下游技能读原始研报用）
 
 URL 抓取改由 LLM 用 firecrawl_scrape MCP 工具完成，不再内置 fetch 子命令。
 
 用法:
   uv run km_import.py store --title "标题" --resource ... --source_type url --content-file /tmp/x.md
   uv run km_import.py res --file ~/xxx.pdf --target 腾讯控股
+  uv run km_import.py read --file ~/.inv-knowledge/res/福耀玻璃/xxx.pdf --pages edges
 """
 
 import argparse
@@ -469,6 +471,30 @@ def cmd_res(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_read(args: argparse.Namespace) -> int:
+    """read 子命令：只读提取已归档 PDF 文本，无副作用。
+
+    用于下游技能读取 res/ 下原始研报原文，不触发归档/索引重建/git push/图谱重建。
+    与 res 的区别：res 是导入（归档+提取+入库），read 是纯读取已存在文件。
+    """
+    texts = []
+    for p in args.file:
+        src = Path(p).expanduser()
+        if not src.exists():
+            print(f"# 文件不存在: {src}", file=sys.stderr)
+            continue
+        text = _extract_pdf_text(src, args.pages, args.first_n,
+                                 args.max_chars, args.max_pages)
+        if text:
+            texts.append(text)
+
+    if not texts:
+        return 0
+
+    sys.stdout.write("\n".join(texts))
+    return 0
+
+
 # ─── main ─────────────────────────────────────────────────
 
 
@@ -497,6 +523,14 @@ def main():
     p_store.add_argument("--min-content-length", type=int, default=100, help="内容最小长度校验（默认 100 字符）")
     p_store.add_argument("--tags", default="", help="标签列表，逗号分隔。示例: python,async,performance")
 
+    # read 子命令：只读提取已归档 PDF（无副作用，下游技能用）
+    p_read = sub.add_parser("read", help="只读提取已归档 PDF 文本（无副作用，下游技能读原始研报用）")
+    p_read.add_argument("--file", action="append", required=True, help="res/ 下 PDF 路径（可多次指定）")
+    p_read.add_argument("--pages", choices=("edges", "all", "first-n"), default="edges")
+    p_read.add_argument("--first-n", type=int, default=3)
+    p_read.add_argument("--max-chars", type=int, default=DEFAULT_MAX_CHARS)
+    p_read.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
+
     args = parser.parse_args()
 
     if not args.command:
@@ -505,6 +539,8 @@ def main():
 
     if args.command == "res":
         sys.exit(cmd_res(args))
+    elif args.command == "read":
+        sys.exit(cmd_read(args))
     elif args.command == "store":
         content = args.content
         if hasattr(args, 'content_file') and args.content_file:

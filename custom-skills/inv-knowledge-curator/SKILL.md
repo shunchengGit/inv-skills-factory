@@ -272,7 +272,7 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 | 脚本 | 用途 |
 |------|------|
 | `knowledge.py` | 共享 OKF 引擎：frontmatter 解析、索引/标签重建、合规校验（被其他脚本 import，不直接调用） |
-| `km_import.py store/res` | 条目存储（git push + index/log 更新）+ 资源导入（pymupdf PDF 提取 + MD5 归档） |
+| `km_import.py store/res/read` | 条目存储（git push + index/log 更新）+ 资源导入（pymupdf PDF 提取 + MD5 归档）+ 只读 PDF 提取（`read`，无副作用，下游技能读原始研报用） |
 | `km_lint.py` | 健康度检查与修复（确定性检查 + index/by-tag/图谱重建 + git push） |
 | `km_visualize.py` | 知识图谱（Cytoscape HTML，确定性数据构建） |
 
