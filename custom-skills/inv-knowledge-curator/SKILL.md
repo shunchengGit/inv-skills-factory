@@ -137,24 +137,41 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 - 去重：标题相同 或 标题相似>80%且resource相同 → 拒绝入库
 - stale 条目（>183天）定期 review 是否需要更新或归档
 
+## /km_init — 初始化（LLM 流程，无脚本）
+
+1. 检查 `~/.inv-knowledge` 是否存在
+2. bash：`git clone <INV_KNOWLEDGE_REPO_URL> ~/.inv-knowledge`（已存在则 `git pull`）
+3. `mkdir -p ~/.inv-knowledge/entries ~/.inv-knowledge/res`
+
+✅ 完成：`~/.inv-knowledge/entries` 和 `res/` 目录存在，可运行 `km_lint`
+
 ## /km_import <url> — 丢链接
 
-LLM 用 `firecrawl_scrape` MCP 工具抓取 URL → 读内容写摘要+要点+标签 → 搜索已有条目建关联 → `km_import.py store`
+1. LLM 用 `firecrawl_scrape` MCP 抓取 URL
+2. 读内容写摘要+要点+tags
+3. 搜索已有条目建 ≥2 关联
+4. `km_import.py store`
+
+✅ 完成：`store` 返回 `success:true`，条目已入库 + git push 完成
 
 ## /km_import res — 丢资源文件
 
-```
 1. LLM 看文件名判断归属（腾讯控股、福耀玻璃、行业研究-互联网...）
-2. km_import.py res --file {路径} --target {归属}  归档到 res/ + 提取原文（pymupdf）
+2. `km_import.py res --file {路径} --target {归属}` 归档到 res/ + 提取原文（pymupdf）
 3. LLM 读原文，用中文写摘要+要点+tags
-4. km_import.py store 存入 entries/
-```
+4. `km_import.py store` 存入 entries/
+
+✅ 完成：`store` `success:true`；PDF 已归档到 `res/{target}/`，`res/index.md` 已更新，条目已入库
 
 > `res/` 不限于研报，可存放财报、公告等任何资源文件。pymupdf venv 首次自动安装。
 
 ## /km_import note — 记笔记（折叠进 /km_import）
 
-LLM 对话流程：用户口述 → 格式化+打标签 → 搜索已有条目建关联 → `km_import.py store --resource manual --source_type note`
+1. 用户口述，LLM 格式化+打标签
+2. 搜索已有条目建 ≥2 关联
+3. `km_import.py store --resource manual --source_type note`
+
+✅ 完成：`store` `success:true`，笔记已入库
 
 ---
 
@@ -162,10 +179,12 @@ LLM 对话流程：用户口述 → 格式化+打标签 → 搜索已有条目�
 
 ## /km_search <query> — 搜（LLM 流程，无脚本）
 
-LLM 直接操作，不依赖脚本评分：
 1. 读 `entries/index.md`（按 type 分组的全量条目清单，含 title/description）→ 一句话定位候选
 2. `grep -rl "<关键词>" entries/*.md` 按命中文件精筛；按 frontmatter 的 `type`/`source_type`/`tags`/`timestamp` 过滤
 3. `grep` 也覆盖 `res/`（`res/index.md` 列出所有资源文件）
+4. 跟随命中条目正文 `## 关联` 段链接，扩展相关条目
+
+✅ 完成：返回匹配条目列表（含 path + 相关原因），或按 4.5 格式输出知识缺口
 
 **LLM 搜索策略**（让 LLM 总能找到相关内容）：
 
@@ -282,9 +301,22 @@ L2 全部步骤 +
 ---
 # 五、1 底座 + 健康度
 
-**知识图谱**：`km_visualize.py`（或 `/km_graph`）生成。每次 `km_lint --fix` 后自动重建。孤立节点比例过高时图谱头部黄标提醒。不要在每条 store 后生成——太频繁。
+## /km_graph — 知识图谱（脚本）
 
-**健康度检查**：`km_lint.py [--fix] [--skip-url-check] [--check-duplicates]`。`--fix` 修复完成后自动 git push。返回结果含 `summary` 汇总（`empty_summary:3` / `no_cross_refs:12` 等），LLM 优先修数量最多的项。
+1. 运行 `km_visualize.py`（或 `km_lint --fix` 后自动重建）
+2. 生成 `knowledge-graph.html`（Cytoscape 力导向图，自包含）
+
+✅ 完成：`knowledge-graph.html` 已生成，含节点/边；孤立节点比例过高时头部黄标提醒
+
+> 不要在每条 store 后生成——太频繁。导入 5-10 条后随 `km_lint --fix` 一起重建即可。
+
+## /km_lint — 健康度检查与修复（脚本）
+
+1. 运行 `km_lint.py [--fix] [--skip-url-check] [--check-duplicates]`
+2. 看 `summary` 找问题最多的项（`empty_summary:3` / `no_cross_refs:12` 等），LLM 优先修数量最多的项
+3. （`--fix`）自动重建 index/by-tag/图谱 + git push，再次 lint 验证
+
+✅ 完成：仅检查 → 返回 `summary` + 各项 issue 列表；`--fix` → index/by-tag/图谱重建 + git push 完成
 
 | 检查项 | --fix |
 |--------|:---:|
