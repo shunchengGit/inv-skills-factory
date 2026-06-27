@@ -24,6 +24,32 @@ commands:
 
 ## 执行流程
 
+### 步骤 0：检索知识库已有研判（只读，避免重复分析）
+
+分析前先用 `inv-knowledge-curator` 的 `/km_search` 检索知识库是否已有该行业/标的的五力或竞争格局研判，复用而非重算。
+
+**只读约束**：本技能只从知识库**读取**知识（`/km_search` + 读条目正文），**绝不写入**——五力研判的入库由知识库主流程 `/km_import` 统一负责，避免多入口污染。
+
+```
+1. 多角度检索（L1 快速检索）
+   读 ~/.inv-knowledge/entries/index.md → 定位含"标的/行业 + 竞争/护城河/五力"的候选
+   grep -rl "<标的>" ~/.inv-knowledge/entries/*.md
+   grep -rl "<行业>" ~/.inv-knowledge/entries/*.md
+
+2. 按标签精筛（知识库已内置 porter-five-forces / competitive-advantage / moat 标签）
+   读 entries/by-tag/porter-five-forces.md  ← 该标签下所有五力条目
+   读 entries/by-tag/competitive-advantage.md
+
+3. 复用已有研判
+   → 若有同行业/同标的的 Analysis 条目：读其摘要+关键要点，作为步骤 3 逐力分析的起点（评分参考、事实依据），标注"复用知识库条目 {path}"
+   → 若有条目时效 stale（>183天）：标注"需更新"，作为参考但侧重最新数据
+   → 若无相关条目：跳过复用，基于步骤 1 数据快照独立分析（不强制入库）
+```
+
+✅ 完成：已检索知识库，明确"有可复用研判"或"无历史研判需独立分析"
+
+> 知识库检索深度按需选择：日常分析用 L1（读 index + grep）；首次覆盖某行业或需追溯历史五力演变时用 L2（跟随 `## 关联` 链 ≥1 层）。完整协议见 `inv-knowledge-curator` 的 `references/deep-mining-protocol.md`。
+
 ### 步骤 1：数据获取（如指定了具体公司）
 
 如果用户指定了具体公司（而非仅行业名称），运行五力数据快照脚本：
@@ -163,3 +189,4 @@ uv run {baseDir}/scripts/five_forces_snapshot.py {股票代码} --output json
 - 如果某力缺乏足够信息，明确标注"信息不足"而非臆测
 - 行业边界定义对分析结果影响极大，需谨慎界定
 - 五力分析是静态快照，行业格局持续变化，需关注趋势
+- **知识库只读**：本技能对知识库仅 `/km_search` 读取，禁止调用 `/km_import` 写入。若分析结论有价值需入库，告知用户由知识库主流程统一处理，不在本技能内 store

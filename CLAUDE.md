@@ -46,7 +46,9 @@ inv-knowledge-curator（知识库 + 研报管理）─────────�
   │     └── inv-qarp-strategy（操作决策）           │
   ├── inv-topic-researcher（信息采集框架）          │
   ├── inv-qarp-strategy（操作决策）                 │
-  └── inv-stock-data（数据层）                     │
+  ├── inv-stock-data（数据层）                     │
+  └── inv-porter-five-forces（五力分析，只读）      │
+
 
 inv-stock-data（数据层）────────────────────────────┐
   ├── inv-valuation-engine（估值引擎）              │
