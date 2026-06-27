@@ -127,7 +127,7 @@ commands:
 | **卖方乐观偏差修正** | 卖方目标价平均存在 10-15% 乐观偏差（尤其是承销关系券商）。使用卖方目标价时，按 0.85-0.9 系数打折后作为参考上限 |
 | **分歧度信号** | 若各家目标价/盈利预测分歧极大（最高/最低 > 1.5x），说明标的未来高度不确定，应要求更大的安全边际（+10pp） |
 
-**使用原则**（来自 `inv-knowledge-curator` 的 `references/research-integration-notes.md`）：
+**使用原则**：
 - 卖方目标价**不**作为独立估值依据
 - 卖方一致预期可作为增速假设参考，但必须人工校验合理性
 - 卖方暗含风险应纳入本技能的风险框架
@@ -151,7 +151,7 @@ commands:
 
 ### 9.1 对新标的：三阶段
 
-**阶段一（并行）**：A. `valuation_snapshot.py <代码> --output json` + B. 按 `inv-knowledge-curator` [深度挖掘协议](#) L2 标准深度搜索知识库——多角度搜索（标的/估值/风险/行业 ≥3 个角度）→ 跟随 cross_refs ≥1 层 → 标签导航收尾。搜索结果须按 `references/research-cross-validation.md` 的映射表结构化输出：共识观点（行业/TAM/竞争）→ 第一道闸门；财务趋势→ 第二道闸门；盈利预测区间→ 估值纪律 3.3；核心风险/隐含假设→ 买入必答。若知识库无记录，按 4.5 格式输出知识缺口。
+**阶段一（并行）**：A. `valuation_snapshot.py <代码> --output json` + B. 按 `inv-knowledge-curator` [深度挖掘协议](#) L2 标准深度搜索知识库——多角度搜索（标的/估值/风险/行业 ≥3 个角度）→ 跟随条目 `## 关联` 链 ≥1 层 → 标签导航收尾。搜索结果须按 `references/research-cross-validation.md` 的映射表结构化输出：共识观点（行业/TAM/竞争）→ 第一道闸门；财务趋势→ 第二道闸门；盈利预测区间→ 估值纪律 3.3；核心风险/隐含假设→ 买入必答。若知识库无记录，按 4.5 格式输出知识缺口。
 **阶段二**：检查数据/知识覆盖缺口。若知识库有缺口，先输出结构化"知识缺口表"（按维度列出缺什么），再决定是否 WebFetch 降级补充。知识缺口表须标注每项缺口对后续分析环节的影响。
 **阶段三（顺序）**：五档结论 → 选股闸门 → 估值纪律 → 买入必答 6 问 → 组合检查 → 结论 + 机会成本对比
 
@@ -185,10 +185,6 @@ commands:
 - `inv-valuation-engine` 的 `scripts/valuation_report.py`：五档估值报告
 - `inv-valuation-engine` 的 `scripts/valuation_compare.py`：多股比较
 - `inv-valuation-engine` 的 `scripts/valuation_manual_compute.py`：手动计算
-- `inv-knowledge-curator` 的 `references/research-integration-notes.md`：研报整合实战笔记（卖方乐观偏差、暗含风险、与独立估值关系）
-- `inv-knowledge-curator` 的 `references/extended-cycle-analysis-workflow.md`：周期股深度分析扩展（周期定位、PE 陷阱）
-- `inv-knowledge-curator` 的 `references/web-fallback-for-non-a-share.md`：非 A 股无本地 PDF 时的 Web 降级策略
-- `inv-knowledge-curator` 的 `references/adhoc-pdf-and-expert-calls.md`：临时 PDF/专家纪要/交叉信号综合方法
 - 本技能 `references/output-template.md`：新标的和持仓 QARP 分析的输出模板
 - 本技能 `references/common-pitfalls.md`：常见陷阱与防范
 - 本技能 `references/data-fallback.md`：数据源脚本优先级、data_gaps 降级、搜索补充策略

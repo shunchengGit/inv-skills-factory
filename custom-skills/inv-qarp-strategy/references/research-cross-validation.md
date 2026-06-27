@@ -38,6 +38,6 @@
 
 ## 无本地研报时的降级路径
 
-当 `~/.inv-knowledge/res/Index.md` 无匹配时，按以下优先级降级：
-1. **Web 降级**：按 `inv-knowledge-curator` 的 `references/web-fallback-for-non-a-share.md` 执行（Yahoo Finance 分析师数据、搜狗微信搜索、Brave Search）
+当 `~/.inv-knowledge/res/index.md` 无匹配时，按以下优先级降级：
+1. **Web 降级**：用 yfinance 取分析师一致预期/目标价、Firecrawl 抓公开研报摘要、搜索引擎补非 A 股标的研报数据（详见本技能 `references/web-search-supplement.md`）
 2. **标注信息缺口**：在输出模板的"卖方研报摘要"中明确标注"无本地研报，已走 Web 降级 / 无可用研报"，并说明对分析完整性的影响

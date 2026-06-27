@@ -3,10 +3,7 @@ from __future__ import annotations
 
 # /// script
 # requires-python = ">=3.10"
-# dependencies = [
-#   "requests>=2.31.0",
-#   "html2text>=2024.2.26",
-# ]
+# dependencies = []
 # ///
 """知识导入：资源文件导入 + 知识条目存储。
 

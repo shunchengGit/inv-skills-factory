@@ -5,7 +5,6 @@ from __future__ import annotations
 # requires-python = ">=3.10"
 # dependencies = [
 #   "requests>=2.31.0",
-#   "PyYAML>=6.0",
 # ]
 # ///
 """知识库完整性检查：OKF v0.2 合规、死链、孤立文件、URL 可达性、重复检测、

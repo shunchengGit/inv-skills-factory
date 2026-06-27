@@ -133,6 +133,7 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 - 写摘要（3-5句）+ 关键要点（3-7条），不可留空
 - tags 至少包含 1 标的 + 2 分析维度
 - **关联由 LLM 建立并写入**：导入时 LLM 自行搜索已有条目（读 `entries/index.md` + `grep entries/*.md`），找 ≥2 个建交叉关联，写明相关原因。`km_lint --fix` 不再自动补关联（确定性词袋规则已移除），仅做密度检查
+- **关联链接必须用实际文件名**（死链根因）：写 `## 关联` 段的 `[](path)` 时，**path 必须是条目的实际 `.md` 文件名（slugified）**，不是标题原文。标题含 `：` `/` 等符号时，slugify 会转成 `-`（如标题"ASML首选股：三大驱动因素" → 文件名 `ASML首选股-三大驱动因素.md`）。写链接前先 `ls entries/` 或读 `entries/index.md` 核对真实文件名，禁止凭标题臆造路径
 - `km_import.py store` 存入 `entries/{slug}.md`（自动更新 index/log + git push）
 - 去重：标题相同 或 标题相似>80%且resource相同 → 拒绝入库
 - stale 条目（>183天）定期 review 是否需要更新或归档
@@ -407,9 +408,7 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 | km_import store: 重复入库 | `疑似重复入库` | 告知用户，如需更新先删旧条目 |
 | km_import store: 内容太短 | `content 过短` | 检查输入是否截断 |
 | km_import store: --description 自动提取错误 | 从frontmatter误取`title: xxx` | 始终显式传 `--description`，不依赖`_auto_description` |
-| km_import store: **--content-file 导致双重frontmatter** | 脚本为文件生成自己的frontmatter，追加到文件已有frontmatter后形成双重`---`块 | **不要用 `--content-file`**。入口文件不要写frontmatter（仅写正文），用 `--title/--description/--type/--tags` 在CLI传元数据。推荐用 `write_file` 直写含完整frontmatter的条目 + `km_lint --fix` |
-| km_import store: **Shell $ 符号被解释为变量** | description中的`$`（如`NT$200`）被shell截断为`NT00` | CLI传参时description含`$`的一定要用单引号包裹；或直接用 `write_file` 直写避免shell转义 |
-| km_import store: 被安全策略拦截 | subagent内store失败（git操作触发Hermes安全） | 降级方案：用`write_file`直写entries/，完成后主会话跑`km_lint --fix --skip-url-check` |
+| km_import store: 双重 frontmatter / Shell `$` 转义 / 被安全拦截 | 见 7.2 写库方式选择（已详述机制与降级） | 按 7.2：避免 `--content-file`、description 含 `$` 用单引号、subagent 被 Hermes 拦截则 `write_file` 直写 + 主会话 `km_lint --fix` |
 | subagent 倾倒PDF原文 | 条目>200行，含`--- page N ---`标记 | 删除后重新派发，context中写明"25-50行MAX，禁止PDF原文" |
 | 标签含斜杠(`I/O`) | `by-tag/I/O-2026.md`创建失败 | tags禁止使用`/ \ : * ? " < > |`，用`IO-2026`替代 |
 | 条目type不合法 | `type: Research Report` | OKF合法type仅5种：`Analysis/Article/Reference/Synthesis/Note` |
