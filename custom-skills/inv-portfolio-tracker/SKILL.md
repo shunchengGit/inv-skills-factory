@@ -45,6 +45,20 @@ Manage the user's investment portfolio master data and understand the automated 
 - `纪律检查`: Portfolio constraint checks (single stock limit, cash ≥2%, sector ≤40%). **Constraint values are user-defined in USER.md — always read latest USER.md rather than hardcoding limits here.**
 - `数据缺口说明`: Known data gaps and workarounds
 
+## 输出持仓概览格式（给用户看时必须遵守）
+
+当用户要求"输出持仓""查看持仓""我的持仓"时，输出表格**必须包含股数列**：
+
+```
+| 标的 | 代码 | 股数 | 价格 | 市值(万) | 仓位 | PE | 52w位 | 备注 |
+```
+
+- **股数是必显字段**，不可省略。用户需要看到每只标的持有多少股。
+- 价格保留原始币种标记（如 HK$421.4、$434.99、¥48.01）
+- 市值统一为万CNY
+- 备注列可精简（涨跌幅 + 风险标记，如 "🔴透支""🟡高位"）
+- 表格下方跟 纪律检查 + 关键关注，用简洁的关键点列出
+
 ## Automated Reporting Workflow (T1–T4)
 
 Defined in `~/.hermes/memories/CRONTASK.md`:
