@@ -31,9 +31,11 @@
 
 ### 阶段二：Web 搜索 — 广度优先
 
-与 deep-dive 的"先本地后外部"不同，Landscape Scan **先 Web 搜索建立全景**：
+与 deep-dive 的"先本地后外部"不同，Landscape Scan **先 Web 搜索建立全景**。
 
-多角度并行搜索：
+**工具选择**：如果当前环境有 Firecrawl MCP（`firecrawl_search`），优先使用；否则用 Agent 内置 WebSearch。Firecrawl 环境下搜索完成后调用 `firecrawl_search_feedback`。
+
+多角度并行搜索（每个角度至少 1 次搜索）：
 - 角度1 行业规模+趋势：`"<行业> industry outlook 2026 market size"`
 - 角度2 主要玩家：`"<行业> top companies market share"`
 - 角度3 投资叙事：`"<行业> AI data center investment thesis"`
@@ -43,22 +45,22 @@
 
 ### 阶段三：行情数据拉取（多标的并行）
 
-确定主要标的列表后，用 `inv-stock-data` 的 `snapshot` 命令批量拉取：
+确定主要标的列表后，用 `inv-stock-data` 技能的 `snapshot` 命令批量拉取（Agent 自行解析脚本路径，不硬编码）：
 
 ```bash
+# 设置代理（美股需要）
 export HTTPS_PROXY=http://127.0.0.1:7890
 export HTTP_PROXY=http://127.0.0.1:7890
 
 # 逐个拉取，间隔 ≥3 秒避免限流
-uv run ~/.hermes/skills/inv-skills/inv-stock-data/scripts/cs_stock_info.py snapshot ETN --output json > /tmp/etn.json
-uv run ~/.hermes/skills/inv-skills/inv-stock-data/scripts/cs_stock_info.py snapshot HUBB --output json > /tmp/hubb.json
+# 示例：uv run <inv-stock-data部署路径>/scripts/cs_stock_info.py snapshot ETN --output json
 ```
 
 > ⚠️ 禁止混用 A 股和美股在同一批调用中（代理状态切换必然出错）
 
 ### 阶段四：持仓交叉分析
 
-读取 `~/.hermes/memories/PORTFOLIO.md`（通过 `inv-portfolio-tracker`），检查：
+读取持仓文件（通过 `inv-portfolio-tracker` 技能，Agent 自行定位 PORTFOLIO.md 路径），检查：
 
 1. **已有敞口**：用户当前持有哪些相关标的？
 2. **相关性矩阵**：新标的与现有持仓的行业/主题重叠度

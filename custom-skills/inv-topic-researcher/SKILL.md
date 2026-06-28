@@ -47,7 +47,7 @@ dependencies:
 ### 阶段一：查知识库（研报已纳入知识库，一个入口，L3 全库挖掘）
 
 ```
-1. 按 inv-knowledge-curator [深度挖掘协议](#) L3 标准执行全库挖掘：
+1. 按 `inv-knowledge-curator` [深度挖掘协议 L3 全库挖掘](#) 标准执行（详见 `inv-knowledge-curator` SKILL.md 第四节）：
    a. 多角度搜索（标的/估值/风险/行业/竞争 ≥5 个角度）
    b. 过滤链精准过滤（--type/--source_type/--after）
    c. 跟随 cross_refs ≥2 层（每层至少跟 2-3 条高关联引用）
@@ -85,13 +85,15 @@ Agent 用 WebFetch 抓取，每个来源控制在 **1-3 个页面**（只抓最�
 
 ### 阶段三：二手分析采集（Web 搜索）
 
-复用 WebSearch + WebFetch，保持已有的三重门控：
+使用 Agent 可用的 Web 搜索工具，按以下优先级：
 
 ```
-搜索（多角度，见搜索策略）→ 去重 → 预过滤 →
-  → WebFetch → 相关性门控 → 新鲜度门控 → 可靠性门控 →
+可用工具检测 → 搜索（多角度，见搜索策略）→ 去重 → 预过滤 →
+  → 抓取页面内容 → 相关性门控 → 新鲜度门控 → 可靠性门控 →
   → 分析
 ```
+
+**工具选择**：如果当前环境有 Firecrawl MCP（`firecrawl_search` + `firecrawl_scrape`），优先使用（搜索结果含全文提取、反爬处理更好）；否则用 Agent 内置 WebSearch + WebFetch。Firecrawl 环境下搜索完成后调用 `firecrawl_search_feedback` 反馈搜索质量。
 
 搜索策略、新鲜度窗口、可靠性信号、源层级表、已知反爬站/低质量源名单 — 见下文「参考附表」。
 

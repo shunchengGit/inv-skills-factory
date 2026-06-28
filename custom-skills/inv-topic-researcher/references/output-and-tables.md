@@ -76,8 +76,8 @@
 | 层级 | 示例 | 处理 |
 |------|------|------|
 | 一手源 | SEC EDGAR, HKEX, 公司 IR, 巨潮 | 直接采集，最高置信度 |
-| 一线财经 | ft.com, economist.com, reuters.com | 默认高置信度 |
+| 一线财经 | economist.com | 默认高置信度 |
 | 二线财经 | cnbc.com, marketwatch.com, morningstar.com | 快速扫 5 信号 |
 | 券商研究 | 各投行研究页面 | 方法论可靠但存在乐观偏差 |
 | 低质量（跳过） | fool.com, investorplace.com, benzinga.com, simplywall.st, gurufocus.com | 直接标记 `unreliable_source` |
-| 不可抓（跳过） | bloomberg.com, wsj.com, ft.com, seekingalpha.com, barrons.com, reuters.com | 直接标记 `blocked` |
+| 付费墙/反爬（尝试→降级） | ft.com, reuters.com, bloomberg.com, wsj.com, seekingalpha.com, barrons.com | 先尝试抓取，被付费墙阻挡则标记 `blocked`，能抓到免费摘要则按二线财经处理 |
