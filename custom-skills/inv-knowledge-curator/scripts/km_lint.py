@@ -72,7 +72,11 @@ def check_dead_links(entries: list[dict]) -> list[dict]:
             if not target or not target.endswith(".md"):
                 continue
             # 解析相对路径
-            resolved = (file_path.parent / target).resolve()
+            # 如果target以entries/开头，直接从KNOWLEDGE_DIR解析，避免entries/entries/双路径
+            if target.startswith("entries/"):
+                resolved = (KNOWLEDGE_DIR / target).resolve()
+            else:
+                resolved = (file_path.parent / target).resolve()
             try:
                 resolved.relative_to(KNOWLEDGE_DIR)
             except ValueError:
