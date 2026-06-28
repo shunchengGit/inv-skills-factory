@@ -255,9 +255,15 @@ def check_okf_compliance() -> list[dict]:
                 issues.append({"path": rel, "issue": "missing_key_points"})
             else:
                 for tag_name in ("关键要点", "Key Points"):
-                    m = re.search(rf"## {tag_name}\s*\n(.*?)(?:\n##|\Z)", content, re.DOTALL)
-                    if m and m.group(1).strip().count("- ") < 2:
-                        issues.append({"path": rel, "issue": "empty_key_points"})
+                    m = re.search(rf"## {tag_name}\s*\n(.*?)(?:\n## |\Z)", content, re.DOTALL)
+                    if m:
+                        section_content = m.group(1).strip()
+                        # 关键要点必须有列表项：编号列表（1. **标题**：内容）或 bullet 列表（- **标题**：内容 或 - 纯文本内容）
+                        numbered_items = re.findall(r'^\d+\.\s+\*\*', section_content, re.MULTILINE)
+                        bullet_bold_items = re.findall(r'^-\s+\*\*', section_content, re.MULTILINE)
+                        bullet_plain_items = re.findall(r'^-\s+\S', section_content, re.MULTILINE)
+                        if len(numbered_items) < 2 and len(bullet_bold_items) < 2 and len(bullet_plain_items) < 2:
+                            issues.append({"path": rel, "issue": "empty_key_points"})
                         break
         except Exception:
             pass

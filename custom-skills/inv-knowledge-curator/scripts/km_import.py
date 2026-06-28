@@ -72,7 +72,12 @@ def _update_index(title: str, rel_path: str, description: str = "") -> None:
 
 
 def _auto_description(content: str, title: str, max_len: int = 120) -> str:
-    """从内容自动提取一句话描述。取第一个非标题非空段落。"""
+    """从内容自动提取一句话描述。取第一个非标题非空段落。
+
+    返回值仅作为 LLM 未显式传 --description 时的 fallback。
+    LLM 应始终显式提供 --description（含具体数据和结论），
+    不依赖此自动提取——因为自动提取无法判断什么是"核心发现"。
+    """
     lines = content.strip().split("\n")
     for line in lines:
         stripped = line.strip()
@@ -178,6 +183,14 @@ def cmd_store(
         return {
             "success": False,
             "error": f"source_type 无效: {source_type}，有效值: {', '.join(valid_types)}",
+        }
+
+    # entry_type 校验
+    valid_entry_types = ("Article", "Analysis", "Reference", "Synthesis", "Note")
+    if entry_type not in valid_entry_types:
+        return {
+            "success": False,
+            "error": f"type 无效: {entry_type}，合法值: {', '.join(valid_entry_types)}",
         }
 
     # 内容验证

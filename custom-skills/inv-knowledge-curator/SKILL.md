@@ -1,7 +1,7 @@
 ---
 name: inv-knowledge-curator
 description: AI投资知识库：3进3出1底座，OKF v0.2。脚本管确定性IO，检索/关联/综合交LLM。用于知识管理、资源分析时
-version: 3.2.0
+version: 3.2.1
 trigger: [知识管理, 收藏文章, 笔记整理, 研报分析, 券商研报, 研报提取, 财报分析, 资源入库, km_init, km_import, km_search, km_lint, km_graph]
 commands:
   - /km_init - 初始化知识库（LLM 流程：bash git clone + 建目录）
@@ -90,12 +90,36 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 
 ### 内容质量标准
 
-**description（搜索召回的命脉）**：一句话说清"这篇文章/研报的核心发现是什么"。
+详见 [二、3 进（导入）](#二3-进导入) 中的**入库前必检清单**（8 项逐条检查表 + 正反例 + 格式规范 + type 选型指南）。
 
-| ❌ 差 | ✅ 好 |
+---
+
+# 二、3 进（导入）
+
+## ⚠ 入库前必检清单（每条 entry 生成后逐项自检，不通过不调 store）
+
+生成 entry 后、调用 `km_import.py store` 前，逐项确认：
+
+| # | 检查项 | 标准 | 不通过的后果 |
+|---|--------|------|------------|
+| 1 | **description** | 含具体数字和结论（如"毛利率38%(+3pp)"），不是"XX相关知识的整理" | 搜索召不回，条目形同虚设 |
+| 2 | **摘要** | ≥3 句连贯段落（不是 bullet），结构：背景→核心发现→结论 | 读者无法快速理解全貌 |
+| 3 | **关键要点** | ≥3 条，每条含独立数据点（数字/百分比/金额），格式 `1. **标题**：内容` | 无法直接引用，信息密度低 |
+| 4 | **tags** | ≥4 个：1 标的 + 2 分析维度 + 1 时效（如 `2026-Q1`） | 标签导航失效，按维度筛选不到 |
+| 5 | **关联** | ≥2 条，每条链接用实际文件名（先 `ls entries/` 核对），写明关联原因 | 孤立节点，知识图谱无连接 |
+| 6 | **type** | 5 选 1：Article/Analysis/Reference/Synthesis/Note，默认不选 Article | lint 报错，索引分组混乱 |
+| 7 | **title** | 含标的/主题关键词，非空泛 | 搜索匹配不到 |
+| 8 | **resource** | 指向真实来源（URL/PDF路径/manual） | OKF 合规失败 |
+
+> **description 是搜索召回的命脉**。如果 description 写"XX相关知识的整理与摘要"，这条 entry 基本等于白入库——搜索时匹配不到具体数据，LLM 也不会优先引用它。
+
+**description 正反例**：
+
+| ❌ 差（会被 store 拒绝） | ✅ 好 |
 |------|------|
 | `福耀玻璃相关知识的整理与摘要` | `福耀2026Q1毛利率38%(+3pp YoY)，纯碱降价+产品升级驱动，ASP+11%超指引` |
 | `腾讯控股研报综合摘要` | `腾讯Q1营收1965亿(+9%),调整后净利+11%,15家券商一致看多,目标价690-716港元` |
+| `ASML最新研究分析` | `ASML 2026Q1新增订单78亿€(指引50-60亿€)，EUV发货56台，25H2收入预期300-350亿€` |
 
 **摘要 ≠ 关键要点**：
 
@@ -103,6 +127,26 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 |------|------|------|
 | 摘要 | 概述"发生了什么" | 3-5 句连贯段落，给出全貌：背景→核心发现→结论 |
 | 关键要点 | 提取"具体论据" | 3-7 条独立要点，每条含数据/事实，可直接引用 |
+
+**关键要点的格式规范（lint 解析依赖）**：
+- 必须使用 `1. **标题**：内容` 的编号列表格式，或 `- **标题**：内容` / `- 纯文本内容` 的 bullet 列表格式
+- 禁止在 `## 关键要点` 下直接写段落文字（会被 lint 误判为空）
+- 编号列表示例：
+  ```markdown
+  ## 关键要点
+  
+  1. **AI收入爆发**：AI收入环比+30%，同比增速达+200%
+  2. **预期过高致回调**：指引miss引发股价回调约15%
+  3. **目标价上调**：JPM将目标价从$500上调至$580
+  ```
+- bullet 列表示例：
+  ```markdown
+  ## 关键要点
+  
+  - 1Q26营收创历史新高KRW 52.6tn（+60% q-q/+198% y-y）
+  - DRAM ASP中60%+增长，NAND ASP中70%+增长
+  - HBM4E预期>50%份额：与TSMC base-die合作
+  ```
 
 **type 选型**：LLM 根据内容性质判断，默认不选 Article：
 
@@ -114,23 +158,7 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 | 融合多份研报/多源信息的综合报告 | `Synthesis` |
 | 随口记录的想法、灵感 | `Note` |
 
----
-
-# 二、3 进（导入）
-
-生成 entry 前自查：
-
-- [ ] description 含具体数据和结论，不可空泛
-- [ ] 摘要 ≥3 句（连贯段落），关键要点 ≥3 条（独立数据点）
-- [ ] tags 含 1 标的 + 2 分析维度 + 时效
-- [ ] 关联 ≥2 条，写明为什么相关（不是只写"相关"）
-- [ ] title 清晰含标的/主题关键词
-- [ ] resource 指向真实来源
-
 所有入口共享的**导入规则**：
-- **description** 含具体数据和结论，不可留空或填"XX相关知识的整理"——description 是搜索召回的核心字段
-- 写摘要（3-5句）+ 关键要点（3-7条），不可留空
-- tags 至少包含 1 标的 + 2 分析维度
 - **关联由 LLM 建立并写入**：导入时 LLM 自行搜索已有条目（读 `entries/index.md` + `grep entries/*.md`），找 ≥2 个建交叉关联，写明相关原因。`km_lint --fix` 不再自动补关联（确定性词袋规则已移除），仅做密度检查
 - **关联链接必须用实际文件名**（死链根因）：写 `## 关联` 段的 `[](path)` 时，**path 必须是条目的实际 `.md` 文件名（slugified）**，不是标题原文。标题含 `：` `/` 等符号时，slugify 会转成 `-`（如标题"ASML首选股：三大驱动因素" → 文件名 `ASML首选股-三大驱动因素.md`）。写链接前先 `ls entries/` 或读 `entries/index.md` 核对真实文件名，禁止凭标题臆造路径
 - `km_import.py store` 存入 `entries/{slug}.md`（自动更新 index/log + git push）
@@ -232,6 +260,47 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 3. （`--fix`）自动重建 index/by-tag/图谱 + git push，再次 lint 验证
 
 ✅ 完成：仅检查 → 返回 `summary` + 各项 issue 列表；`--fix` → index/by-tag/图谱重建 + git push 完成
+
+### lint 修复工作流（LLM 驱动）
+
+当 `km_lint --fix` 后仍有孤立条目（`no_cross_refs > 0`）时，LLM 按以下步骤修复：
+
+**步骤 1：读取 lint 结果获取孤立条目列表**
+```bash
+cd ~/.inv-knowledge && python3 km_lint.py 2>&1 | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for e in data.get('isolated_entries', []):
+    print(f\"- {e['path']}: {e['title']}\")
+"
+```
+
+**步骤 2：为每个孤立条目搜索相关条目**
+- 读取所有条目的 frontmatter（title, tags）
+- 基于标签重叠和标题关键词计算相似度
+- 为每个孤立条目找出 top 3 最相关的已有条目
+
+**步骤 3：批量写入关联**
+- 在孤立条目的 `## 关联` 段添加指向相关条目的 markdown 链接
+- 格式：`- [标题](entries/文件名.md) — 关联原因`
+- 关联原因需具体说明为什么相关（同机构/同主题/同行业等）
+
+**步骤 4：清理死链**
+- 运行 `km_lint --fix` 自动清理指向不存在文件的死链
+- 若仍有死链，手动检查关联段中的 `[](path)` 路径是否对应真实文件名
+
+**步骤 5：验证修复**
+- 再次运行 `km_lint --fix`，确认 `no_cross_refs: 0`
+- 检查 `summary` 中其他问题项是否归零
+
+### 常见 lint 问题速查
+
+| 问题 | 原因 | 修复方式 |
+|------|------|---------|
+| `no_cross_refs` | 条目无交叉引用 | LLM 按上述工作流批量建关联 |
+| `dead_links` | 关联指向的文件不存在 | `--fix` 自动清理；检查 slugify 后的文件名是否一致 |
+| `empty_key_points` | `## 关键要点` 下无有效列表项 | 确保使用 `1. **标题**` 或 `- 内容` 格式 |
+| `okf_errors` | frontmatter 缺少必需字段 | 补全 type/title/description/timestamp/resource/source_type |
 
 | 检查项 | --fix |
 |--------|:---:|

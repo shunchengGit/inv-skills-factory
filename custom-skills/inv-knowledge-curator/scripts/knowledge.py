@@ -33,6 +33,8 @@ FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 OKF_REQUIRED = ("type", "title", "description", "timestamp", "resource", "source_type")
 # 有效的 source_type 取值
 VALID_SOURCE_TYPES = ("url", "pdf", "note")
+# 有效的 type 取值
+VALID_ENTRY_TYPES = ("Article", "Analysis", "Reference", "Synthesis", "Note")
 # 本地时区
 LOCAL_TZ = timezone(timedelta(hours=8))  # Asia/Shanghai
 
@@ -196,6 +198,13 @@ def validate_okf(file_path: Path) -> dict:
         st = fm["source_type"].strip().strip('"').strip("'")
         if st not in VALID_SOURCE_TYPES:
             result["warnings"].append(f"source_type 值无效: {st}（期望: {', '.join(VALID_SOURCE_TYPES)}）")
+
+    # type 取值校验
+    if "type" in fm and fm["type"]:
+        et = fm["type"].strip().strip('"').strip("'")
+        if et not in VALID_ENTRY_TYPES:
+            result["valid"] = False
+            result["errors"].append(f"type 值无效: {et}（合法值: {', '.join(VALID_ENTRY_TYPES)}）")
 
     # 推荐字段缺失
     if "tags" not in fm or not fm["tags"]:
