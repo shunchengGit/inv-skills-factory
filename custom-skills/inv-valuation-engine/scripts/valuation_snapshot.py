@@ -210,10 +210,35 @@ def _build_a_share_snapshot(
     notes: list[str],
     data_sources: list[str],
 ) -> Snapshot:
-    """Build snapshot for A-share symbols via inv-stock-data (进程内调用)."""
+    """Build snapshot for A-share symbols via inv-stock-data (进程内调用).
+
+    优先使用 cs_stock_all 一键取数（snapshot + daily + announcements + relations），
+    减少 API 调用次数，降低限流风险。
+    """
     plain = to_a_share_plain_code(normalized)
-    # --- snapshot ---
-    snap = _call_cs_stock("snapshot", plain)
+    # --- 一键取数（优先 cs_stock_all） ---
+    all_data = _call_cs_stock("all", plain)
+    # all 命令成功时返回 {snapshot, daily, announcements, relations} 且各子模块非空
+    all_ok = (
+        all_data
+        and not all_data.get("error")
+        and isinstance(all_data.get("snapshot"), dict)
+        and not all_data["snapshot"].get("error")
+    )
+    if all_ok:
+        snap = all_data.get("snapshot") or {}
+        daily_data = all_data.get("daily") or {}
+        ann_data = all_data.get("announcements") or {}
+        rel_data = all_data.get("relations") or {}
+        data_sources.append("inv-stock-data(all)")
+    else:
+        # 降级：逐个调用（兼容 all 不支持或依赖缺失的场景）
+        if all_data and all_data.get("error"):
+            notes.append(f"cs_stock_all 不可用（{all_data['error'][:80]}），降级逐个调用")
+        snap = _call_cs_stock("snapshot", plain)
+        daily_data = _call_cs_stock("daily", plain)
+        ann_data = _call_cs_stock("announcements", plain)
+        rel_data = _call_cs_stock("relations", plain)
     if snap and not snap.get("error"):
         data_sources.append("inv-stock-data(snapshot)")
     else:
@@ -263,7 +288,6 @@ def _build_a_share_snapshot(
     ak_xq_industry = None
 
     # --- daily bars for 5y percentile ---
-    daily_data = _call_cs_stock("daily", plain)
     hist_5y = _bars_to_df(daily_data)
     if not hist_5y.empty:
         data_sources.append("inv-stock-data(daily)")
@@ -285,7 +309,6 @@ def _build_a_share_snapshot(
     high_52w, low_52w, pos_52w, downside_to_52w = compute_52w_position(hist_5y)
 
     # --- announcements for event scoring ---
-    ann_data = _call_cs_stock("announcements", plain)
     announcements = []
     if ann_data:
         if isinstance(ann_data, list):
@@ -298,7 +321,6 @@ def _build_a_share_snapshot(
         notes.append("inv-stock-data announcements 调用失败，事件评分可能不完整")
 
     # --- relations ---
-    rel_data = _call_cs_stock("relations", plain)
     relations = []
     if rel_data:
         if isinstance(rel_data, list):
@@ -451,11 +473,12 @@ def _build_yahoo_snapshot(
     total_cash = fin_fund.get("total_cash")
     shares_outstanding = fin_fund.get("shares_outstanding") or fin_fund.get("market_cap")
     operating_margin = fin_fund.get("operating_margins")
-    ps = None
-    ev_to_ebitda = None
-    analyst_target_price = None
-    analyst_count = None
-    beta = None
+    # 从 financial_data 的 fundamentals 提取更完整字段
+    ps = fin_fund.get("price_to_sales") or fin_fund.get("ps_ttm")
+    ev_to_ebitda = fin_fund.get("ev_to_ebitda") or fin_fund.get("enterprise_to_ebitda")
+    analyst_target_price = fin_fund.get("target_mean_price") or fin_fund.get("analyst_target_price")
+    analyst_count = fin_fund.get("number_of_analysts") or fin_fund.get("analyst_count")
+    beta = fin_fund.get("beta") or snap.get("beta")
 
     # --- daily bars for 5y percentile ---
     daily_data = _call_cs_stock("daily", normalized)
@@ -494,6 +517,8 @@ def _build_yahoo_snapshot(
     # --- assemble metrics ---
     current_price_value = safe_round(current_price, 4)
     analyst_upside_pct = None
+    if analyst_target_price is not None and current_price_value is not None and current_price_value > 0:
+        analyst_upside_pct = safe_round((analyst_target_price / current_price_value - 1) * 100, 2)
     earnings_yield_pct = None
     if trailing_pe not in {None, 0}:
         earnings_yield_pct = safe_round(100 / float(trailing_pe), 2)

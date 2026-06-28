@@ -108,8 +108,9 @@ def infer_company_type(metrics: dict[str, Any], override: str) -> str:
     return "待确认"
 
 
-def build_metric_views(metrics: dict[str, Any], company_type: str) -> list[MetricView]:
+def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list[MetricView], list[str]]:
     views: list[MetricView] = []
+    notes_for_report: list[str] = []
 
     trailing_pe = metrics.get("trailing_pe")
     forward_pe = metrics.get("forward_pe")
@@ -228,8 +229,21 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> list[Metri
         )
 
     pe_anchor = first_non_null(forward_pe, trailing_pe)
+    # Forward PE 合理性校验：若 Forward PE 暗含的盈利增速与 trailing PE 差距过大（>30%），
+    # 大概率是 Yahoo earningsGrowth 失真（常见于港股互联网/平台公司），降级使用 trailing_pe
+    pe_anchor_source = "forward_pe" if forward_pe is not None else "trailing_pe"
+    if forward_pe is not None and trailing_pe is not None and trailing_pe > 0:
+        implied_growth = (trailing_pe / forward_pe - 1) * 100
+        if implied_growth > 30:
+            pe_anchor = trailing_pe
+            pe_anchor_source = "trailing_pe(fwd_pe_implied_{:.0f}pct_growth_suspect)".format(implied_growth)
+            notes_for_report.append(
+                "Forward PE({:.2f})暗含{:.0f}%盈利增速，疑似Yahoo earningsGrowth失真，已降级使用trailing_pe({:.2f})".format(
+                    forward_pe, implied_growth, trailing_pe
+                )
+            )
     if pe_anchor is not None:
-        pe_comment = "行业 PE 参考锚。"
+        pe_comment = "行业 PE 参考锚（{}）。".format(pe_anchor_source)
         if company_type == "消费/医疗":
             pe_rating = metric_rating_by_ranges(
                 pe_anchor,
@@ -288,7 +302,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> list[Metri
 
     # event_score 已移除，LLM 根据原始公告/调研数据判断
 
-    return views
+    return views, notes_for_report
 
 
 def first_non_null(*values: Any) -> Any:
@@ -368,8 +382,22 @@ def build_key_reasons(metrics: dict[str, Any], conclusion: str, views: list[Metr
 
 def build_assumptions(metrics: dict[str, Any]) -> list[str]:
     assumptions = []
-    if metrics.get("earnings_growth_pct") is not None:
-        assumptions.append(f"未来 2-3 年利润增速大致维持在 {metrics['earnings_growth_pct']}% 附近，不明显下修。")
+    earnings_growth = metrics.get("earnings_growth_pct")
+    if earnings_growth is not None:
+        # 合理性校验：Yahoo earningsGrowth 对互联网/平台公司常严重失真
+        # 若增速 >40% 或 < -30%，大概率是 GAAP 单季度扭曲，标记警告而非直接采信
+        if earnings_growth > 40:
+            assumptions.append(
+                f"⚠ 数据源利润增速 {earnings_growth}% 异常偏高（疑似GAAP单季度扭曲），"
+                "请用 Normalized/Non-GAAP 净利润手动重算增速，勿直接采信此值。"
+            )
+        elif earnings_growth < -30:
+            assumptions.append(
+                f"⚠ 数据源利润增速 {earnings_growth}% 异常偏低（疑似一次性项目拖累），"
+                "请确认是否为 Non-GAAP 口径，勿直接采信此值。"
+            )
+        else:
+            assumptions.append(f"未来 2-3 年利润增速大致维持在 {earnings_growth}% 附近，不明显下修。")
     if metrics.get("gross_margin_pct") is not None:
         assumptions.append("毛利率与净利率不发生结构性恶化。")
     if metrics.get("next_earnings_date") is not None:
@@ -405,7 +433,7 @@ def action_reference(conclusion: str) -> str:
 
 def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str) -> ValuationReport:
     company_type = infer_company_type(snapshot.metrics, company_type_override)
-    views = build_metric_views(snapshot.metrics, company_type)
+    views, report_notes = build_metric_views(snapshot.metrics, company_type)
     conclusion = choose_conclusion(views)
     confidence = confidence_level(snapshot.data_gaps, views)
 
@@ -423,7 +451,7 @@ def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str
         core_assumptions=build_assumptions(snapshot.metrics),
         risks=build_risks(snapshot.metrics),
         action_reference=action_reference(conclusion),
-        notes=snapshot.notes,
+        notes=snapshot.notes + report_notes,
     )
 
 
