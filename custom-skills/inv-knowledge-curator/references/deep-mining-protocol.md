@@ -1,6 +1,8 @@
 # 深度挖掘协议（下游技能必读）
 
 > 以下三个深度等级供下游技能（估值引擎/QARP策略/主题研究）选择使用。不是每次查询都需要 L3——根据任务性质选择，**但估值和决策类分析默认最低 L2**。
+>
+> **适用边界**：下游技能默认只读知识库，仅使用 `/km_search` + `km_import read`。L3 可以产出候选 Synthesis、待入库建议或增量研究结论，但真正的 `/km_import store|res` 写入、版本递增与刷新落库，由 `inv-knowledge-curator` 主流程负责。
 
 ## L1 快速检索（30 秒）
 
@@ -60,7 +62,7 @@ L2 全部步骤 +
 
   7. 聚合分析（LLM inline）
      → 收集所有匹配条目 → 识别共识/分歧/时间线/信息缺口
-     → 可选：km_import.py store 为新的 Synthesis 条目
+     → 产出候选 Synthesis、待入库建议或增量研究结论；如需真正落库，移交 `inv-knowledge-curator` 主流程执行
 
   8. 双向回链查询
      → grep -rl "<关注条目slug>.md" entries/*.md 查找"谁引用了我关注的条目"

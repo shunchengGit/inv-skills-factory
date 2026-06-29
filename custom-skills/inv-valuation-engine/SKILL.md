@@ -31,11 +31,10 @@ commands:
 2. 用户给了代码但没给完整数据：先运行 `scripts/valuation_snapshot.py`。
 3. 用户要直接结论：优先运行 `scripts/valuation_report.py`。
 4. 用户要比较几家公司谁更便宜/更贵：优先运行 `scripts/valuation_compare.py`。
-5. **脚本超时降级**：若 `uv run` 因依赖下载超时（常见于首次运行或网络慢），降级为 inv-stock-data `financials` 子命令获取财务三表数据，再按本技能框架手动计算。不得因脚本超时而放弃数据获取。
-5. 脚本返回后，先检查 `data_gaps`，明确缺口和置信度影响。
+5. 若脚本超时或字段缺失，按 `inv-stock-data` 的数据层策略降级，先检查 `data_gaps`，必要时再用 `financials` + `valuation_manual_compute.py` 补全。
 6. 定量判断只按 `references/scoring-rules.md` 执行，定性解释再用 `references/master-frameworks.md`。
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点。
-8. **查阅知识库**（`inv-knowledge-curator`）：通过 L2 深度探索查找该标的相关条目——多角度搜索、跟随 cross_refs、按类型（Reference 优先）分层读取。LLM 自行判断哪些资料可用（Article/Reference/Analysis/Synthesis/pdf）。若有原始 PDF 资源，可通过 `/km_import res` 提取原文。定量结论仍以 `scoring-rules.md` 为准。
+8. **查阅知识库**（`inv-knowledge-curator`）：估值分析默认最低 L2，按 `inv-knowledge-curator/references/deep-mining-protocol.md` 执行。保留本技能特有约束：Reference 类条目优先作为数据锚点；条目摘要不足时，可用 `km_import read --file <res/...pdf> --pages edges` 回溯原始 PDF。定量结论仍以 `scoring-rules.md` 为准。
 
 ## 数据源说明（新增）
 - 所有数据统一通过 `inv-stock-data` CLI 获取，不直接调用 yfinance/AkShare。
@@ -106,7 +105,7 @@ commands:
 
 ## 执行流程
 1. 确认标的类型和适用估值口径。
-2. **查阅知识库（L2 深度探索）**：按 `inv-knowledge-curator` 的 [深度挖掘协议](#) L2 标准执行——多角度搜索（标的/估值/风险 ≥3 个角度）→ 跟随 cross_refs ≥1 层 → 标签导航收尾。**必须先完成深度搜索，不可跳过或与下一步并行。** Reference 类条目优先读取（作为数据锚点），Analysis/Synthesis 次之（定性校验）。若知识库无记录，按 4.5 格式输出知识缺口。
+2. **查阅知识库（L2 深度探索）**：按 `inv-knowledge-curator/references/deep-mining-protocol.md` 的 L2 标准执行。**必须先完成深度搜索，不可跳过或与下一步并行。** 本技能只保留两条特有约束：Reference 类条目优先读取（作为数据锚点），Analysis/Synthesis 次之（定性校验）；若知识库无记录，按协议输出结构化知识缺口。
 3. 优先用 `cs_stock_all` 一次获取全量数据（snapshot + financial + financials），避免多次跨进程调用触发限流。然后标注数据时点。
 4. 检查关键数据是否齐全；缺失、过旧或无法更新时先列出缺口。
 5. 按公司类型选择框架，不强行套用全部方法。
@@ -121,7 +120,7 @@ commands:
 | 层级 | 回答的问题 | 数据来源 | 作用 |
 |------|------------|---------|------|
 | **数据层** | 事实是什么 | 实时行情（Yahoo Finance/inv-stock-data）+ 财务快照 | 锚定事实，确定估值锚点 |
-| **知识层** | 已有资料怎么说 | inv-knowledge-curator（L2 深度探索：多角度搜索 → cross_refs 跟随 ≥1层 → 按 Reference/Analysis/Synthesis 分层读取） | 校验假设，发现共识与分歧；输出知识覆盖度矩阵 |
+| **知识层** | 已有资料怎么说 | inv-knowledge-curator（按 `deep-mining-protocol.md` 执行 L2；Reference 优先、必要时回溯原始 PDF） | 校验假设，发现共识与分歧；输出知识覆盖度矩阵 |
 | **竞争层** | 护城河有多深 | Porter五力 / 行业数据 | 验证长期竞争优势是否结构性 |
 | **操作层** | 具体怎么做 | 前三层结论 + 位置/波动判断 | 落到价格区间、仓位、打脸条件 |
 

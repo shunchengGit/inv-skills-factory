@@ -162,12 +162,12 @@ commands:
 **阶段一（A/B 并行）**：
 
 1. **A. 估值快照**：`valuation_snapshot.py <代码> --output json`，检查 `data_gaps`
-2. **B. 知识库 L2 深度搜索**（见 `inv-knowledge-curator/references/deep-mining-protocol.md`）：多角度搜索（标的/估值/风险/行业 ≥3 角度）→ 跟随条目 `## 关联` 链 ≥1 层 → 标签导航收尾
+2. **B. 知识库 L2 深度搜索**：按 `inv-knowledge-curator/references/deep-mining-protocol.md` 执行，QARP 只保留本技能特有要求——输出必须映射到三道闸门、估值纪律和买入必答
 3. **原始资源回溯**（条目摘要不足时）：读条目 frontmatter `resource` 字段 → `km_import.py read --file {resource} --pages edges` 回溯 res/ 原始研报首尾页。触发条件：缺量化数据（毛利率驱动分解、关税敏感度）、需验证具体数字、缺风险段落措辞。`read` 只读无副作用
 4. **时效前置**：检查最晚条目时间戳，全部 aging（91-183天）或 stale（>183天）则标记"研报过期"，阶段二触发 Web 降级
-5. **结构化输出**：按 `references/research-cross-validation.md` 映射表输出——共识观点（行业/TAM/竞争）→ 第一道闸门；财务趋势 → 第二道闸门；盈利预测区间 → 估值纪律 3.3；核心风险/隐含假设 → 买入必答。知识库无记录则按 4.5 格式输出知识缺口
+5. **结构化输出**：按 `references/research-cross-validation.md` 映射表输出——共识观点（行业/TAM/竞争）→ 第一道闸门；财务趋势 → 第二道闸门；盈利预测区间 → 估值纪律 3.3；核心风险/隐含假设 → 买入必答。知识库无记录则按协议输出结构化知识缺口
 
-**阶段二**：检查数据/知识覆盖缺口。若知识库有缺口，先输出结构化"知识缺口表"（按维度列出缺什么），再决定是否 WebFetch 降级补充。知识缺口表须标注每项缺口对后续分析环节的影响。
+**阶段二**：检查数据/知识覆盖缺口。数据事实统一以 `inv-stock-data` 为准，脚本/字段缺口按 `references/data-fallback.md` 和上游数据层策略降级；若知识库有缺口，先输出结构化"知识缺口表"，再决定是否 WebFetch 补充。知识缺口表须标注每项缺口对后续分析环节的影响。
 
 **阶段三（顺序）**：五档结论 → 选股闸门 → 估值纪律 → 买入必答 6 问 → 组合检查 → 结论 + 机会成本对比
 

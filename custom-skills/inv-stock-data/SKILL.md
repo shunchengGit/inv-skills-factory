@@ -30,7 +30,7 @@ commands:
 
 在用户询问 **个股基础信息、行情、财务摘要、公告、调研或行业数据** 时，优先用本技能内置脚本拉取结构化数据，再回答或整理；不做估值结论与买卖建议（估值请用 `inv-valuation-engine`）。
 
-**本技能是所有投资相关技能的唯一数据层**，其他技能通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。
+**本技能是所有投资相关技能的唯一数据层**，其他技能通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。脚本优先级、代理规则、重试/降级语义以本技能为权威，其他技能只保留与自身分析逻辑强相关的补充说明。
 
 ## 快速命令
 
@@ -144,6 +144,24 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 - **估值指标**：A 股 snapshot 含 `valuation`（百度 PE TTM/PE 静态/PB/市现率/总市值）和 `sina_financial_supplement`（新浪 EPS/每股净资产/股息发放率）；百度缺失时用新浪数据 + 收盘价自行计算。
 - **yfinance 高级 API**：当 CLI 子命令返回不全或需完整年度财报时，可直接用 Python `yfinance` 调用 `ticker.income_stmt` / `balance_sheet` / `cash_flow` 和 `ticker.history(period='5y', interval='1mo')`。详见 `references/yfinance-advanced-usage.md`。
 
+## 持仓数据刷新流程
+
+当用户要求"刷新持仓数据"时，按以下流程执行：
+
+1. **读取持仓主文件**：`cat ~/.hermes/memories/PORTFOLIO.md` 获取持仓列表和成本
+2. **优先使用脚本**：`uv run scripts/cs_stock_info.py snapshot <code>` 逐个拉取
+   - A股/ETF 先执行 `unset HTTPS_PROXY HTTP_PROXY`
+   - 美港股先执行 `export HTTPS_PROXY=http://127.0.0.1:7890`
+3. **脚本超时/失败时降级**：
+   - **A股/ETF**：用 QQ Finance API (`qt.gtimg.cn`) 获取实时价格，详见 `references/qq-finance-realtime-api.md`
+   - **美港股**：用 `web_search` 搜索 "<股票名> <代码> 最新股价 <日期>" 获取价格
+   - **港股特殊**：07709/06809 等 Yahoo 404 标的，搜索富途牛牛/moomoo 页面获取价格
+4. **交叉验证**：同一标的至少用 2 个独立数据源验证价格
+5. **整理输出**：表格形式呈现 标的|代码|最新价|涨跌|数据来源
+6. **更新 PORTFOLIO.md**：将最新价格写入持仓文件（如用户要求）
+
+**禁止**：同一对话中重复执行相同 `web_search` 查询超过 3 次——如果搜索结果已包含所需数据，直接使用，不要陷入循环。
+
 ## 与其他技能配合
 
 - **数据层统一**：本技能是所有投资相关技能的**唯一数据层**。`inv-valuation-engine`、`inv-qarp-strategy`、`inv-porter-five-forces` 通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。
@@ -176,6 +194,7 @@ uv pip install --python .venv/bin/python akshare pandas yfinance
 - **Yahoo 浏览器降级**：`references/yahoo-browser-fallback.md`（Agent WebFetch 用法、JS 提取技巧）
 - **已知问题与降级**：`references/known-issues.md`（分端点限流、SSL 失败、A 股数据源问题等）
 - **yfinance 高级用法**：`references/yfinance-advanced-usage.md`（期权、评级、search 等）
+- **持仓刷新流程**：`references/portfolio-refresh-workflow.md`（"刷新持仓数据"指令的标准执行流程与降级策略）
 
 ## 使用原则
 

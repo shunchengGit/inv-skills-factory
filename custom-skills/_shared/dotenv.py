@@ -10,12 +10,30 @@
 
 import os
 from pathlib import Path
+from typing import Optional
+
+
+def _find_env_file() -> Optional[Path]:
+    seen: set[Path] = set()
+    starts = [Path.cwd().resolve(), Path(__file__).resolve().parent]
+
+    for start in starts:
+        for candidate in [start, *start.parents]:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+
+            env_file = candidate / ".env"
+            if env_file.exists():
+                return env_file
+
+    return None
 
 
 def load() -> None:
-    """加载 SkillsStore/.env，已存在的环境变量不覆盖。"""
-    env_file = Path(__file__).resolve().parents[2] / ".env"
-    if not env_file.exists():
+    """加载项目根 .env，已存在的环境变量不覆盖。"""
+    env_file = _find_env_file()
+    if not env_file:
         return
 
     for line in env_file.read_text().splitlines():

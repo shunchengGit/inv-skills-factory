@@ -2,7 +2,7 @@
 name: inv-hk-ipo-analysis
 description: 分析港股IPO招股书PDF，提取财务数据、基石投资者、行业前景、风险因素，综合判断打新价值。用于港股新股认购决策时
 version: 1.0.0
-triggers:
+trigger:
   - "新股分析"
   - "IPO分析"
   - "打新"
@@ -59,15 +59,13 @@ ps_ratio = 市值 / 年化收入
 
 ### 第三步：搜索市场数据
 
-```bash
-# 查询孖展认购热度
-web_search("股票代码 孖展 认购倍数")
+```text
+优先使用 `firecrawl_search`（必要时再 `firecrawl_scrape`）；若当前环境无 Firecrawl MCP，则降级为 `WebSearch` + `WebFetch`。
 
-# 查询近期同类新股首日表现
-web_search("2026年 港股 18A 新股 首日 表现")
-
-# 查询公司新闻和评价
-web_search("公司名 IPO 评价")
+推荐查询模板：
+- `<股票代码> 孖展 认购倍数`
+- `2026年 港股 18A 新股 首日 表现`
+- `<公司名> IPO 评价`
 ```
 
 ### 第四步：综合分析框架

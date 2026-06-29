@@ -15,6 +15,7 @@ commands:
 
 > **3 进 3 出 1 底座。** 扁平存储，frontmatter + 全文检索，不依赖目录层级。
 > **脚本/LLM 分工**：脚本只做确定性 IO（git/PDF提取/索引重建/图谱生成/合规校验）；检索、统计、关联发现、综合分析全交 LLM（读 `entries/index.md` + `grep entries/*.md` + 跟随 markdown 链接）。
+> **边界**：下游技能默认只读知识库；真正的 `/km_import store|res` 写入、Synthesis 落库、版本递增与刷新由本技能主流程负责。原始 PDF 只读入口统一为 `km_import read --file <res/...pdf> --pages ...`。
 
 ## 仓库结构
 
@@ -98,72 +99,14 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 
 ## ⚠ 入库前必检清单（每条 entry 生成后逐项自检，不通过不调 store）
 
-生成 entry 后、调用 `km_import.py store` 前，逐项确认：
+入库前最少确认 8 项：`description`、摘要、关键要点、tags、关联、type、title、resource。
 
-| # | 检查项 | 标准 | 不通过的后果 |
-|---|--------|------|------------|
-| 1 | **description** | 含具体数字和结论（如"毛利率38%(+3pp)"），不是"XX相关知识的整理" | 搜索召不回，条目形同虚设 |
-| 2 | **摘要** | ≥3 句连贯段落（不是 bullet），结构：背景→核心发现→结论 | 读者无法快速理解全貌 |
-| 3 | **关键要点** | ≥3 条，每条含独立数据点（数字/百分比/金额），格式 `1. **标题**：内容` | 无法直接引用，信息密度低 |
-| 4 | **tags** | ≥4 个：1 标的 + 2 分析维度 + 1 时效（如 `2026-Q1`） | 标签导航失效，按维度筛选不到 |
-| 5 | **关联** | ≥2 条，每条链接用实际文件名（先 `ls entries/` 核对），写明关联原因 | 孤立节点，知识图谱无连接 |
-| 6 | **type** | 5 选 1：Article/Analysis/Reference/Synthesis/Note，默认不选 Article | lint 报错，索引分组混乱 |
-| 7 | **title** | 含标的/主题关键词，非空泛 | 搜索匹配不到 |
-| 8 | **resource** | 指向真实来源（URL/PDF路径/manual） | OKF 合规失败 |
+其中有三条必须特别注意：
+- **description 必须含具体数字和结论**，否则搜索召回会明显变差
+- **关键要点必须是可解析的列表格式**，不要在 `## 关键要点` 下直接写段落
+- **关联链接必须使用真实文件名**，写入前先 `ls entries/` 或读 `entries/index.md` 核对
 
-> **description 是搜索召回的命脉**。如果 description 写"XX相关知识的整理与摘要"，这条 entry 基本等于白入库——搜索时匹配不到具体数据，LLM 也不会优先引用它。
-
-**description 正反例**：
-
-| ❌ 差（会被 store 拒绝） | ✅ 好 |
-|------|------|
-| `福耀玻璃相关知识的整理与摘要` | `福耀2026Q1毛利率38%(+3pp YoY)，纯碱降价+产品升级驱动，ASP+11%超指引` |
-| `腾讯控股研报综合摘要` | `腾讯Q1营收1965亿(+9%),调整后净利+11%,15家券商一致看多,目标价690-716港元` |
-| `ASML最新研究分析` | `ASML 2026Q1新增订单78亿€(指引50-60亿€)，EUV发货56台，25H2收入预期300-350亿€` |
-
-**摘要 ≠ 关键要点**：
-
-| 章节 | 定位 | 写法 |
-|------|------|------|
-| 摘要 | 概述"发生了什么" | 3-5 句连贯段落，给出全貌：背景→核心发现→结论 |
-| 关键要点 | 提取"具体论据" | 3-7 条独立要点，每条含数据/事实，可直接引用 |
-
-**关键要点的格式规范（lint 解析依赖）**：
-- 必须使用 `1. **标题**：内容` 的编号列表格式，或 `- **标题**：内容` / `- 纯文本内容` 的 bullet 列表格式
-- 禁止在 `## 关键要点` 下直接写段落文字（会被 lint 误判为空）
-- 编号列表示例：
-  ```markdown
-  ## 关键要点
-  
-  1. **AI收入爆发**：AI收入环比+30%，同比增速达+200%
-  2. **预期过高致回调**：指引miss引发股价回调约15%
-  3. **目标价上调**：JPM将目标价从$500上调至$580
-  ```
-- bullet 列表示例：
-  ```markdown
-  ## 关键要点
-  
-  - 1Q26营收创历史新高KRW 52.6tn（+60% q-q/+198% y-y）
-  - DRAM ASP中60%+增长，NAND ASP中70%+增长
-  - HBM4E预期>50%份额：与TSMC base-die合作
-  ```
-
-**type 选型**：LLM 根据内容性质判断，默认不选 Article：
-
-| 场景 | 选 type |
-|------|---------|
-| 提取外部文章/新闻的客观内容 | `Article` |
-| **有自己的分析、推理、判断**（最常见） | `Analysis` |
-| 年报/财报/官方数据的基准锚点 | `Reference` |
-| 融合多份研报/多源信息的综合报告 | `Synthesis` |
-| 随口记录的想法、灵感 | `Note` |
-
-所有入口共享的**导入规则**：
-- **关联由 LLM 建立并写入**：导入时 LLM 自行搜索已有条目（读 `entries/index.md` + `grep entries/*.md`），找 ≥2 个建交叉关联，写明相关原因。`km_lint --fix` 不再自动补关联（确定性词袋规则已移除），仅做密度检查
-- **关联链接必须用实际文件名**（死链根因）：写 `## 关联` 段的 `[](path)` 时，**path 必须是条目的实际 `.md` 文件名（slugified）**，不是标题原文。标题含 `：` `/` 等符号时，slugify 会转成 `-`（如标题"ASML首选股：三大驱动因素" → 文件名 `ASML首选股-三大驱动因素.md`）。写链接前先 `ls entries/` 或读 `entries/index.md` 核对真实文件名，禁止凭标题臆造路径
-- `km_import.py store` 存入 `entries/{slug}.md`（自动更新 index/log + git push）
-- 去重：标题相同 或 标题相似>80%且resource相同 → 拒绝入库
-- stale 条目（>183天）定期 review 是否需要更新或归档
+完整检查表、正反例、关键要点格式规范、type 选型和共享导入规则，详见 `references/import-checklist.md`。
 
 ## /km_init — 初始化（LLM 流程，无脚本）
 
@@ -263,52 +206,9 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 
 ### lint 修复工作流（LLM 驱动）
 
-当 `km_lint --fix` 后仍有孤立条目（`no_cross_refs > 0`）时，LLM 按以下步骤修复：
+当 `km_lint --fix` 后仍有孤立条目（`no_cross_refs > 0`）时，LLM 负责补关联、清死链、再次验证；`--fix` 只做确定性修复，不自动写交叉关联。
 
-**步骤 1：读取 lint 结果获取孤立条目列表**
-```bash
-cd ~/.inv-knowledge && python3 km_lint.py 2>&1 | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for e in data.get('isolated_entries', []):
-    print(f\"- {e['path']}: {e['title']}\")
-"
-```
-
-**步骤 2：为每个孤立条目搜索相关条目**
-- 读取所有条目的 frontmatter（title, tags）
-- 基于标签重叠和标题关键词计算相似度
-- 为每个孤立条目找出 top 3 最相关的已有条目
-
-**步骤 3：批量写入关联**
-- 在孤立条目的 `## 关联` 段添加指向相关条目的 markdown 链接
-- 格式：`- [标题](entries/文件名.md) — 关联原因`
-- 关联原因需具体说明为什么相关（同机构/同主题/同行业等）
-
-**步骤 4：清理死链**
-- 运行 `km_lint --fix` 自动清理指向不存在文件的死链
-- 若仍有死链，手动检查关联段中的 `[](path)` 路径是否对应真实文件名
-
-**步骤 5：验证修复**
-- 再次运行 `km_lint --fix`，确认 `no_cross_refs: 0`
-- 检查 `summary` 中其他问题项是否归零
-
-### 常见 lint 问题速查
-
-| 问题 | 原因 | 修复方式 |
-|------|------|---------|
-| `no_cross_refs` | 条目无交叉引用 | LLM 按上述工作流批量建关联 |
-| `dead_links` | 关联指向的文件不存在 | `--fix` 自动清理；检查 slugify 后的文件名是否一致 |
-| `empty_key_points` | `## 关键要点` 下无有效列表项 | 确保使用 `1. **标题**` 或 `- 内容` 格式 |
-| `okf_errors` | frontmatter 缺少必需字段 | 补全 type/title/description/timestamp/resource/source_type |
-
-| 检查项 | --fix |
-|--------|:---:|
-| OKF 合规（resource, source_type 等） | ❌ |
-| 死链 / 孤立文件 / 图谱过期 | ✅ |
-| 缺失 resource / 重建 index.md / 重建 by-tag/ | ✅ |
-| 交叉引用密度（只读检查，关联由 LLM 导入时建立） | ❌ |
-| 资源配对 / URL 可达 / 重复检测 / 标签治理 / 时效预警 / 内容质量 | ❌ |
+常见 lint 问题速查、修复步骤与 `--fix` 覆盖范围，详见 `references/error-handling.md`。
 
 ---
 
@@ -356,37 +256,11 @@ for e in data.get('isolated_entries', []):
 
 # 九、异常处理
 
-| 场景 | 表现 | 处理 |
-|------|------|------|
-| 知识库不存在 | `请先运行 km_init.py` | LLM 用 bash：`git clone <INV_KNOWLEDGE_REPO_URL> ~/.inv-knowledge` + `mkdir -p entries res` |
-| km_import res: 文件不存在 | `# 文件不存在` | 确认路径 |
-| km_import res: 缺少 --target | `请指定 --target` | 先读 `res/` 确认已有文件夹 |
-| km_import res: PDF 损坏/扫描件 | `跳过无法打开` / 文本为空 | 跳过或告知用户 |
-| km_import res: 目标已存在 | MD5 相同→跳过，不同→加后缀 | 自动处理 |
-| 抓取 URL 失败 | firecrawl_scrape MCP 返回空/反爬 | LLM 换 `waitFor`/`proxy`，或手动粘贴正文 store |
-| LLM 搜索无结果 | grep/index 无命中 | 缩短关键词（"福耀玻璃利润趋势"→"福耀"）；读 `entries/by-tag/{tag}.md` 浏览 |
-| km_import store: 重复入库 | `疑似重复入库` | 告知用户，如需更新先删旧条目 |
-| km_import store: 内容太短 | `content 过短` | 检查输入是否截断 |
-| km_import store: --description 自动提取错误 | 从frontmatter误取`title: xxx` | 始终显式传 `--description`，不依赖`_auto_description` |
-| km_import store: 双重 frontmatter / Shell `$` 转义 / 被安全拦截 | 见 7.2 写库方式选择（已详述机制与降级） | 按 7.2：避免 `--content-file`、description 含 `$` 用单引号、subagent 被 Hermes 拦截则 `write_file` 直写 + 主会话 `km_lint --fix` |
-| subagent 倾倒PDF原文 | 条目>200行，含`--- page N ---`标记 | 删除后重新派发，context中写明"25-50行MAX，禁止PDF原文" |
-| 标签含斜杠(`I/O`) | `by-tag/I/O-2026.md`创建失败 | tags禁止使用`/ \ : * ? " < > |`，用`IO-2026`替代 |
-| 条目type不合法 | `type: Research Report` | OKF合法type仅5种：`Analysis/Article/Reference/Synthesis/Note` |
-| 同标的研报大量重复 | 每家券商一条独立条目导致膨胀 | 合并为「标的+主题」综合条目（如"腾讯控股1Q26多投行分析"），覆盖2-5家券商观点 |
-| git push 超时/失败 | 超时或失败提示 | 文件已写入本地，不阻塞流程，稍后手动 push |
+常见导入/抓取/lint 异常、`km_lint --fix` 自动修复范围、以及 git push 触发时机，详见 `references/error-handling.md`。
 
-**git push 触发时机**：`km_import store` 自动 push、`km_import res` 自动 push、`km_lint --fix` 自动 push。
-| 路径含空格 | macOS 下载常见 | shell 用引号包裹或用 `\\` 转义 |
-
-## km_lint --fix 自动化修复内容
-
-`km_lint.py --fix --skip-url-check` 自动处理：
-- 清除死链、修复孤立文件、补全缺失 resource
-- 重建 `entries/index.md` 和 `entries/by-tag/` 标签索引
-- 重建知识图谱
-- 修复后再次 lint 验证
-
-> 交叉关联**不再自动写入**（确定性词袋规则已移除，质量差）。关联由 LLM 导入时手动建立，`km_lint` 仅做密度检查（`no_cross_refs` 计数）。导入 5-10 条后跑一次 `--fix` 重建索引/标签/图谱即可。
+主规则只保留两条：
+- `km_lint --fix` 只做确定性修复（索引、标签、图谱、死链、部分 resource 补全），**不自动写交叉关联**
+- 写入失败不应让知识库边界下沉到下游技能；需要写库、刷新或版本递增时，一律回到 `inv-knowledge-curator` 主流程处理
 
 ## 依赖
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Any
 
 
 def run(args: list[str], cwd: Path | None = None, timeout: int = 60) -> subprocess.CompletedProcess:
@@ -24,8 +24,23 @@ def run(args: list[str], cwd: Path | None = None, timeout: int = 60) -> subproce
     )
 
 
+def _resolve_branch(path: Path) -> Optional[str]:
+    r_current = run(["rev-parse", "--abbrev-ref", "HEAD"], cwd=path)
+    branch = r_current.stdout.strip()
+    if r_current.returncode == 0 and branch and branch != "HEAD":
+        return branch
+
+    r_origin_head = run(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=path)
+    origin_head = r_origin_head.stdout.strip()
+    if r_origin_head.returncode == 0 and origin_head.startswith("origin/"):
+        return origin_head.split("/", 1)[1]
+
+    return None
+
+
 def is_repo(path: Path) -> bool:
-    return (path / ".git").exists()
+    r = run(["rev-parse", "--is-inside-work-tree"], cwd=path)
+    return r.returncode == 0 and r.stdout.strip() == "true"
 
 
 def same_remote(path: Path, url: str) -> bool:
@@ -33,9 +48,14 @@ def same_remote(path: Path, url: str) -> bool:
     return r.returncode == 0 and r.stdout.strip() == url
 
 
-def clone(url: str, path: Path, branch: str = "master") -> dict:
+def clone(url: str, path: Path, branch: Optional[str] = None) -> dict:
     """克隆仓库，返回 {success, action, error?, hint?}。"""
-    r = run(["clone", "-b", branch, url, str(path)])
+    args = ["clone"]
+    if branch:
+        args.extend(["-b", branch])
+    args.extend([url, str(path)])
+
+    r = run(args)
     if r.returncode == 0:
         return {"success": True, "action": "clone"}
 
@@ -49,8 +69,17 @@ def clone(url: str, path: Path, branch: str = "master") -> dict:
     return {"success": False, "action": "clone", "error": err[:500], "hint": hint}
 
 
-def pull(path: Path, branch: str = "master") -> dict:
+def pull(path: Path, branch: Optional[str] = None) -> dict:
     """拉取仓库，返回 {success, action, error?, files_changed?}。"""
+    branch = branch or _resolve_branch(path)
+    if not branch:
+        return {
+            "success": False,
+            "action": "pull",
+            "error": "无法解析当前分支，请在非 detached HEAD 状态下重试或显式传入 branch",
+            "hint": "请先切回本地分支，或为 pull() 显式指定 branch",
+        }
+
     r = run(["pull", "origin", branch], cwd=path)
     if r.returncode == 0:
         return {"success": True, "action": "pull", "files_changed": r.stdout.strip() or ""}
@@ -61,12 +90,20 @@ def pull(path: Path, branch: str = "master") -> dict:
     }
 
 
-def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: str = "master",
+def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: Optional[str] = None,
          max_retries: int = 2) -> dict:
     """pull --rebase → add → commit → push（push 失败自动重试）。
 
     返回 {success, push_failed?, error?, no_change?}。
     """
+    branch = branch or _resolve_branch(cwd)
+    if not branch:
+        return {
+            "success": False,
+            "step": "pull",
+            "error": "无法解析当前分支，请在非 detached HEAD 状态下重试或显式传入 branch",
+        }
+
     r_pull = run(["pull", "--rebase", "origin", branch], cwd=cwd)
     if r_pull.returncode != 0:
         if "conflict" in (r_pull.stderr + r_pull.stdout).lower():
