@@ -27,4 +27,4 @@
 
 ## 搜索与增量信息策略
 
-搜索补充的触发条件、工具选择、数据源映射和实践案例见 `web-search-supplement.md`（本节仅讲数据源降级，搜索增量归该文件）。
+搜索补充的触发条件、工具选择、数据源映射和实践案例见 `web-search-supplement.md`（本节仅讲数据源降级，搜索增量归该文件）。对美股/港股字段缺口，优先直抓 Yahoo Finance、MacroTrends 等已验证白名单；不要默认先走 `web_search`。

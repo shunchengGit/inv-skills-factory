@@ -16,15 +16,16 @@
 1. yfinance info + financials + history（已覆盖 90% 需求）
 2. 本地券商研报 PDF（inv-knowledge-curator）
 3. Agent WebFetch / browser_navigate 直抓特定页面（仅当上述不够时）
-4. web_search（最后手段，预期低效）
+4. `web_search`（仅用于发现链接、公司动态、新闻验证；不要把它当金融字段主数据源）
 
 ## 工具选择规则
 
 | 网站类型 | 首选工具 | 说明 |
 |----------|---------|------|
 | 中国财经/新闻（新浪、东财、腾讯新闻、澎湃、雪球、工信部） | **`browser_navigate`** | `web_extract` 几乎全部返回 Blocked |
-| 英文财经（Yahoo Finance、Reuters） | `web_extract` | 成功率较高 |
-| 搜索发现链接 | `web_search` → `browser_navigate` | 先搜后打开，不要直接用 web_extract |
+| 英文财经白名单（Yahoo Finance、MacroTrends） | `web_extract` | 当前实测最稳定；适合补目标价、Forward PE、PEG、EV/EBITDA、历史 PE 轨迹 |
+| 英文财经受限站点（Morningstar、Investing、MarketWatch、Google Finance） | `browser_navigate` 或放弃 | 常见问题分别为 Human Verification、安全验证、正文抽取为空、URL 拦截 |
+| 搜索发现链接 | `web_search` → `browser_navigate` | 先搜后打开；若已知白名单 URL，直接 `web_extract`，不要多绕一层 |
 
 **硬规则**：对中国 `.sina.com.cn` / `.eastmoney.com` / `.qq.com` / `.thepaper.cn` / `.xueqiu.com` / `miit.gov.cn` 等域名，**永远不要用 web_extract**，直接用 browser_navigate。浪费时间去重试是无效的。
 
