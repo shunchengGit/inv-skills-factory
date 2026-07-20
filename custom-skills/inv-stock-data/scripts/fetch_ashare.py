@@ -25,7 +25,7 @@ def fetch_exchange_list(code: str) -> dict | None:
     return {"name": name}
 
 
-def fetch_a_daily(code: str, n: int = 60) -> pd.DataFrame | None:
+def fetch_a_daily(code: str, n: int | None = None) -> pd.DataFrame | None:
     """获取 A 股/北交所日K线。新浪源（stock_zh_a_daily），避免东财 API 反爬。"""
     import akshare as ak
     sina_code = prefixed_sina(code, "a")
@@ -34,7 +34,7 @@ def fetch_a_daily(code: str, n: int = 60) -> pd.DataFrame | None:
         return None
     if "date" in df.columns:
         df = df.sort_values("date")
-    return df.tail(n) if len(df) > n else df
+    return df.tail(n) if n is not None and len(df) > n else df
 
 
 def fetch_ths_financial(code: str) -> dict | None:

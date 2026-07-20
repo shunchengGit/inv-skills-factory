@@ -74,8 +74,8 @@ def fetch_etf_snapshot(code: str) -> dict | None:
     }
 
 
-def fetch_etf_daily(code: str, n: int = 60) -> pd.DataFrame | None:
-    """获取 ETF 日K线（东财源，前复权）。"""
+def fetch_etf_daily(code: str, n: int | None = None) -> pd.DataFrame | None:
+    """获取 ETF 日K线（新浪源，前复权）。"""
     import akshare as ak
     sina_code = prefixed_sina(code, "etf")
     df = safe_call(ak.stock_zh_a_daily, symbol=sina_code, adjust="qfq")
@@ -83,7 +83,7 @@ def fetch_etf_daily(code: str, n: int = 60) -> pd.DataFrame | None:
         return None
     if "date" in df.columns:
         df = df.sort_values("date")
-    return df.tail(n) if len(df) > n else df
+    return df.tail(n) if n is not None and len(df) > n else df
 
 
 def fetch_etf_nav(code: str) -> dict | None:

@@ -24,7 +24,6 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,18 +33,28 @@ import pandas as pd
 _inv_stock_dir = Path(__file__).resolve().parent.parent.parent / "inv-stock-data" / "scripts"
 sys.path.insert(0, str(_inv_stock_dir))
 from cs_stock_info import execute_command
-# 代理管理模块（美港股需要）
-_shared_dir = Path(__file__).resolve().parent.parent.parent / "_shared"
-sys.path.insert(0, str(_shared_dir))
-from proxy import setup_proxy_env
+from data_contract import historical_eligibility, historical_gaps, make_gap
+
+from investment_data_adapter import (
+    Envelope,
+    component_data,
+    has_fallback,
+    merge_gaps,
+    number,
+    parse_all_components,
+    parse_v1_envelope,
+)
 
 
-def _call_cs_stock(command: str, symbol: str) -> dict[str, Any]:
-    """调用 inv-stock-data 命令，直接进程内执行。"""
-    try:
-        return execute_command(command, symbol)
-    except Exception as exc:
-        return {"error": str(exc)[:200]}
+def _call_cs_stock(
+    command: str,
+    symbol: str,
+    *,
+    period: str = "1y",
+    limit: int | None = None,
+) -> dict[str, Any]:
+    """调用 inv-stock-data v1 公共契约。"""
+    return execute_command(command, symbol, period=period, limit=limit)
 
 
 def _bars_to_df(data: dict[str, Any] | list[dict[str, Any]]) -> pd.DataFrame:
@@ -101,12 +110,6 @@ def to_a_share_plain_code(symbol: str) -> str:
     if "." in s:
         return s.split(".", 1)[0]
     return s
-
-
-def pct(value: float | None) -> float | None:
-    if value is None:
-        return None
-    return round(value * 100, 2)
 
 
 def normalize_dividend_yield(value: float | None) -> float | None:
@@ -167,9 +170,6 @@ def compute_52w_position(hist: pd.DataFrame) -> tuple[float | None, float | None
     return high_52w, low_52w, from_low, to_high
 
 
-def clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
-    return max(low, min(high, value))
-
 
 @dataclass
 class Snapshot:
@@ -178,11 +178,14 @@ class Snapshot:
     company_name: str | None
     currency: str | None
     market: str | None
-    data_time: str
-    data_sources: list[str]
+    data_time: str | None
+    data_sources: list[dict[str, Any]]
     metrics: dict[str, Any]
-    data_gaps: list[str]
+    data_gaps: list[dict[str, Any]]
     notes: list[str]
+    upstream_status: str
+    history_window: dict[str, Any] | None
+    used_fallback: bool
 
 
 def first_not_none(*values: Any) -> Any:
@@ -194,406 +197,228 @@ def first_not_none(*values: Any) -> Any:
 
 def build_snapshot(symbol: str) -> Snapshot:
     normalized = normalize_symbol(symbol)
-    notes: list[str] = []
-    data_sources: list[str] = []
-    is_a_share = is_a_share_code(normalized)
-
-    if is_a_share:
-        return _build_a_share_snapshot(symbol, normalized, notes, data_sources)
-    else:
-        return _build_yahoo_snapshot(symbol, normalized, notes, data_sources)
+    if is_a_share_code(normalized):
+        return _build_a_share_snapshot_v1(symbol, normalized)
+    return _build_yahoo_snapshot_v1(symbol, normalized)
 
 
-def _build_a_share_snapshot(
-    symbol: str,
-    normalized: str,
-    notes: list[str],
-    data_sources: list[str],
-) -> Snapshot:
-    """Build snapshot for A-share symbols via inv-stock-data (进程内调用).
+def _history_metrics(daily: Envelope) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    bars = daily.data.get("daily") or []
+    hist = _bars_to_df(bars)
+    window = daily.window or {"observations": len(bars)}
+    eligibility = historical_eligibility(window)
+    gaps = historical_gaps(window)
 
-    优先使用 cs_stock_all 一键取数（snapshot + daily + announcements + relations），
-    减少 API 调用次数，降低限流风险。
-    """
-    plain = to_a_share_plain_code(normalized)
-    # --- 一键取数（优先 cs_stock_all） ---
-    all_data = _call_cs_stock("all", plain)
-    # all 命令成功时返回 {snapshot, daily, announcements, relations} 且各子模块非空
-    all_ok = (
-        all_data
-        and not all_data.get("error")
-        and isinstance(all_data.get("snapshot"), dict)
-        and not all_data["snapshot"].get("error")
-    )
-    if all_ok:
-        snap = all_data.get("snapshot") or {}
-        daily_data = all_data.get("daily") or {}
-        ann_data = all_data.get("announcements") or {}
-        rel_data = all_data.get("relations") or {}
-        data_sources.append("inv-stock-data(all)")
-    else:
-        # 降级：逐个调用（兼容 all 不支持或依赖缺失的场景）
-        if all_data and all_data.get("error"):
-            notes.append(f"cs_stock_all 不可用（{all_data['error'][:80]}），降级逐个调用")
-        snap = _call_cs_stock("snapshot", plain)
-        daily_data = _call_cs_stock("daily", plain)
-        ann_data = _call_cs_stock("announcements", plain)
-        rel_data = _call_cs_stock("relations", plain)
-    if snap and not snap.get("error"):
-        data_sources.append("inv-stock-data(snapshot)")
-    else:
-        notes.append("inv-stock-data snapshot 调用失败，A 股数据可能不完整")
-
-    company_name = snap.get("name")
-    description = snap.get("description")
-
-    # 财务指标：优先 sina（更新更及时），fallback 到 financial（同花顺）
-    financial = snap.get("financial") or {}
-    sina = snap.get("sina") or {}
-
-    # 从 sina 提取（中文 key，值可能是 None/False/数字）
-    def _sina_num(key: str) -> float | None:
-        v = sina.get(key)
-        if v is None or v is False:
-            return None
-        try:
-            return float(v)
-        except (ValueError, TypeError):
-            return None
-
-    def _fin_num(key: str) -> float | None:
-        v = financial.get(key)
-        if v is None or v is False:
-            return None
-        try:
-            return float(str(v).replace("亿", "").replace("%", "").replace("万", ""))
-        except (ValueError, TypeError):
-            return None
-
-    # 基本面：sina 优先
-    gross_margin = _sina_num("销售毛利率") or _fin_num("销售毛利率")
-    net_margin = _sina_num("销售净利率") or _fin_num("销售净利率")
-    roe = _sina_num("净资产收益率") or _fin_num("净资产收益率")
-    debt_to_asset = _sina_num("资产负债率") or _fin_num("资产负债率")
-    eps = _sina_num("基本每股收益") or _fin_num("基本每股收益")
-    bvps = _sina_num("每股净资产") or _fin_num("每股净资产")
-    report_date = sina.get("报告日") or financial.get("报告期")
-
-    # 估值：从 valuation 字段获取
-    valuation = snap.get("valuation") or {}
-    pe_ttm = valuation.get("pe_ttm")
-    pb = valuation.get("pb")
-
-    # 行业：从 description 提取（inv-stock-data A 股快照不直接返回 industry）
-    ak_xq_industry = None
-
-    # --- daily bars for 5y percentile ---
-    hist_5y = _bars_to_df(daily_data)
-    if not hist_5y.empty:
-        data_sources.append("inv-stock-data(daily)")
-
-    # 从 daily bars 计算收盘价和收益率
     latest_close = None
     return_20d = None
     return_60d = None
-    if not hist_5y.empty and "Close" in hist_5y.columns:
-        closes = hist_5y["Close"].dropna()
-        if len(closes) > 0:
+    if not hist.empty and "Close" in hist.columns:
+        closes = hist["Close"].dropna()
+        if not closes.empty:
             latest_close = float(closes.iloc[-1])
-            return_20d = compute_period_return(hist_5y, 20)
-            return_60d = compute_period_return(hist_5y, 60)
+            if len(closes) >= 21:
+                return_20d = compute_period_return(hist, 20)
+            if len(closes) >= 61:
+                return_60d = compute_period_return(hist, 60)
 
-    price_percentile_5y = estimate_price_percentile(hist_5y)
-    return_250d = compute_period_return(hist_5y, 250)
-    # 从 daily bars 计算 52w 位置
-    high_52w, low_52w, pos_52w, downside_to_52w = compute_52w_position(hist_5y)
-
-    # --- announcements for event scoring ---
-    announcements = []
-    if ann_data:
-        if isinstance(ann_data, list):
-            announcements = ann_data
-        elif isinstance(ann_data, dict):
-            announcements = ann_data.get("announcements", ann_data.get("items", []))
-        if announcements:
-            data_sources.append("inv-stock-data(announcements)")
-    else:
-        notes.append("inv-stock-data announcements 调用失败，事件评分可能不完整")
-
-    # --- relations ---
-    relations = []
-    if rel_data:
-        if isinstance(rel_data, list):
-            relations = rel_data
-        elif isinstance(rel_data, dict):
-            relations = rel_data.get("relations", rel_data.get("items", []))
-        if relations:
-            data_sources.append("inv-stock-data(relations)")
-    relation_count = len(relations)
-    latest_relation_title = None
-    if relation_count > 0 and isinstance(relations[0], dict):
-        latest_relation_title = relations[0].get("title") or relations[0].get("公告标题")
-
-    # --- raw announcements & relations (for LLM to interpret) ---
-    raw_titles = []
-    for item in announcements[:30]:
-        if not isinstance(item, dict):
-            continue
-        title = str(item.get("title") or item.get("公告标题", ""))
-        event_time_str = item.get("time") or item.get("date") or item.get("公告时间", "")
-        if title:
-            raw_titles.append({"title": title, "date": event_time_str})
-
-    event_metrics = {
-        "recent_announcements": raw_titles[:10],
-        "relation_count_30d": relation_count,
-        "latest_relation_title": latest_relation_title,
-    }
-
-    # --- assemble metrics ---
-    metrics: dict[str, Any] = {
-        "market_label": "A-share",
-        "currency": "CNY",
-        "sector": ak_xq_industry,
-        "industry": ak_xq_industry,
-        "current_price": safe_round(latest_close, 4),
+    percentile = estimate_price_percentile(hist) if eligibility["5y_percentile"] else None
+    return_250d = compute_period_return(hist, 250) if eligibility["250d_return"] else None
+    high_52w = low_52w = pos_52w = distance_52w = None
+    if eligibility["52w"]:
+        high_52w, low_52w, pos_52w, distance_52w = compute_52w_position(hist)
+    return {
         "latest_close": safe_round(latest_close, 4),
-        "company_name": company_name,
-        "ak_xq_industry": ak_xq_industry,
-        "ak_ths_report_date": str(report_date) if report_date is not None else None,
-        "ak_ths_roe_weighted_pct": safe_round(roe, 2),
-        "ak_ths_gross_margin_pct": safe_round(gross_margin, 2),
-        "ak_ths_net_margin_pct": safe_round(net_margin, 2),
-        "ak_ths_debt_asset_ratio_pct": safe_round(debt_to_asset, 2),
-        "valuation_pe_ttm": safe_round(pe_ttm, 2),
-        "trailing_pe": safe_round(pe_ttm, 2),
-        "valuation_pb": safe_round(pb, 2),
-        "pb": safe_round(pb, 2),
-        "sina_eps": safe_round(eps, 2) if eps is not None else None,
-        "sina_bvps": safe_round(bvps, 2) if bvps is not None else None,
-        "price_percentile_5y_proxy": price_percentile_5y,
-        "return_20d_pct": safe_round(return_20d, 2),
-        "return_60d_pct": safe_round(return_60d, 2),
-        "return_250d_pct": return_250d,
-        "high_52w": safe_round(high_52w, 4),
-        "low_52w": safe_round(low_52w, 4),
-        "position_in_52w_range_pct": pos_52w,
-        "distance_to_52w_high_pct": downside_to_52w,
-    }
-    if description:
-        metrics["profile_highlights"] = description
-
-    metrics.update(event_metrics)
-
-    # company_type_hint 由 LLM 根据 sector/industry 判断
-
-    gaps = [k for k, v in metrics.items() if v is None]
-    notes.extend(
-        [
-            "price_percentile_5y_proxy 为价格分位代理值，并非严格 PE/PB 历史分位。",
-            "部分市场数据可能有 15-20 分钟延迟，建议在结论中标注时点。",
-            "若 trailing_pe/pb 缺失，通常因亏损或数据源未提供。",
-            "A股 / 港股 / 美股统一优先输出技能真正要用的估值、增长、质量、分位与财报时点字段。",
-        ]
-    )
-    if not data_sources:
-        data_sources.append("none")
-
-    return Snapshot(
-        symbol=symbol,
-        normalized_symbol=normalized,
-        company_name=company_name,
-        currency="CNY",
-        market="A-share",
-        data_time=datetime.now().isoformat(timespec="seconds"),
-        data_sources=data_sources,
-        metrics=metrics,
-        data_gaps=gaps,
-        notes=notes,
-    )
-
-
-def _build_yahoo_snapshot(
-    symbol: str,
-    normalized: str,
-    notes: list[str],
-    data_sources: list[str],
-) -> Snapshot:
-    """Build snapshot for non-A-share (Yahoo) symbols via inv-stock-data (进程内调用)."""
-    setup_proxy_env()
-    # --- 一次调用获取全部数据 ---
-    all_data = _call_cs_stock("all", normalized)
-
-    snap = all_data.get("snapshot") or {}
-    financial_data = all_data.get("financial") or {}
-    financials_data = all_data.get("financials") or {}
-
-    if snap and not snap.get("error"):
-        data_sources.append("inv-stock-data(all→snapshot)")
-    else:
-        notes.append("inv-stock-data snapshot 调用失败，Yahoo 数据可能不完整")
-    if financial_data and not financial_data.get("error"):
-        data_sources.append("inv-stock-data(all→financial)")
-    if financials_data and not financials_data.get("error"):
-        data_sources.append("inv-stock-data(all→financials)")
-
-    company_name = snap.get("name")
-    sector = snap.get("sector")
-    industry = snap.get("industry")
-    current_price = snap.get("price")
-    currency = snap.get("currency")
-
-    # fundamentals（inv-stock-data Yahoo 快照的 key 名）
-    fund = snap.get("fundamentals") or {}
-    trailing_pe = fund.get("pe_trailing")
-    forward_pe = fund.get("pe_forward")
-    pb = fund.get("pb")
-    market_cap = fund.get("market_cap")
-    div_yield = fund.get("dividend_yield")
-    roe = fund.get("roe")
-    gross_margin = fund.get("gross_margins")
-    net_margin = fund.get("profit_margins")
-    revenue_growth = fund.get("revenue_growth")
-    earnings_growth = fund.get("earnings_growth")
-
-    # 从 financial 子命令补充更多字段
-    fin_fund = financial_data.get("fundamentals") or {}
-    if not trailing_pe:
-        trailing_pe = fin_fund.get("pe_trailing")
-    if not forward_pe:
-        forward_pe = fin_fund.get("pe_forward")
-    if not pb:
-        pb = fin_fund.get("pb")
-    if not market_cap:
-        market_cap = fin_fund.get("market_cap")
-    enterprise_value = fin_fund.get("enterprise_value")
-    debt_to_equity = fin_fund.get("debt_to_equity")
-    fcf = fin_fund.get("free_cashflow")
-    total_debt = fin_fund.get("total_debt")
-    total_cash = fin_fund.get("total_cash")
-    shares_outstanding = fin_fund.get("shares_outstanding") or fin_fund.get("market_cap")
-    operating_margin = fin_fund.get("operating_margins")
-    # 从 financial_data 的 fundamentals 提取更完整字段
-    ps = fin_fund.get("price_to_sales") or fin_fund.get("ps_ttm")
-    ev_to_ebitda = fin_fund.get("ev_to_ebitda") or fin_fund.get("enterprise_to_ebitda")
-    analyst_target_price = fin_fund.get("target_mean_price") or fin_fund.get("analyst_target_price")
-    analyst_count = fin_fund.get("number_of_analysts") or fin_fund.get("analyst_count")
-    beta = fin_fund.get("beta") or snap.get("beta")
-
-    # --- daily bars for 5y percentile ---
-    daily_data = _call_cs_stock("daily", normalized)
-    hist_5y = _bars_to_df(daily_data)
-    if not hist_5y.empty:
-        data_sources.append("inv-stock-data(daily)")
-
-    price_percentile_5y = estimate_price_percentile(hist_5y)
-    latest_close = None if hist_5y.empty else float(hist_5y["Close"].dropna().iloc[-1]) if "Close" in hist_5y.columns else None
-    return_20d = compute_period_return(hist_5y, 20)
-    return_60d = compute_period_return(hist_5y, 60)
-    return_250d = compute_period_return(hist_5y, 250)
-    # 从 daily bars 计算 52w 位置
-    high_52w, low_52w, pos_52w, downside_to_52w = compute_52w_position(hist_5y)
-
-    # --- financial command for earnings data（已从 all 调用获取） ---
-    next_earnings_date = None
-    last_earnings_date = None
-    last_surprise = None
-
-    # --- raw earnings data (for LLM to interpret) ---
-    event_metrics = {
-        "last_surprise_pct": safe_round(last_surprise, 2),
-        "next_earnings_date": next_earnings_date,
-        "last_earnings_date": last_earnings_date,
-    }
-
-    # Determine market label from normalized symbol
-    if normalized.endswith(".HK"):
-        market = "HK"
-    elif normalized.startswith("^"):
-        market = "US-Index"
-    else:
-        market = "US"
-
-    # --- assemble metrics ---
-    current_price_value = safe_round(current_price, 4)
-    analyst_upside_pct = None
-    if analyst_target_price is not None and current_price_value is not None and current_price_value > 0:
-        analyst_upside_pct = safe_round((analyst_target_price / current_price_value - 1) * 100, 2)
-    earnings_yield_pct = None
-    if trailing_pe not in {None, 0}:
-        earnings_yield_pct = safe_round(100 / float(trailing_pe), 2)
-    price_to_fcf = None
-
-    metrics = {
-        "market_label": market,
-        "currency": currency,
-        "sector": sector,
-        "industry": industry,
-        "current_price": current_price_value,
-        "latest_close": safe_round(latest_close, 4),
-        "trailing_pe": safe_round(trailing_pe, 2),
-        "forward_pe": safe_round(forward_pe, 2),
-        "pb": safe_round(pb, 2),
-        "ps_ttm": safe_round(ps, 2),
-        "ev_ebitda": safe_round(ev_to_ebitda, 2),
-        "market_cap": market_cap,
-        "enterprise_value": enterprise_value,
-        "total_debt": total_debt,
-        "total_cash": total_cash,
-        "shares_outstanding": shares_outstanding,
-        "analyst_target_price": safe_round(analyst_target_price, 4),
-        "analyst_upside_pct": analyst_upside_pct,
-        "analyst_count": analyst_count,
-        "next_earnings_date": next_earnings_date,
-        "last_earnings_date": last_earnings_date,
-        "dividend_yield_pct": normalize_dividend_yield(div_yield),
-        "roe_pct": pct(roe),
-        "gross_margin_pct": pct(gross_margin),
-        "operating_margin_pct": pct(operating_margin),
-        "net_margin_pct": pct(net_margin),
-        "debt_to_equity": safe_round(debt_to_equity, 2),
-        "revenue_growth_pct": pct(revenue_growth),
-        "earnings_growth_pct": pct(earnings_growth),
-        "free_cash_flow": fcf,
-        "price_to_fcf": price_to_fcf,
-        "earnings_yield_pct": earnings_yield_pct,
-        "price_percentile_5y_proxy": price_percentile_5y,
+        "price_percentile_5y_proxy": percentile,
         "return_20d_pct": return_20d,
         "return_60d_pct": return_60d,
         "return_250d_pct": return_250d,
         "high_52w": safe_round(high_52w, 4),
         "low_52w": safe_round(low_52w, 4),
         "position_in_52w_range_pct": pos_52w,
-        "distance_to_52w_high_pct": downside_to_52w,
-        "beta": safe_round(beta, 2),
+        "distance_to_52w_high_pct": distance_52w,
+    }, gaps
+
+
+def _component_gaps(component: dict[str, Any]) -> list[dict[str, Any]]:
+    return [dict(item) for item in component.get("gaps") or []]
+
+
+def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
+    plain = to_a_share_plain_code(normalized)
+    all_envelope, components = parse_all_components(_call_cs_stock("all", plain))
+    daily = parse_v1_envelope(_call_cs_stock("daily", plain, period="5y"), expected_command="daily")
+    announcements = parse_v1_envelope(_call_cs_stock("announcements", plain), expected_command="announcements")
+    relations = parse_v1_envelope(_call_cs_stock("relations", plain), expected_command="relations")
+
+    snap = component_data(components["snapshot"])
+    financial_component = component_data(components["financial"])
+    financial = snap.get("financial") or financial_component.get("ths_financial") or {}
+    sina = snap.get("sina") or financial_component.get("sina_financial") or {}
+    valuation = snap.get("valuation") or {}
+
+    def sina_num(key: str) -> float | None:
+        return number(sina.get(key))
+
+    def fin_num(key: str) -> float | None:
+        return number(financial.get(key))
+
+    history, history_gaps = _history_metrics(daily)
+    roe = first_not_none(sina_num("净资产收益率"), fin_num("净资产收益率"))
+    gross_margin = first_not_none(sina_num("销售毛利率"), fin_num("销售毛利率"))
+    net_margin = first_not_none(sina_num("销售净利率"), fin_num("销售净利率"))
+    debt_to_asset = first_not_none(sina_num("资产负债率"), fin_num("资产负债率"))
+    pe_ttm = number(valuation.get("pe_ttm"))
+    pb = number(valuation.get("pb"))
+    current_price = first_not_none(number(snap.get("price")), history["latest_close"])
+
+    ann_items = announcements.data.get("announcements") or []
+    rel_items = relations.data.get("relations") or []
+    raw_titles = []
+    for item in ann_items[:10]:
+        if isinstance(item, dict):
+            title = item.get("title") or item.get("标题") or item.get("公告标题")
+            if title:
+                raw_titles.append({"title": str(title), "date": item.get("date") or item.get("公告日期")})
+
+    metrics: dict[str, Any] = {
+        "market_label": "A-share",
+        "currency": "CNY",
+        "sector": snap.get("industry"),
+        "industry": snap.get("industry"),
+        "current_price": safe_round(current_price, 4),
+        "company_name": snap.get("name"),
+        "trailing_pe": safe_round(pe_ttm, 2),
+        "forward_pe": None,
+        "pb": safe_round(pb, 2),
+        "roe_pct": safe_round(roe, 2),
+        "gross_margin_pct": safe_round(gross_margin, 2),
+        "net_margin_pct": safe_round(net_margin, 2),
+        "debt_to_equity": safe_round(debt_to_asset, 2),
+        "sina_eps": safe_round(sina_num("基本每股收益"), 2),
+        "sina_bvps": safe_round(sina_num("每股净资产"), 2),
+        "recent_announcements": raw_titles,
+        "relation_count_30d": len(rel_items),
+        "profile_highlights": snap.get("description"),
+        **history,
     }
-    metrics.update(event_metrics)
-
-    # company_type_hint 由 LLM 根据 sector/industry 判断
-
-    gaps = [k for k, v in metrics.items() if v is None]
-    notes.extend(
-        [
-            "price_percentile_5y_proxy 为价格分位代理值，并非严格 PE/PB 历史分位。",
-            "部分市场数据可能有 15-20 分钟延迟，建议在结论中标注时点。",
-            "若 trailing_pe/pb 缺失，通常因亏损或数据源未提供。",
-            "A股 / 港股 / 美股统一优先输出技能真正要用的估值、增长、质量、分位与财报时点字段。",
-        ]
+    computed_gaps = [
+        make_gap("field_unavailable", f"metrics.{key}", "估值指标不可用", retryable=False)
+        for key in ("trailing_pe", "pb", "roe_pct", "gross_margin_pct")
+        if metrics.get(key) is None
+    ]
+    gaps = merge_gaps(
+        all_envelope.gaps,
+        _component_gaps(components["snapshot"]),
+        _component_gaps(components["financial"]),
+        _component_gaps(components["financials"]),
+        daily.gaps,
+        announcements.gaps,
+        relations.gaps,
+        history_gaps,
+        computed_gaps,
     )
-    if not data_sources:
-        data_sources.append("none")
-
+    sources = all_envelope.sources + daily.sources + announcements.sources + relations.sources
+    status = "failed" if components["snapshot"]["status"] == "failed" else "partial" if gaps or all_envelope.status == "partial" else "ok"
     return Snapshot(
         symbol=symbol,
         normalized_symbol=normalized,
-        company_name=company_name,
-        currency=currency,
-        market=market,
-        data_time=datetime.now().isoformat(timespec="seconds"),
-        data_sources=data_sources,
+        company_name=snap.get("name"),
+        currency="CNY",
+        market="A-share",
+        data_time=daily.data_as_of or all_envelope.data_as_of,
+        data_sources=sources,
         metrics=metrics,
         data_gaps=gaps,
-        notes=notes,
+        notes=all_envelope.notes + daily.notes,
+        upstream_status=status,
+        history_window=daily.window,
+        used_fallback=has_fallback(sources),
+    )
+
+
+def _build_yahoo_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
+    all_envelope, components = parse_all_components(_call_cs_stock("all", normalized))
+    daily = parse_v1_envelope(_call_cs_stock("daily", normalized, period="5y"), expected_command="daily")
+    snap = component_data(components["snapshot"])
+    financial = component_data(components["financial"])
+    fund = snap.get("fundamentals") or {}
+    fin_fund = financial.get("fundamentals") or {}
+
+    def first_metric(*keys: str) -> Any:
+        for key in keys:
+            value = first_not_none(fund.get(key), fin_fund.get(key))
+            if value is not None:
+                return value
+        return None
+
+    history, history_gaps = _history_metrics(daily)
+    trailing_pe = number(first_metric("pe_trailing"))
+    forward_pe = number(first_metric("pe_forward"))
+    pb = number(first_metric("pb"))
+    current_price = number(snap.get("price"))
+    market = "HK" if all_envelope.symbol.get("market") == "hk" else "US"
+    metrics: dict[str, Any] = {
+        "market_label": market,
+        "currency": snap.get("currency"),
+        "sector": snap.get("sector"),
+        "industry": snap.get("industry"),
+        "current_price": safe_round(current_price, 4),
+        "trailing_pe": safe_round(trailing_pe, 2),
+        "forward_pe": safe_round(forward_pe, 2),
+        "pb": safe_round(pb, 2),
+        "ps_ttm": safe_round(number(first_metric("price_to_sales", "ps_ttm")), 2),
+        "ev_ebitda": safe_round(number(first_metric("ev_to_ebitda", "enterprise_to_ebitda")), 2),
+        "market_cap": number(first_metric("market_cap")),
+        "enterprise_value": number(first_metric("enterprise_value")),
+        "total_debt": number(first_metric("total_debt")),
+        "total_cash": number(first_metric("total_cash")),
+        "analyst_target_price": safe_round(number(first_metric("target_mean_price", "analyst_target_price")), 4),
+        "analyst_count": number(first_metric("number_of_analysts", "analyst_count")),
+        "next_earnings_date": financial.get("next_earnings_date"),
+        "dividend_yield_pct": safe_round(number(first_metric("dividend_yield_pct")), 2),
+        "roe_pct": safe_round(number(first_metric("roe_pct")), 2),
+        "gross_margin_pct": safe_round(number(first_metric("gross_margin_pct")), 2),
+        "operating_margin_pct": safe_round(number(first_metric("operating_margin_pct")), 2),
+        "net_margin_pct": safe_round(number(first_metric("net_margin_pct")), 2),
+        "debt_to_equity": safe_round(number(first_metric("debt_to_equity")), 2),
+        "revenue_growth_pct": safe_round(number(first_metric("revenue_growth_pct")), 2),
+        "earnings_growth_pct": safe_round(number(first_metric("earnings_growth_pct")), 2),
+        "free_cash_flow": number(first_metric("free_cash_flow")),
+        "earnings_yield_pct": safe_round(100 / trailing_pe, 2) if trailing_pe not in (None, 0) else None,
+        **history,
+    }
+    target = metrics["analyst_target_price"]
+    metrics["analyst_upside_pct"] = safe_round((target / current_price - 1) * 100, 2) if target and current_price else None
+    computed_gaps = [
+        make_gap("field_unavailable", f"metrics.{key}", "估值指标不可用", retryable=False)
+        for key in ("trailing_pe", "forward_pe", "pb", "revenue_growth_pct", "earnings_growth_pct")
+        if metrics.get(key) is None
+    ]
+    gaps = merge_gaps(
+        all_envelope.gaps,
+        _component_gaps(components["snapshot"]),
+        _component_gaps(components["financial"]),
+        _component_gaps(components["financials"]),
+        daily.gaps,
+        history_gaps,
+        computed_gaps,
+    )
+    sources = all_envelope.sources + daily.sources
+    status = "failed" if components["snapshot"]["status"] == "failed" else "partial" if gaps or all_envelope.status == "partial" else "ok"
+    return Snapshot(
+        symbol=symbol,
+        normalized_symbol=normalized,
+        company_name=snap.get("name"),
+        currency=snap.get("currency"),
+        market=market,
+        data_time=daily.data_as_of or all_envelope.data_as_of,
+        data_sources=sources,
+        metrics=metrics,
+        data_gaps=gaps,
+        notes=all_envelope.notes + daily.notes,
+        upstream_status=status,
+        history_window=daily.window,
+        used_fallback=has_fallback(sources),
     )
 
 
@@ -602,7 +427,8 @@ def render_text(snapshot: Snapshot) -> str:
         "=" * 72,
         f"VALUE SNAPSHOT: {snapshot.normalized_symbol} ({snapshot.company_name or 'N/A'})",
         f"Data Time: {snapshot.data_time}",
-        f"Data Sources: {', '.join(snapshot.data_sources)}",
+        f"Upstream Status: {snapshot.upstream_status}",
+        f"Data Sources: {json.dumps(snapshot.data_sources, ensure_ascii=False)}",
         "=" * 72,
         "",
         "估值与经营指标:",
@@ -613,7 +439,7 @@ def render_text(snapshot: Snapshot) -> str:
         lines.append("")
         lines.append("缺失字段:")
         for g in snapshot.data_gaps:
-            lines.append(f"- {g}")
+            lines.append(f"- {g.get('field')}: {g.get('reason')} ({g.get('code')})")
     if snapshot.notes:
         lines.append("")
         lines.append("说明:")
@@ -627,8 +453,9 @@ def render_markdown(snapshot: Snapshot) -> str:
     lines = [
         f"## 估值快照：{snapshot.normalized_symbol} {snapshot.company_name or ''}".rstrip(),
         "",
-        f"- 数据时点：{snapshot.data_time}",
-        f"- 数据源：{', '.join(snapshot.data_sources)}",
+        f"- 数据时点：{snapshot.data_time or '未知'}",
+        f"- 上游状态：{snapshot.upstream_status}",
+        f"- 数据源：{json.dumps(snapshot.data_sources, ensure_ascii=False)}",
         "",
         "## 核心字段",
         "",
@@ -647,7 +474,7 @@ def render_markdown(snapshot: Snapshot) -> str:
             [
                 "",
                 "## 缺失字段",
-                *[f"- {item}" for item in snapshot.data_gaps],
+                *[f"- {item.get('field')}: {item.get('reason')} ({item.get('code')})" for item in snapshot.data_gaps],
             ]
         )
     if snapshot.notes:
@@ -682,7 +509,7 @@ def main() -> int:
         print(render_markdown(snapshot))
     else:
         print(render_text(snapshot))
-    return 0
+    return 1 if snapshot.upstream_status == "failed" else 0
 
 
 if __name__ == "__main__":

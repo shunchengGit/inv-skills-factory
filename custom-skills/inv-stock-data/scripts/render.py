@@ -8,12 +8,41 @@ from utils import _fmt_pct, _fmt_num
 
 
 def print_text(payload: dict) -> str:
-    """根据 payload 的 _command 字段分派渲染。"""
+    """渲染 v1 envelope；复杂命令退回可读 JSON。"""
+    if payload.get("schema_version") == "1.0":
+        return _render_envelope(payload)
     cmd = payload.get("_command", "")
     renderer = _RENDERERS.get(cmd)
     if renderer:
         return renderer(payload)
     return json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+
+
+def _render_envelope(payload: dict) -> str:
+    symbol = payload.get("symbol") or {}
+    lines = [
+        f"# {payload.get('command', '')}: {symbol.get('input', '')}",
+        "",
+        f"状态: {payload.get('status', 'failed')}",
+    ]
+    if payload.get("data_as_of"):
+        lines.append(f"数据时点: {payload['data_as_of']}")
+    if payload.get("window"):
+        window = payload["window"]
+        lines.append(
+            f"窗口: 请求 {window.get('requested')}，实际 {window.get('observations', 0)} 条，"
+            f"{window.get('first_date') or '-'} 至 {window.get('last_date') or '-'}"
+        )
+    data = payload.get("data") or {}
+    lines.extend(["", "## 数据", json.dumps(data, ensure_ascii=False, indent=2, default=str)])
+    if payload.get("gaps"):
+        lines.extend(["", "## 数据缺口"])
+        for gap in payload["gaps"]:
+            lines.append(f"- {gap.get('field')}: {gap.get('reason')} ({gap.get('code')})")
+    if payload.get("notes"):
+        lines.extend(["", "## 备注"])
+        lines.extend(f"- {note}" for note in payload["notes"])
+    return "\n".join(lines)
 
 
 def _render_snapshot_a(p: dict) -> str:

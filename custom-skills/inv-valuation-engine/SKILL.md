@@ -1,7 +1,7 @@
 ---
 name: inv-valuation-engine
 description: 从价值投资视角评估个股估值，结合巴菲特/芒格、段永平、彼得·林奇、邓普顿等框架给出买卖参考。用于估值判断、多股票对比时
-version: 1.6.0
+version: 2.0.0
 trigger:
   - 估值分析
   - 价值投资
@@ -27,7 +27,7 @@ commands:
 路径中 `{baseDir}` = 本技能目录。详见 `references/commands-quickref.md`。
 
 ## 脚本优先级（新增）
-1. **首选 `cs_stock_all`**：一次调用获取 snapshot + financial + financials，避免分开调用触发限流或超时。这是所有估值分析的默认第一步。
+1. **首选 `cs_stock_all` 获取三个核心组件**：v1 `all.data.components` 固定为 snapshot + financial + financials，各有独立状态；不含 daily/announcements/relations。估值脚本会另行显式请求 `daily(period=5y)`，A 股再请求公告与关联数据。
 2. 用户给了代码但没给完整数据：先运行 `scripts/valuation_snapshot.py`。
 3. 用户要直接结论：优先运行 `scripts/valuation_report.py`。
 4. 用户要比较几家公司谁更便宜/更贵：优先运行 `scripts/valuation_compare.py`。
@@ -40,7 +40,8 @@ commands:
 - 所有数据统一通过 `inv-stock-data` CLI 获取，不直接调用 yfinance/AkShare。
 - A 股：inv-stock-data 聚合同花顺财务、新浪财务指标、百度估值等数据源。
 - 美股/港股：inv-stock-data 通过 Yahoo Finance 获取快照和基本面数据。
-- 输出中会写 `data_sources`，明确本次实际使用的数据来源。
+- 输出保留数据层 v1 的 `upstream_status`、`data_sources`、结构化 `data_gaps`、`data_as_of` 与历史 `window`。`all`、数据层和估值层的状态不可混为一谈。
+- 估值状态为 `ok | partial | insufficient_for_valuation | upstream_failed`：只有 `ok` 可以生成操作参考；`partial` 可保留受限五档结论但操作为空；后两者结论和操作均为空。
 - **Yahoo Finance Forward PE 陷阱**：港股互联网公司（如0700.HK）的 `forwardPE` 可能包含 Non-GAAP 调整或投资收益，导致 Forward EPS 隐含的净利润增速远超合理范围（实测出现过隐含56%增速）。使用 Forward PE 时必须做常识校验：`隐含增速 = (1/ForwardPE) / (1/TrailingPE) - 1`，若超过20%应标注口径差异，改用自建增速假设计算 Forward PE。
 - **A+H 双上市 Forward PE 失真**：福耀玻璃等 A+H 双上市公司的 Yahoo Forward PE 可能基于 Non-GAAP/调整后 EPS（剔除汇兑损失等一次性项），而 Trailing PE 基于 GAAP（含汇兑损失），导致隐含增速虚高（实测福耀出现过隐含33%增速，实际一致预期增速仅4-5%）。校验方法：用一致预期 EPS 手算 Forward PE = 当前价/一致预期EPS，与 Yahoo Forward PE 对比；若差异大，以手算为准并标注口径差异。
 - **港股/美股代理**：由 inv-stock-data 脚本内置自动检测和管理，详见 `inv-stock-data/SKILL.md`「代理规则」。
@@ -53,7 +54,7 @@ commands:
   - 标的基本信息：名称、市场、币种、行业、公司类型提示
   - 估值指标：PE、PB、PS、EV/EBITDA、股息率、盈利收益率、Price/FCF
   - 增长与质量：营收增速、利润增速、ROE、毛利率、净利率、负债、FCF
-  - 位置与分位：5年价格分位代理、20/60/250日回报、52周位置
+  - 位置与分位：5年价格分位代理、20/60/250日回报、52周位置。52周至少 200 个观测且覆盖 350 天；250日收益至少 251 个观测；5年分位至少 1000 个观测且覆盖 4.5 年。不足时字段为 null 并记录 gap
   - 事件与预期：分析师目标价/上行空间、下一次财报日期、最近一次财报日期
 - A股额外补充：近 1～2 个月公告关键词、近 30 日调研记录、事件层偏向与摘要
 
@@ -106,8 +107,8 @@ commands:
 ## 执行流程
 1. 确认标的类型和适用估值口径。
 2. **查阅知识库（L2 深度探索）**：按 `inv-knowledge-curator/references/deep-mining-protocol.md` 的 L2 标准执行。**必须先完成深度搜索，不可跳过或与下一步并行。** 本技能只保留两条特有约束：Reference 类条目优先读取（作为数据锚点），Analysis/Synthesis 次之（定性校验）；若知识库无记录，按协议输出结构化知识缺口。
-3. 优先用 `cs_stock_all` 一次获取全量数据（snapshot + financial + financials），避免多次跨进程调用触发限流。然后标注数据时点。
-4. 检查关键数据是否齐全；缺失、过旧或无法更新时先列出缺口。
+3. 用 `cs_stock_all` 获取三个核心组件，再显式请求 `daily --period 5y`；A 股按需请求 announcements/relations。标注每个响应的状态、时点、来源与实际历史窗口。
+4. 先执行估值就绪门禁：上游失败或可评级指标/核心锚不足时输出不可评级；partial 只允许受限结论、不输出操作参考。
 5. 按公司类型选择框架，不强行套用全部方法。
 6. 读取 `references/scoring-rules.md` 对照阈值完成定量判断。
 7. 结合 `references/master-frameworks.md` 做定性校验，解释应享有溢价或折价的原因；**与知识库中已有分析交叉验证**：逐一对照评分结论与知识库条目中的判断，标注共识/分歧。特别注意：若知识库中多份研报的盈利预测/估值假设与自建假设差异 >5pp，必须分析根源并说明采用理由。

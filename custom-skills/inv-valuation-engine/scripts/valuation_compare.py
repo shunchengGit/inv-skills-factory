@@ -30,7 +30,8 @@ from valuation_snapshot import build_snapshot
 class CompareRow:
     symbol: str
     company_name: str | None
-    conclusion: str
+    valuation_status: str
+    conclusion: str | None
     confidence: str
     pe: float | None
     pb: float | None
@@ -38,7 +39,7 @@ class CompareRow:
     peg: float | None
     earnings_growth_pct: float | None
     percentile_proxy: float | None
-    action: str
+    action: str | None
 
 
 @dataclass
@@ -73,6 +74,7 @@ def build_row(report: Any, snapshot_metrics: dict[str, Any]) -> CompareRow:
     return CompareRow(
         symbol=report.symbol,
         company_name=report.company_name,
+        valuation_status=report.valuation_status,
         conclusion=report.conclusion,
         confidence=report.confidence,
         pe=_get_metric(report, "PE锚"),
@@ -86,11 +88,12 @@ def build_row(report: Any, snapshot_metrics: dict[str, Any]) -> CompareRow:
 
 
 def sort_rows(rows: list[CompareRow]) -> list[CompareRow]:
-    def key_fn(row: CompareRow) -> tuple[float, float, float]:
-        rating_score = RATING_SCORE.get(row.conclusion, 2)
+    def key_fn(row: CompareRow) -> tuple[float, float, float, float]:
+        rateable = 0.0 if row.valuation_status in {"ok", "partial"} else 1.0
+        rating_score = float(RATING_SCORE.get(row.conclusion, 99))
         percentile = row.percentile_proxy if row.percentile_proxy is not None else 50.0
         peg = row.peg if row.peg is not None else 1.2
-        return (rating_score, percentile, peg)
+        return (rateable, rating_score, percentile, peg)
 
     return sorted(rows, key=key_fn)
 
@@ -99,8 +102,11 @@ def build_summary(rows: list[CompareRow]) -> list[str]:
     if not rows:
         return ["无可比数据。"]
 
-    cheapest = rows[0]
-    richest = rows[-1]
+    rateable = [row for row in rows if row.valuation_status in {"ok", "partial"} and row.conclusion]
+    if not rateable:
+        return ["没有可评级标的，无法生成相对便宜/昂贵排序。"]
+    cheapest = rateable[0]
+    richest = rateable[-1]
     summary = [
         f"按综合排序相对更便宜：{cheapest.symbol} {cheapest.company_name or ''}，当前结论为“{cheapest.conclusion}”。".strip(),
         f"按综合排序相对更不便宜：{richest.symbol} {richest.company_name or ''}，当前结论为“{richest.conclusion}”。".strip(),
@@ -150,7 +156,7 @@ def render_text(result: CompareResult) -> str:
         lines.extend(
             [
                 f"- {row['symbol']} {row['company_name'] or ''}".rstrip(),
-                f"  结论={row['conclusion']} | 置信度={row['confidence']} | PE={row['pe']} | PB={row['pb']} | PS={row['ps']} | PEG={row['peg']} | 增速={row['earnings_growth_pct']}% | 分位代理={row['percentile_proxy']} | 操作={row['action']}",
+                f"  状态={row['valuation_status']} | 结论={row['conclusion'] or '不可评级'} | 置信度={row['confidence']} | PE={row['pe']} | PB={row['pb']} | PS={row['ps']} | PEG={row['peg']} | 增速={row['earnings_growth_pct']}% | 分位代理={row['percentile_proxy']} | 操作={row['action'] or '无'}",
             ]
         )
     return "\n".join(lines)
@@ -164,16 +170,16 @@ def render_markdown(result: CompareResult) -> str:
         "",
         "## 对比明细",
         "",
-        "| 代码 | 名称 | 结论 | 置信度 | PE | PB | PS | PEG | 增速% | 分位代理 | 操作 |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---|",
+        "| 代码 | 名称 | 状态 | 结论 | 置信度 | PE | PB | PS | PEG | 增速% | 分位代理 | 操作 |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in result.rows:
         lines.append(
-            f"| {row['symbol']} | {row['company_name'] or ''} | {row['conclusion']} | {row['confidence']} | "
+            f"| {row['symbol']} | {row['company_name'] or ''} | {row['valuation_status']} | {row['conclusion'] or '不可评级'} | {row['confidence']} | "
             f"{'' if row['pe'] is None else row['pe']} | {'' if row['pb'] is None else row['pb']} | "
             f"{'' if row['ps'] is None else row['ps']} | {'' if row['peg'] is None else row['peg']} | "
             f"{'' if row['earnings_growth_pct'] is None else row['earnings_growth_pct']} | "
-            f"{'' if row['percentile_proxy'] is None else row['percentile_proxy']} | {row['action']} |"
+            f"{'' if row['percentile_proxy'] is None else row['percentile_proxy']} | {row['action'] or '无'} |"
         )
     return "\n".join(lines)
 

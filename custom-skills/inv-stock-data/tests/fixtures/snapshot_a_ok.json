@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "command": "snapshot",
+  "status": "ok",
+  "symbol": {"input": "600000", "code": "600000", "market": "a"},
+  "data_as_of": "2026-01-05",
+  "sources": [{"name": "sina", "status": "ok", "fallback": false}],
+  "gaps": [],
+  "notes": [],
+  "data": {
+    "name": "示例银行",
+    "industry": "银行",
+    "price": 10.5,
+    "currency": "CNY",
+    "daily": [],
+    "financial": {"roe": 0.12},
+    "valuation": {"pe_ttm": 6.5, "pb": 0.7},
+    "fundamentals": {"pe_trailing": 6.5, "pb": 0.7, "roe_pct": 12.0, "gross_margin_pct": 45.0},
+    "description": "匿名 A 股契约样例"
+  }
+}

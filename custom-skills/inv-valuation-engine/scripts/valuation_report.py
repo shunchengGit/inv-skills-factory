@@ -44,16 +44,19 @@ class ValuationReport:
     symbol: str
     company_name: str | None
     company_type: str
-    conclusion: str
+    valuation_status: str
+    upstream_status: str
+    conclusion: str | None
     confidence: str
-    data_time: str
-    data_sources: list[str]
+    data_time: str | None
+    data_sources: list[dict[str, Any]]
+    data_gaps: list[dict[str, Any]]
     key_reasons: list[str]
     framework_views: dict[str, str]
     metrics_used: list[dict[str, Any]]
     core_assumptions: list[str]
     risks: list[str]
-    action_reference: str
+    action_reference: str | None
     notes: list[str]
 
 
@@ -335,10 +338,14 @@ def choose_conclusion(views: list[MetricView]) -> str:
     return baseline
 
 
-def confidence_level(snapshot_gaps: list[str], views: list[MetricView]) -> str:
+def confidence_level(snapshot_gaps: list[dict[str, Any]], views: list[MetricView]) -> str:
     usable = [v for v in views if v.rating]
-    critical_missing = {"trailing_pe", "forward_pe", "pb", "revenue_growth_pct", "earnings_growth_pct", "price_percentile_5y_proxy"}
-    missing_count = len([g for g in snapshot_gaps if g in critical_missing])
+    critical_fields = {
+        "metrics.trailing_pe", "metrics.forward_pe", "metrics.pb",
+        "metrics.revenue_growth_pct", "metrics.earnings_growth_pct",
+        "metrics.price_percentile_5y_proxy", "window",
+    }
+    missing_count = len([gap for gap in snapshot_gaps if gap.get("field") in critical_fields])
     if len(usable) >= 3 and missing_count == 0:
         return "高"
     if len(usable) >= 2 and missing_count <= 2:
@@ -346,7 +353,42 @@ def confidence_level(snapshot_gaps: list[str], views: list[MetricView]) -> str:
     return "低"
 
 
-def framework_views(metrics: dict[str, Any], company_type: str, conclusion: str) -> dict[str, str]:
+def determine_readiness(snapshot: Snapshot, views: list[MetricView]) -> tuple[str, list[dict[str, Any]]]:
+    """Return valuation readiness independently from upstream data status."""
+    gaps = [dict(item) for item in snapshot.data_gaps]
+    if snapshot.upstream_status == "failed":
+        gaps.append({
+            "code": "valuation_upstream_failed",
+            "field": "snapshot",
+            "reason": "数据层核心快照失败",
+            "retryable": True,
+        })
+        return "upstream_failed", gaps
+
+    rated_count = sum(view.rating is not None for view in views)
+    has_anchor = any(snapshot.metrics.get(key) is not None for key in ("trailing_pe", "forward_pe", "pb"))
+    if rated_count < 2:
+        gaps.append({
+            "code": "valuation_insufficient_rated_metrics",
+            "field": "valuation.metrics",
+            "reason": "可评级指标少于两个",
+            "retryable": False,
+        })
+    if not has_anchor:
+        gaps.append({
+            "code": "valuation_missing_core_anchor",
+            "field": "valuation.anchor",
+            "reason": "缺少 PE、Forward PE 或 PB 核心估值锚",
+            "retryable": False,
+        })
+    if rated_count < 2 or not has_anchor:
+        return "insufficient_for_valuation", gaps
+    if snapshot.upstream_status == "partial" or snapshot.used_fallback or snapshot.data_gaps:
+        return "partial", gaps
+    return "ok", gaps
+
+
+def framework_views(metrics: dict[str, Any], company_type: str, conclusion: str | None) -> dict[str, str]:
     peg = None
     if metrics.get("trailing_pe") and metrics.get("earnings_growth_pct"):
         growth = metrics["earnings_growth_pct"]
@@ -365,7 +407,7 @@ def framework_views(metrics: dict[str, Any], company_type: str, conclusion: str)
     }
 
 
-def build_key_reasons(metrics: dict[str, Any], conclusion: str, views: list[MetricView]) -> list[str]:
+def build_key_reasons(metrics: dict[str, Any], conclusion: str | None, views: list[MetricView]) -> list[str]:
     reasons: list[str] = []
     top = [v for v in views if v.rating][:3]
     for item in top:
@@ -376,7 +418,7 @@ def build_key_reasons(metrics: dict[str, Any], conclusion: str, views: list[Metr
     if metrics.get("roe_pct") is not None and metrics["roe_pct"] >= 15:
         reasons.append("ROE 处于较好水平，对估值中枢有支撑。")
     if not reasons:
-        reasons.append(f"当前数据有限，结论暂偏向“{conclusion}”。")
+        reasons.append("当前数据不足，无法形成可靠估值结论。" if conclusion is None else f"当前数据有限，结论暂偏向“{conclusion}”。")
     return reasons[:3]
 
 
@@ -434,23 +476,28 @@ def action_reference(conclusion: str) -> str:
 def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str) -> ValuationReport:
     company_type = infer_company_type(snapshot.metrics, company_type_override)
     views, report_notes = build_metric_views(snapshot.metrics, company_type)
-    conclusion = choose_conclusion(views)
-    confidence = confidence_level(snapshot.data_gaps, views)
+    valuation_status, data_gaps = determine_readiness(snapshot, views)
+    conclusion = choose_conclusion(views) if valuation_status in {"ok", "partial"} else None
+    action = action_reference(conclusion) if valuation_status == "ok" and conclusion is not None else None
+    confidence = confidence_level(data_gaps, views)
 
     return ValuationReport(
         symbol=snapshot.symbol,
         company_name=snapshot.company_name,
         company_type=company_type,
+        valuation_status=valuation_status,
+        upstream_status=snapshot.upstream_status,
         conclusion=conclusion,
         confidence=confidence,
         data_time=snapshot.data_time,
         data_sources=snapshot.data_sources,
+        data_gaps=data_gaps,
         key_reasons=build_key_reasons(snapshot.metrics, conclusion, views),
         framework_views=framework_views(snapshot.metrics, company_type, conclusion),
         metrics_used=[asdict(v) for v in views],
         core_assumptions=build_assumptions(snapshot.metrics),
         risks=build_risks(snapshot.metrics),
-        action_reference=action_reference(conclusion),
+        action_reference=action,
         notes=snapshot.notes + report_notes,
     )
 
@@ -460,35 +507,41 @@ def generate_report(symbol: str, company_type_override: str) -> ValuationReport:
     return generate_report_from_snapshot(snapshot, company_type_override)
 
 
+def _source_labels(sources: list[dict[str, Any]]) -> str:
+    labels = []
+    for source in sources:
+        suffix = "(fallback)" if source.get("fallback") else ""
+        labels.append(f"{source.get('name')}:{source.get('status')}{suffix}")
+    return ", ".join(labels) or "none"
+
+
+def _gap_lines(gaps: list[dict[str, Any]]) -> list[str]:
+    return [f"- {gap.get('field')}：{gap.get('reason')}（{gap.get('code')}）" for gap in gaps]
+
+
 def render_text(report: ValuationReport) -> str:
-    metric_lines = []
-    for item in report.metrics_used:
-        metric_lines.append(f"- {item['name']}: {item['value']} -> {item['rating']}（{item['comment']}）")
-
-    framework_lines = [
-        f"- 巴菲特/芒格：{report.framework_views['巴菲特/芒格']}",
-        f"- 段永平：{report.framework_views['段永平']}",
-        f"- 彼得·林奇：{report.framework_views['彼得·林奇']}",
-        f"- 邓普顿：{report.framework_views['邓普顿']}",
-    ]
-
+    metric_lines = [f"- {item['name']}: {item['value']} -> {item['rating']}（{item['comment']}）" for item in report.metrics_used]
+    conclusion = report.conclusion or "数据不足，无法评级"
+    action = report.action_reference or "无（估值闸门未通过）"
     return "\n".join(
         [
             "## 核心结论",
-            f"- 估值结论：{report.conclusion}",
+            f"- 估值状态：{report.valuation_status}",
+            f"- 上游状态：{report.upstream_status}",
+            f"- 估值结论：{conclusion}",
             f"- 结论置信度：{report.confidence}",
             f"- 公司类型：{report.company_type}",
             "",
             "## 关键依据",
             *[f"- {x}" for x in report.key_reasons],
             "",
-            "## 分框架判断",
-            *framework_lines,
-            "",
             "## 定量指标验证",
-            f"- 数据时点：{report.data_time}",
-            f"- 数据源：{', '.join(report.data_sources)}",
+            f"- 数据时点：{report.data_time or '未知'}",
+            f"- 数据源：{_source_labels(report.data_sources)}",
             *metric_lines,
+            "",
+            "## 数据缺口",
+            *_gap_lines(report.data_gaps),
             "",
             "## 核心假设",
             *[f"- {x}" for x in report.core_assumptions],
@@ -497,7 +550,7 @@ def render_text(report: ValuationReport) -> str:
             *[f"- {x}" for x in report.risks],
             "",
             "## 操作参考",
-            f"- {report.action_reference}",
+            f"- {action}",
         ]
     )
 
@@ -505,22 +558,18 @@ def render_text(report: ValuationReport) -> str:
 def render_markdown(report: ValuationReport) -> str:
     lines = [
         "## 核心结论",
-        f"- 估值结论：{report.conclusion}",
+        f"- 估值状态：{report.valuation_status}",
+        f"- 上游状态：{report.upstream_status}",
+        f"- 估值结论：{report.conclusion or '数据不足，无法评级'}",
         f"- 结论置信度：{report.confidence}",
         f"- 公司类型：{report.company_type}",
         "",
         "## 关键依据",
         *[f"- {x}" for x in report.key_reasons],
         "",
-        "## 分框架判断",
-        f"- 巴菲特/芒格：{report.framework_views['巴菲特/芒格']}",
-        f"- 段永平：{report.framework_views['段永平']}",
-        f"- 彼得·林奇：{report.framework_views['彼得·林奇']}",
-        f"- 邓普顿：{report.framework_views['邓普顿']}",
-        "",
         "## 定量指标验证",
-        f"- 数据时点：{report.data_time}",
-        f"- 数据源：{', '.join(report.data_sources)}",
+        f"- 数据时点：{report.data_time or '未知'}",
+        f"- 数据源：{_source_labels(report.data_sources)}",
         "",
         "| 指标 | 数值 | 档位 | 说明 |",
         "|---|---:|---|---|",
@@ -533,6 +582,9 @@ def render_markdown(report: ValuationReport) -> str:
     lines.extend(
         [
             "",
+            "## 数据缺口",
+            *_gap_lines(report.data_gaps),
+            "",
             "## 核心假设",
             *[f"- {x}" for x in report.core_assumptions],
             "",
@@ -540,7 +592,7 @@ def render_markdown(report: ValuationReport) -> str:
             *[f"- {x}" for x in report.risks],
             "",
             "## 操作参考",
-            f"- {report.action_reference}",
+            f"- {report.action_reference or '无（估值闸门未通过）'}",
         ]
     )
     return "\n".join(lines)
@@ -556,7 +608,7 @@ def main() -> int:
         print(render_markdown(report))
     else:
         print(render_text(report))
-    return 0
+    return 1 if report.valuation_status == "upstream_failed" else 0
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 ---
 name: inv-stock-data
 description: 获取A股/港股/美股/ETF行情与财务数据，所有投资技能的唯一数据层。用于查询股票行情、财务报表、估值指标时
-version: 1.5.0
+version: 2.0.0
 trigger:
   - 股票数据
   - 行情查询
@@ -30,7 +30,13 @@ commands:
 
 在用户询问 **个股基础信息、行情、财务摘要、公告、调研或行业数据** 时，优先用本技能内置脚本拉取结构化数据，再回答或整理；不做估值结论与买卖建议（估值请用 `inv-valuation-engine`）。
 
-**本技能是所有投资相关技能的唯一数据层**，其他技能通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。脚本优先级、代理规则、重试/降级语义以本技能为权威，其他技能只保留与自身分析逻辑强相关的补充说明。
+**本技能是所有投资相关技能的唯一数据层**，其他技能只能通过本技能的公共契约获取数据，不直接调用 AkShare / yfinance。脚本优先级、代理规则、重试/降级语义以本技能为权威，其他技能只保留与自身分析逻辑强相关的补充说明。
+
+### v1 公共契约（破坏性变更）
+
+所有 JSON 命令统一返回 `schema_version: "1.0"` envelope：`status`（`ok|partial|failed`）、`symbol`、`data_as_of`、`sources`、结构化 `gaps`、`notes`、`data`，日线另含实际 `window`。调用方必须先检查 `status`，不得读取供应商原始字段；`failed` 的 CLI 退出码非零。
+
+`all` 固定只聚合 `snapshot + financial + financials`，位于 `data.components` 且各有独立状态；**不包含** `daily`、`announcements`、`relations`。需要历史或事件数据时显式调用对应命令。
 
 ## 快速命令
 
@@ -60,7 +66,8 @@ export HTTP_PROXY=http://127.0.0.1:7890
 uv run {baseDir}/scripts/cs_stock_info.py snapshot 600519
 uv run {baseDir}/scripts/cs_stock_info.py snapshot 000001 --output json
 uv run {baseDir}/scripts/cs_stock_info.py profile 300750 --output json
-uv run {baseDir}/scripts/cs_stock_info.py daily 688981 --output json
+uv run {baseDir}/scripts/cs_stock_info.py daily 688981 --period 5y --output json
+# 可显式限制返回数量：--limit 250；未给 limit 时不截短请求窗口
 uv run {baseDir}/scripts/cs_stock_info.py financial 600519 --output json
 uv run {baseDir}/scripts/cs_stock_info.py description 600519 --output json
 uv run {baseDir}/scripts/cs_stock_info.py announcements 600660 --output json
@@ -85,10 +92,11 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 
 ## 脚本使用优先级
 
-1. 用户要 **一眼看清** 名称、行业、价格/收盘、短期涨跌、关键估值或质量指标：运行 `snapshot`。
-   - A 股 snapshot 含：name, industry, daily, financial, valuation, sina, description
-   - ETF snapshot 含：name, fund_type, daily, nav, stats_20d, stats_52w
-   - 美港股 snapshot 含：name, sector, industry, price, currency, daily, fundamentals
+1. 用户要 **一眼看清** 名称、行业、价格/收盘、短期涨跌、关键估值或质量指标：运行 `snapshot`，并从 v1 `data` 读取标准字段。
+   - A 股 snapshot data：name, industry, price, currency, daily, financial, valuation, sina, description
+   - ETF snapshot data：name, category, price, currency, daily, nav
+   - 美港股 snapshot data：name, sector, industry, price, currency, daily, fundamentals
+   - snapshot 内的 daily 仅用于短期概览；52 周/250 日/5 年指标必须显式调用 `daily --period 5y` 并检查 window 门槛
 2. 用户要 **完整原始字段表**（雪球 item 或 Yahoo `info`）：运行 `profile --output json`。
 3. 用户要 **K 线序列**：运行 `daily --output json`。
 4. 用户要 **财务摘要**：运行 `financial --output json`（A 股同花顺+新浪；美港股 Yahoo fundamentals）。

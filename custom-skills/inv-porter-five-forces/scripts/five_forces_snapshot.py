@@ -21,7 +21,6 @@ import argparse
 import json
 import subprocess
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -157,8 +156,9 @@ class Snapshot:
     company_name: str | None
     market: str
     currency: str | None
-    data_time: str
-    data_sources: list[str]
+    data_time: str | None
+    data_sources: list[dict[str, Any]]
+    upstream: dict[str, Any]
     company_profile: dict[str, Any]
     financial_metrics: dict[str, Any]
     market_signals: dict[str, Any]
@@ -167,7 +167,7 @@ class Snapshot:
     recent_developments: dict[str, Any]
     five_forces_facts: dict[str, list[str]]
     pre_scoring: dict[str, Any]
-    data_gaps: list[str]
+    data_gaps: list[dict[str, Any]]
     notes: list[str]
 
 
@@ -424,16 +424,21 @@ def normalize_dividend_yield(value: Any) -> float | None:
 
 
 def _call_cs_stock(*args: str) -> dict:
-    """调用 inv-stock-data CLI 并返回解析后的 JSON dict。代理通过环境变量自动管理。"""
+    """调用数据层；非零退出时仍优先保留 stdout 中的合法 v1 failed envelope。"""
     from pathlib import Path
 
     cs_dir = Path(__file__).resolve().parent.parent.parent / "inv-stock-data"
     cmd = ["uv", "run", str(cs_dir / "scripts" / "cs_stock_info.py"), *args, "--output", "json"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=cs_dir, timeout=90)
-        if result.returncode != 0:
-            return {"error": result.stderr.strip()[:300]}
-        return json.loads(result.stdout)
+        try:
+            payload = json.loads(result.stdout)
+        except (json.JSONDecodeError, TypeError):
+            payload = None
+        if isinstance(payload, dict) and payload.get("schema_version"):
+            return payload
+        message = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        return {"error": message[:300]}
     except Exception as exc:
         return {"error": str(exc)[:200]}
 
@@ -488,7 +493,8 @@ def build_pre_scoring(
     five_forces_facts: dict[str, list[str]],
     event_titles: list[str],
     event_time_map: dict[str, str] | None,
-    data_gaps: list[str],
+    data_gaps: list[dict[str, Any]],
+    upstream_status: str = "ok",
 ) -> dict[str, Any]:
     benchmark = industry_benchmark.get("benchmark") if industry_benchmark.get("matched") else None
     gross_margin = financial_metrics.get("gross_margin_pct")
@@ -628,42 +634,57 @@ def build_pre_scoring(
             dimensions[dimension]["reasons"].append(reason)
 
     results: dict[str, Any] = {}
-    total = 0
     missing_count = len(data_gaps)
+    minimum_evidence = 6  # 3 个评分子维度 × 每维至少 2 条独立事实
     for key, payload in dimensions.items():
-        suggested = clamp_score(payload["score"])
-        evidence_count = min(4, len(five_forces_facts.get(key, [])))
+        evidence_count = len(five_forces_facts.get(key, []))
+        ready = upstream_status != "failed" and evidence_count >= minimum_evidence
+        suggested = clamp_score(payload["score"]) if ready else None
+        force_gaps = []
+        if upstream_status == "failed":
+            force_gaps.append({
+                "code": "upstream_failed",
+                "field": key,
+                "reason": "上游快照失败，结构化预评分不可用",
+                "retryable": True,
+            })
+        if evidence_count < minimum_evidence:
+            force_gaps.append({
+                "code": "insufficient_force_evidence",
+                "field": key,
+                "reason": f"需要至少 {minimum_evidence} 条覆盖三个子维度的独立事实，当前 {evidence_count} 条",
+                "retryable": False,
+            })
+        confidence = "低" if not ready else "中" if upstream_status == "partial" or missing_count else "高"
         results[key] = {
             "label": payload["label"],
-            "base_score": payload["base"],
+            "base_score": payload["base"] if benchmark else None,
+            "score": suggested,
             "suggested_score": suggested,
-            "score_band": score_band(suggested),
-            "confidence": confidence_label(evidence_count, missing_count),
-            "reasoning": (payload["reasons"] or ["当前维度主要依据行业基准和已有事实做保守预估。"])[:3],
+            "score_band": score_band(suggested) if suggested is not None else None,
+            "evidence_count": evidence_count,
+            "confidence": confidence,
+            "gaps": force_gaps,
+            "reasoning": (payload["reasons"] or ["证据不足，暂不生成结构化预评分。"]),
         }
-        total += suggested
 
-    strongest = max(results.items(), key=lambda item: item[1]["suggested_score"])
-    weakest = min(results.items(), key=lambda item: item[1]["suggested_score"])
+    scored = [(key, item) for key, item in results.items() if item["score"] is not None]
+    complete = len(scored) == len(results)
+    strongest = max(scored, key=lambda item: item[1]["score"]) if complete else None
+    weakest = min(scored, key=lambda item: item[1]["score"]) if complete else None
 
     return {
+        "status": "ok" if complete else "insufficient_evidence",
         "dimensions": results,
-        "total_score": total,
-        "overall_confidence": confidence_label(
-            evidence_count=sum(len(v) > 0 for v in five_forces_facts.values()),
-            missing_count=missing_count,
-        ),
+        "total_score": sum(item["score"] for _, item in scored) if complete else None,
+        "overall_confidence": "高" if complete and not missing_count and upstream_status == "ok" else "中" if complete else "低",
         "strongest_dimension": {
-            "key": strongest[0],
-            "label": strongest[1]["label"],
-            "score": strongest[1]["suggested_score"],
-        },
+            "key": strongest[0], "label": strongest[1]["label"], "score": strongest[1]["score"],
+        } if strongest else None,
         "weakest_dimension": {
-            "key": weakest[0],
-            "label": weakest[1]["label"],
-            "score": weakest[1]["suggested_score"],
-        },
-        "note": "预评分仅用于起草分析，最终分数仍应结合最新行业事实人工校准。",
+            "key": weakest[0], "label": weakest[1]["label"], "score": weakest[1]["score"],
+        } if weakest else None,
+        "note": "只有五力全部达到证据门槛时才生成总分；外部研究可继续补充证据。",
     }
 
 
@@ -689,17 +710,17 @@ def build_force_facts(
     benchmark_match: dict[str, Any],
 ) -> dict[str, list[str]]:
     gross_margin_pct = first_not_none(
-        pct(info.get("grossMargins")),
+        _parse_num(info.get("grossMargins")),
         enhancements.get("ths_gross_margin_pct"),
     )
-    operating_margin_pct = pct(info.get("operatingMargins"))
+    operating_margin_pct = _parse_num(info.get("operatingMargins"))
     net_margin_pct = first_not_none(
-        pct(info.get("profitMargins")),
+        _parse_num(info.get("profitMargins")),
         enhancements.get("ths_net_margin_pct"),
     )
-    revenue_growth_pct = pct(info.get("revenueGrowth"))
+    revenue_growth_pct = _parse_num(info.get("revenueGrowth"))
     roe_pct = first_not_none(
-        pct(info.get("returnOnEquity")),
+        _parse_num(info.get("returnOnEquity")),
         enhancements.get("ths_roe_pct"),
     )
     market_cap = info.get("marketCap")
@@ -722,53 +743,51 @@ def build_force_facts(
         "rivalry": [],
     }
 
-    if gross_margin_pct is not None or operating_margin_pct is not None:
-        facts["supplier_power"].append(
-            "毛利率 {0}%，营业利润率 {1}%，可用于判断公司对成本波动和上游涨价的传导能力。".format(
-                "--" if gross_margin_pct is None else gross_margin_pct,
-                "--" if operating_margin_pct is None else operating_margin_pct,
-            )
-        )
-    if supplier_hits:
-        facts["supplier_power"].append("公司简介中出现 `{0}` 等关键词，提示可能存在自研、自制或供应链控制线索。".format(" / ".join(supplier_hits)))
+    if gross_margin_pct is not None:
+        facts["supplier_power"].append(f"毛利率 {gross_margin_pct}%，可用于判断成本传导与上游涨价吸收能力。")
+    if operating_margin_pct is not None:
+        facts["supplier_power"].append(f"营业利润率 {operating_margin_pct}%，可交叉验证采购和制造环节的成本控制。")
+    for hit in supplier_hits:
+        facts["supplier_power"].append(f"公司简介出现 `{hit}`，提示自研、自制或供应链控制线索。")
     if enhancements.get("ths_debt_asset_ratio_pct") is not None:
         facts["supplier_power"].append(
             "A股补充财务摘要显示资产负债率约 {0}%，可结合资本开支和扩产能力判断对上游的依赖程度。".format(
                 enhancements["ths_debt_asset_ratio_pct"]
             )
         )
-    facts["supplier_power"].extend(event_force_hints["supplier_power"][:1])
+    if market_cap is not None:
+        facts["supplier_power"].append(f"公司市值约 {market_cap:,}，规模可作为采购谈判能力的辅助证据。")
+    if employees is not None:
+        facts["supplier_power"].append(f"员工数约 {employees:,}，组织和制造规模可辅助判断供应链管理能力。")
+    facts["supplier_power"].extend(event_force_hints["supplier_power"])
 
-    if gross_margin_pct is not None or net_margin_pct is not None:
-        facts["buyer_power"].append(
-            "毛利率 {0}%、净利率 {1}% 是观察定价权、客户压价能力和产品差异化的直接线索。".format(
-                "--" if gross_margin_pct is None else gross_margin_pct,
-                "--" if net_margin_pct is None else net_margin_pct,
-            )
-        )
-    if buyer_hits:
-        facts["buyer_power"].append("公司简介中出现 `{0}` 等关键词，常对应品牌、渠道、平台或用户粘性。".format(" / ".join(buyer_hits)))
+    if gross_margin_pct is not None:
+        facts["buyer_power"].append(f"毛利率 {gross_margin_pct}% 是观察定价权和客户压价能力的直接线索。")
+    if net_margin_pct is not None:
+        facts["buyer_power"].append(f"净利率 {net_margin_pct}% 可辅助判断产品差异化是否转化为股东收益。")
+    for hit in buyer_hits:
+        facts["buyer_power"].append(f"公司简介出现 `{hit}`，对应品牌、渠道、平台或用户粘性线索。")
     if revenue_growth_pct is not None:
         facts["buyer_power"].append(f"最新收入增速约 {revenue_growth_pct}%，可结合毛利率变化判断提价是否成立。")
-    facts["buyer_power"].extend(event_force_hints["buyer_power"][:1])
+    facts["buyer_power"].extend(event_force_hints["buyer_power"])
 
     if market_cap is not None:
         facts["entry_threat"].append(f"当前市值约 {market_cap:,}，可作为规模、资本壁垒和行业地位的参考。")
     if employees is not None:
         facts["entry_threat"].append(f"员工数约 {employees:,}，可辅助判断组织规模、渠道覆盖和交付壁垒。")
-    if entry_hits:
-        facts["entry_threat"].append("公司简介中出现 `{0}` 等关键词，提示存在专利、认证、平台或监管壁垒线索。".format(" / ".join(entry_hits)))
+    for hit in entry_hits:
+        facts["entry_threat"].append(f"公司简介出现 `{hit}`，提示专利、认证、平台或监管壁垒线索。")
     if industry:
         facts["entry_threat"].append(f"细分行业识别为 `{industry}`，后续应对照行业基准判断进入门槛高低。")
-    facts["entry_threat"].extend(event_force_hints["entry_threat"][:1])
+    facts["entry_threat"].extend(event_force_hints["entry_threat"])
 
-    if substitute_hits:
-        facts["substitute_threat"].append("公司简介中出现 `{0}` 等关键词，提示产品可能处于标准、基础设施或关键环节。".format(" / ".join(substitute_hits)))
+    for hit in substitute_hits:
+        facts["substitute_threat"].append(f"公司简介出现 `{hit}`，提示产品处于标准、基础设施或关键环节。")
     if recent_news:
         facts["substitute_threat"].append("最近新闻可用于检查是否出现新技术、替代路线或商业模式变化。")
     if roe_pct is not None:
         facts["substitute_threat"].append(f"ROE 约 {roe_pct}% 可作为产品/模式是否具备持续价值的辅助验证。")
-    facts["substitute_threat"].extend(event_force_hints["substitute_threat"][:1])
+    facts["substitute_threat"].extend(event_force_hints["substitute_threat"])
 
     if industry:
         facts["rivalry"].append(f"当前行业标签为 `{industry}`，应先匹配 `references/industry-benchmark.md` 的最近行业基准。")
@@ -786,12 +805,12 @@ def build_force_facts(
         facts["rivalry"].append("近期新闻标题含 `{0}`，需重点检查是否存在价格战或竞争加剧。".format(" / ".join(rivalry_news[:3])))
     elif recent_news:
         facts["rivalry"].append("最近新闻标题可用于识别价格战、监管、产能扩张或行业出清线索。")
-    facts["rivalry"].extend(event_force_hints["rivalry"][:1])
+    facts["rivalry"].extend(event_force_hints["rivalry"])
 
     if company_name and market != "A-share":
         facts["rivalry"].append(f"{company_name} 当前主要依赖 Yahoo Finance 跨市场数据，同行名单建议结合用户指定可比公司补充。")
 
-    return {key: value[:4] for key, value in facts.items()}
+    return facts
 
 
 def _parse_news_items(raw_news: list[dict[str, Any]] | None, limit: int = 5) -> list[NewsItem]:
@@ -815,366 +834,133 @@ def _parse_news_items(raw_news: list[dict[str, Any]] | None, limit: int = 5) -> 
 
 
 def build_snapshot(symbol: str, forced_market: str) -> Snapshot:
+    """Build a Porter fact sheet from the inv-stock-data v1 public contract."""
+    from porter_data_adapter import adapt_snapshot_envelope
+
     normalized = normalize_symbol(symbol, forced_market)
-    data_sources: list[str] = []
-    notes: list[str] = []
-    data_gaps: list[str] = []
-    info: dict[str, Any] = {}
-    enhancements: dict[str, Any] = {}
-    yf_data: dict[str, Any] = {}
-    recent_news: list[NewsItem] = []
-    next_earnings_date: str | None = None
-    last_earnings_date: str | None = None
-    high_52w: float | None = None
-    low_52w: float | None = None
-    pos_52w: float | None = None
+    raw = _call_cs_stock("snapshot", normalized)
+    facts = adapt_snapshot_envelope(raw)
+    upstream = facts.upstream
+    data_gaps = [dict(item) for item in upstream["gaps"]]
 
-    a_share_announcements: list[dict[str, Any]] = []
-    a_share_research_records: list[dict[str, Any]] = []
-
-    if is_a_share(symbol):
+    announcements: list[dict[str, Any]] = []
+    relations: list[dict[str, Any]] = []
+    if facts.market == "A-share":
         plain = to_a_share_code(symbol)
+        for command, target in (("announcements", announcements), ("relations", relations)):
+            payload = _call_cs_stock(command, plain)
+            if payload.get("schema_version") == "1.0":
+                data = payload.get("data") or {}
+                target.extend(data.get(command) or [])
+                data_gaps.extend(dict(item) for item in payload.get("gaps") or [])
+                upstream["sources"].extend(dict(item) for item in payload.get("sources") or [])
 
-        # --- A股: snapshot ---
-        snap = _call_cs_stock("snapshot", plain)
-        if snap and not snap.get("error"):
-            data_sources.append("inv-stock-data(snapshot)")
-        else:
-            err = snap.get("error", "未知错误") if snap else "无返回"
-            notes.append(f"inv-stock-data snapshot 调用失败: {err}")
-
-        # 从 snapshot 提取基本信息
-        company_name = snap.get("name")
-        industry = None
-        regular_price = None
-        business_summary = None
-        fin = snap.get("financial") or {}
-        sina = snap.get("sina") or {}
-        val = snap.get("valuation") or {}
-        currency = "CNY"
-
-        # --- A股: description (补充行业和概况) ---
-        desc_data = _call_cs_stock("description", plain)
-        if desc_data and not desc_data.get("error"):
-            data_sources.append("inv-stock-data(description)")
-            cninfo_industry = desc_data.get("industry")
-            if cninfo_industry:
-                industry = cninfo_industry
-            desc_text = desc_data.get("description") or ""
-            if desc_text:
-                business_summary = desc_text
-
-        # 财务指标（适配 inv-stock-data 中文 key 输出）
-        ths_gross_margin_pct = _parse_pct(fin.get("销售毛利率"))
-        ths_net_margin_pct = _parse_pct(fin.get("销售净利率"))
-        ths_roe_pct = _parse_pct(fin.get("净资产收益率"))
-        ths_debt_asset_ratio_pct = _parse_pct(fin.get("资产负债率"))
-        ths_report_date = fin.get("报告期")
-
-        # 从 sina 利润表补充计算
-        sina_revenue = _parse_num(sina.get("营业总收入"))
-        sina_cost = _parse_num(sina.get("营业成本"))
-        sina_net_profit = _parse_num(sina.get("归属于母公司所有者的净利润")) or _parse_num(sina.get("净利润"))
-        if ths_gross_margin_pct is None and sina_revenue and sina_cost and sina_revenue > 0:
-            ths_gross_margin_pct = round((sina_revenue - sina_cost) / sina_revenue * 100, 2)
-        if ths_net_margin_pct is None and sina_net_profit and sina_revenue and sina_revenue > 0:
-            ths_net_margin_pct = round(sina_net_profit / sina_revenue * 100, 2)
-
-        enhancements = {
-            "xq_name": company_name,
-            "xq_industry": None,
-            "xq_exchange": None,
-            "ths_gross_margin_pct": ths_gross_margin_pct,
-            "ths_net_margin_pct": ths_net_margin_pct,
-            "ths_roe_pct": ths_roe_pct,
-            "ths_debt_asset_ratio_pct": ths_debt_asset_ratio_pct,
-            "ths_report_date": ths_report_date,
-            "sina_revenue": sina_revenue,
-            "sina_net_profit": sina_net_profit,
-        }
-
-        # 估值
-        market_cap = _parse_num(val.get("总市值")) if val else None
-        employees = None
-
-        # info 模拟（兼容 build_force_facts）
-        a_share_debt_to_equity = None
-        if ths_debt_asset_ratio_pct is not None and ths_debt_asset_ratio_pct < 100:
-            a_share_debt_to_equity = safe_round(ths_debt_asset_ratio_pct / (100.0 - ths_debt_asset_ratio_pct), 2)
-        info = {
-            "industry": None,
-            "marketCap": market_cap,
-            "fullTimeEmployees": employees,
-            "debtToEquity": a_share_debt_to_equity,
-        }
-
-        # --- A股: announcements ---
-        ann_data = _call_cs_stock("announcements", plain)
-        if ann_data and not ann_data.get("error"):
-            a_share_announcements = ann_data.get("announcements") or ann_data.get("items", [])
-            if a_share_announcements:
-                data_sources.append("inv-stock-data(announcements)")
-        else:
-            err = ann_data.get("error", "未知错误") if ann_data else "无返回"
-            notes.append(f"inv-stock-data announcements 调用失败: {err}")
-
-        # --- A股: relations ---
-        rel_data = _call_cs_stock("relations", plain)
-        if rel_data and not rel_data.get("error"):
-            a_share_research_records = rel_data.get("peers") or rel_data.get("relations") or rel_data.get("items", [])
-            if a_share_research_records:
-                data_sources.append("inv-stock-data(relations)")
-        else:
-            err = rel_data.get("error", "未知错误") if rel_data else "无返回"
-            notes.append(f"inv-stock-data relations 调用失败: {err}")
-
-        # 更新 industry 到 info 和 enhancements
-        if industry:
-            info["industry"] = industry
-            enhancements["xq_industry"] = industry
-        sector = industry
-        analyst_target_price = None
-
-    else:
-        # --- 非A股 (Yahoo): snapshot ---
-        snap = _call_cs_stock("snapshot", normalized)
-        if snap and not snap.get("error"):
-            data_sources.append("inv-stock-data(snapshot)")
-        else:
-            err = snap.get("error", "未知错误") if snap else "无返回"
-            notes.append(f"inv-stock-data snapshot 调用失败: {err}")
-
-        company_name = _dig(snap, "name")
-        sector = _dig(snap, "sector")
-        industry = _dig(snap, "industry")
-        exchange = _dig(snap, "exchange")
-        currency = _dig(snap, "quote", "currency")
-        regular_price = _dig(snap, "quote", "regular_market_price")
-        business_summary = _dig(snap, "summary")
-
-        # yahoo_fundamentals
-        yf_data = _dig(snap, "yahoo_fundamentals") or {}
-        info = {
-            "longName": company_name,
-            "shortName": company_name,
-            "sector": sector,
-            "industry": industry,
-            "exchange": exchange,
-            "currency": currency,
-            "currentPrice": regular_price,
-            "regularMarketPrice": regular_price,
-            "marketCap": yf_data.get("marketCap"),
-            "fullTimeEmployees": None,
-            "grossMargins": yf_data.get("grossMargins"),
-            "operatingMargins": yf_data.get("operatingMargins"),
-            "profitMargins": yf_data.get("profitMargins"),
-            "returnOnEquity": yf_data.get("returnOnEquity"),
-            "returnOnAssets": yf_data.get("returnOnAssets"),
-            "revenueGrowth": yf_data.get("revenueGrowth"),
-            "earningsGrowth": yf_data.get("earningsGrowth"),
-            "debtToEquity": yf_data.get("debtToEquity"),
-            "freeCashflow": None,
-            "totalRevenue": None,
-            "enterpriseValue": None,
-            "targetMeanPrice": yf_data.get("targetMeanPrice"),
-            "numberOfAnalystOpinions": yf_data.get("numberOfAnalystOpinions"),
-        }
-        analyst_target_price = yf_data.get("targetMeanPrice")
-
-        # 52w 统计
-        high_52w = _dig(snap, "stats_52w", "high")
-        low_52w = _dig(snap, "stats_52w", "low")
-        pos_52w = _dig(snap, "stats_52w", "position_pct")
-
-        # earnings
-        next_earnings_date = _dig(snap, "earnings", "next_date")
-        last_earnings_date = _dig(snap, "earnings", "last_date")
-
-        # news
-        raw_news = _dig(snap, "news") or []
-        recent_news = _parse_news_items(raw_news, limit=6)
-        if recent_news:
-            data_sources.append("inv-stock-data(news)")
-
-        enhancements = {}
-
-    market = detect_market(normalized, forced_market, info)
-
-    # --- 公共计算 ---
-    analyst_upside_pct = None
-    if regular_price not in {None, 0} and analyst_target_price is not None:
-        analyst_upside_pct = safe_round((float(analyst_target_price) - float(regular_price)) / float(regular_price) * 100, 2)
-
-    company_name = first_not_none(
-        company_name,
-        enhancements.get("xq_name"),
-    )
-    industry = first_not_none(industry, enhancements.get("xq_industry"))
-    business_summary = first_not_none(business_summary, info.get("longBusinessSummary"), info.get("description"))
-    peer_candidates = enhancements.get("industry_peers", [])
-    event_titles = [item.title for item in recent_news]
-    event_titles.extend(item.get("title", "") for item in a_share_announcements)
-    event_titles.extend(item.get("title", "") for item in a_share_research_records)
-    benchmark_match = match_industry_benchmark(industry, sector, business_summary)
-
+    fund = facts.fundamentals
+    info = {
+        "industry": facts.industry,
+        "sector": facts.sector,
+        "marketCap": fund.get("market_cap"),
+        "fullTimeEmployees": fund.get("employees"),
+        "grossMargins": fund.get("gross_margin_pct"),
+        "operatingMargins": fund.get("operating_margin_pct"),
+        "profitMargins": fund.get("net_margin_pct"),
+        "returnOnEquity": fund.get("roe_pct"),
+        "returnOnAssets": fund.get("roa_pct"),
+        "revenueGrowth": fund.get("revenue_growth_pct"),
+        "earningsGrowth": fund.get("earnings_growth_pct"),
+        "debtToEquity": fund.get("debt_to_equity"),
+        "freeCashflow": fund.get("free_cashflow") or fund.get("free_cash_flow"),
+        "totalRevenue": fund.get("total_revenue"),
+    }
+    enhancements: dict[str, Any] = {}
     financial_metrics = {
-        "market_cap": info.get("marketCap"),
-        "enterprise_value": info.get("enterpriseValue"),
-        "total_revenue": info.get("totalRevenue"),
-        "gross_margin_pct": first_not_none(pct(info.get("grossMargins")), enhancements.get("ths_gross_margin_pct")),
-        "operating_margin_pct": pct(info.get("operatingMargins")),
-        "net_margin_pct": first_not_none(pct(info.get("profitMargins")), enhancements.get("ths_net_margin_pct")),
-        "roe_pct": first_not_none(pct(info.get("returnOnEquity")), enhancements.get("ths_roe_pct")),
-        "roa_pct": pct(info.get("returnOnAssets")),
-        "revenue_growth_pct": pct(info.get("revenueGrowth")),
-        "earnings_growth_pct": pct(info.get("earningsGrowth")),
-        "free_cash_flow": info.get("freeCashflow"),
-        "debt_to_equity": first_not_none(
-            info.get("debtToEquity") if market == "A-share" else None,
-            safe_round(
-                float(yf_data.get("debtToEquity")) / 100.0, 2,
-            ) if yf_data.get("debtToEquity") is not None else None,
-        ),
-        "employees": info.get("fullTimeEmployees"),
-        "a_share_report_date": enhancements.get("ths_report_date"),
+        "market_cap": info["marketCap"],
+        "enterprise_value": fund.get("enterprise_value"),
+        "total_revenue": info["totalRevenue"],
+        "gross_margin_pct": _parse_num(info["grossMargins"]),
+        "operating_margin_pct": _parse_num(info["operatingMargins"]),
+        "net_margin_pct": _parse_num(info["profitMargins"]),
+        "roe_pct": _parse_num(info["returnOnEquity"]),
+        "roa_pct": _parse_num(info["returnOnAssets"]),
+        "revenue_growth_pct": _parse_num(info["revenueGrowth"]),
+        "earnings_growth_pct": _parse_num(info["earningsGrowth"]),
+        "free_cash_flow": info["freeCashflow"],
+        "debt_to_equity": _parse_num(info["debtToEquity"]),
+        "employees": info["fullTimeEmployees"],
+        "a_share_report_date": None,
     }
-
-    # A 股：从 inv-stock-data 中文 key 补充缺失的财务指标
-    if market == "A-share" and snap:
-        fin = snap.get("financial") or {}
-        sina = snap.get("sina") or {}
-        if financial_metrics["gross_margin_pct"] is None:
-            v = fin.get("销售毛利率")
-            if v and v is not False:
-                financial_metrics["gross_margin_pct"] = _pct_str(v)
-            else:
-                # 从 sina 计算：毛利率 = (营收 - 营业成本) / 营收 * 100
-                rev = sina.get("营业总收入") or sina.get("营业收入")
-                cost = sina.get("营业成本")
-                if rev and cost and rev is not False and cost is not False:
-                    try:
-                        financial_metrics["gross_margin_pct"] = round((float(rev) - float(cost)) / float(rev) * 100, 2)
-                    except (ValueError, TypeError, ZeroDivisionError):
-                        pass
-        if financial_metrics["net_margin_pct"] is None:
-            v = fin.get("销售净利率")
-            if v and v is not False:
-                financial_metrics["net_margin_pct"] = _pct_str(v)
-            else:
-                # 从 sina 计算：净利率 = 归母净利润 / 营收 * 100
-                np = sina.get("归属于母公司所有者的净利润")
-                rev = sina.get("营业总收入") or sina.get("营业收入")
-                if np and rev and np is not False and rev is not False:
-                    try:
-                        financial_metrics["net_margin_pct"] = round(float(np) / float(rev) * 100, 2)
-                    except (ValueError, TypeError, ZeroDivisionError):
-                        pass
-        if financial_metrics["roe_pct"] is None:
-            v = fin.get("净资产收益率")
-            if v and v is not False:
-                financial_metrics["roe_pct"] = _pct_str(v)
-        if financial_metrics["revenue_growth_pct"] is None:
-            v = fin.get("营业总收入同比增长率")
-            if v and v is not False:
-                financial_metrics["revenue_growth_pct"] = _pct_str(v)
-        if financial_metrics["total_revenue"] is None:
-            v = sina.get("营业总收入") or sina.get("营业收入")
-            if v and v is not False:
-                financial_metrics["total_revenue"] = v
-
-    market_signals = {
-        "current_price": safe_round(regular_price, 4),
-        "currency": currency,
-        "high_52w": high_52w,
-        "low_52w": low_52w,
-        "position_in_52w_range_pct": pos_52w,
-        "analyst_target_price": safe_round(analyst_target_price, 4),
-        "analyst_upside_pct": analyst_upside_pct,
-        "analyst_count": info.get("numberOfAnalystOpinions"),
-        "next_earnings_date": next_earnings_date,
-        "last_earnings_date": last_earnings_date,
-    }
-
-    company_profile = {
-        "sector": sector,
-        "industry": industry,
-        "country": info.get("country"),
-        "exchange": first_not_none(info.get("exchange"), enhancements.get("xq_exchange")),
-        "website": info.get("website"),
-        "business_summary": business_summary,
-    }
-
-    recent_developments = {
-        "recent_news": [asdict(item) for item in recent_news],
-        "a_share_announcements": a_share_announcements,
-        "a_share_research_records": a_share_research_records,
-    }
-
-    peer_reference = {
-        "industry_label": industry,
-        "sector_label": sector,
-        "peer_candidates": peer_candidates[:8],
-        "industry_peer_count": enhancements.get("industry_peer_count"),
-    }
-
-    five_forces_facts = build_force_facts(
-        company_name=company_name,
-        summary=business_summary,
-        market=market,
+    benchmark = match_industry_benchmark(facts.industry, facts.sector, facts.business_summary)
+    event_titles = [
+        str(item.get("title") or item.get("标题") or item.get("公告标题"))
+        for item in announcements + relations
+        if item.get("title") or item.get("标题") or item.get("公告标题")
+    ]
+    force_facts = build_force_facts(
+        company_name=facts.company_name,
+        summary=facts.business_summary,
+        market=facts.market,
         info=info,
         enhancements=enhancements,
-        recent_news=recent_news,
-        event_titles=[title for title in event_titles if title],
-        benchmark_match=benchmark_match,
+        recent_news=[],
+        event_titles=event_titles,
+        benchmark_match=benchmark,
     )
-    if not company_name:
-        data_gaps.append("缺少公司名称")
-    if not industry:
-        data_gaps.append("缺少细分行业")
-    if not business_summary:
-        data_gaps.append("缺少主营/商业模式摘要")
-    if financial_metrics["gross_margin_pct"] is None:
-        data_gaps.append("缺少毛利率")
-    if financial_metrics["revenue_growth_pct"] is None:
-        data_gaps.append("缺少收入增速")
-    if not recent_news and not recent_developments["a_share_announcements"]:
-        data_gaps.append("缺少媒体新闻线索")
-    if market == "A-share" and not recent_developments["a_share_announcements"]:
-        data_gaps.append("A股公告层数据缺失或接口不可用")
-    if not benchmark_match.get("matched"):
-        data_gaps.append("未自动匹配到行业基准")
-
+    for field, label in ((facts.company_name, "公司名称"), (facts.industry, "细分行业"), (facts.business_summary, "主营/商业模式摘要")):
+        if not field:
+            data_gaps.append({
+                "code": "field_unavailable", "field": f"company.{label}",
+                "reason": f"缺少{label}", "retryable": False,
+            })
+    if not benchmark.get("matched"):
+        data_gaps.append({
+            "code": "benchmark_unmatched", "field": "industry_benchmark",
+            "reason": "未自动匹配到行业基准", "retryable": False,
+        })
     pre_scoring = build_pre_scoring(
         financial_metrics=financial_metrics,
-        industry_benchmark=benchmark_match,
-        five_forces_facts=five_forces_facts,
-        event_titles=[title for title in event_titles if title],
-        event_time_map={
-            item.get("title", ""): item.get("time") or item.get("published_at") or ""
-            for item in a_share_announcements + a_share_research_records
-            if item.get("title")
-        },
+        industry_benchmark=benchmark,
+        five_forces_facts=force_facts,
+        event_titles=event_titles,
+        event_time_map=None,
         data_gaps=data_gaps,
+        upstream_status=upstream["status"],
     )
-
     return Snapshot(
         symbol=symbol,
         normalized_symbol=normalized,
-        company_name=company_name,
-        market=market,
-        currency=currency,
-        data_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        data_sources=data_sources,
-        company_profile=company_profile,
+        company_name=facts.company_name,
+        market=facts.market,
+        currency=facts.currency,
+        data_time=upstream["data_as_of"],
+        data_sources=upstream["sources"],
+        upstream=upstream,
+        company_profile={
+            "sector": facts.sector,
+            "industry": facts.industry,
+            "country": None,
+            "exchange": None,
+            "business_summary": facts.business_summary,
+        },
         financial_metrics=financial_metrics,
-        market_signals=market_signals,
-        peer_reference=peer_reference,
-        industry_benchmark=benchmark_match,
-        recent_developments=recent_developments,
-        five_forces_facts=five_forces_facts,
+        market_signals={
+            "current_price": facts.price,
+            "currency": facts.currency,
+            "high_52w": None,
+            "low_52w": None,
+            "position_in_52w_range_pct": None,
+            "analyst_target_price": None,
+            "analyst_upside_pct": None,
+            "analyst_count": None,
+            "next_earnings_date": None,
+            "last_earnings_date": None,
+        },
+        peer_reference={"industry_label": facts.industry, "sector_label": facts.sector, "peer_candidates": [], "industry_peer_count": len(relations)},
+        industry_benchmark=benchmark,
+        recent_developments={"recent_news": [], "a_share_announcements": announcements, "a_share_research_records": relations},
+        five_forces_facts=force_facts,
         pre_scoring=pre_scoring,
         data_gaps=data_gaps,
-        notes=notes,
+        notes=upstream["notes"],
     )
 
 
@@ -1184,7 +970,7 @@ def render_text(snapshot: Snapshot) -> str:
         f"波特五力事实底稿: {snapshot.symbol} ({snapshot.company_name or '未知标的'})",
         "=" * 72,
         f"市场: {snapshot.market} | 币种: {snapshot.currency or '--'} | 数据时间: {snapshot.data_time}",
-        f"数据源: {', '.join(snapshot.data_sources) if snapshot.data_sources else '--'}",
+        f"上游状态: {snapshot.upstream.get('status')} | 数据源: {json.dumps(snapshot.data_sources, ensure_ascii=False)}",
         "",
         "【公司画像】",
         f"行业: {snapshot.company_profile.get('industry') or '--'}",
@@ -1232,28 +1018,26 @@ def render_text(snapshot: Snapshot) -> str:
     else:
         lines.extend([benchmark.get("reason", "未匹配到行业基准"), ""])
 
-    lines.extend([
-        "【预评分】",
-    ])
+    lines.extend(["【预评分】"])
+    total = snapshot.pre_scoring["total_score"]
+    strongest = snapshot.pre_scoring.get("strongest_dimension")
+    weakest = snapshot.pre_scoring.get("weakest_dimension")
     lines.append(
-        "建议总分: {0}/100 | 置信度 {1} | 最强维度 {2} | 最弱维度 {3}".format(
-            snapshot.pre_scoring["total_score"],
+        "建议总分: {0} | 状态 {1} | 置信度 {2} | 最强维度 {3} | 最弱维度 {4}".format(
+            "未生成（证据不足）" if total is None else f"{total}/100",
+            snapshot.pre_scoring["status"],
             snapshot.pre_scoring["overall_confidence"],
-            snapshot.pre_scoring["strongest_dimension"]["label"],
-            snapshot.pre_scoring["weakest_dimension"]["label"],
+            strongest["label"] if strongest else "--",
+            weakest["label"] if weakest else "--",
         )
     )
     for key in ["supplier_power", "buyer_power", "entry_threat", "substitute_threat", "rivalry"]:
         item = snapshot.pre_scoring["dimensions"][key]
-        lines.append(
-            "{0}: 建议 {1}/20 ({2}, 置信度 {3})".format(
-                item["label"],
-                item["suggested_score"],
-                item["score_band"],
-                item["confidence"],
-            )
-        )
-        for reason in item["reasoning"]:
+        score = "未评分" if item["score"] is None else f"{item['score']}/20"
+        lines.append(f"{item['label']}: {score}（证据 {item['evidence_count']}，置信度 {item['confidence']}）")
+        for gap in item["gaps"]:
+            lines.append(f"- 缺口：{gap['reason']}")
+        for reason in item["reasoning"][:3]:
             lines.append(f"- {reason}")
 
     lines.extend(["", "【五力线索】"])
@@ -1296,7 +1080,7 @@ def render_text(snapshot: Snapshot) -> str:
     if snapshot.data_gaps:
         lines.extend(["", "【数据缺口】"])
         for gap in snapshot.data_gaps:
-            lines.append(f"- {gap}")
+            lines.append(f"- {gap.get('field')}: {gap.get('reason')} ({gap.get('code')})")
 
     if snapshot.notes:
         lines.extend(["", "【备注】"])
@@ -1314,7 +1098,8 @@ def render_markdown(snapshot: Snapshot) -> str:
         f"- 市场：{snapshot.market}",
         f"- 币种：{snapshot.currency or '--'}",
         f"- 数据时间：{snapshot.data_time}",
-        f"- 数据源：{', '.join(snapshot.data_sources) if snapshot.data_sources else '--'}",
+        f"- 上游状态：{snapshot.upstream.get('status')}",
+        f"- 数据源：{json.dumps(snapshot.data_sources, ensure_ascii=False)}",
         "",
         "## 公司画像",
         f"- 行业：{snapshot.company_profile.get('industry') or '--'}",
@@ -1351,16 +1136,21 @@ def render_markdown(snapshot: Snapshot) -> str:
         lines.append(f"- {benchmark.get('reason', '未匹配到行业基准')}")
 
     lines.extend(["", "## 预评分"])
-    lines.append(f"- 建议总分：{snapshot.pre_scoring['total_score']}/100")
+    total = snapshot.pre_scoring["total_score"]
+    lines.append(f"- 状态：{snapshot.pre_scoring['status']}")
+    lines.append(f"- 建议总分：{'未生成（证据不足）' if total is None else f'{total}/100'}")
     lines.append(f"- 整体置信度：{snapshot.pre_scoring['overall_confidence']}")
-    lines.append(f"- 最强维度：{snapshot.pre_scoring['strongest_dimension']['label']}")
-    lines.append(f"- 最弱维度：{snapshot.pre_scoring['weakest_dimension']['label']}")
+    strongest = snapshot.pre_scoring.get("strongest_dimension")
+    weakest = snapshot.pre_scoring.get("weakest_dimension")
+    lines.append(f"- 最强维度：{strongest['label'] if strongest else '--'}")
+    lines.append(f"- 最弱维度：{weakest['label'] if weakest else '--'}")
     for key in ["supplier_power", "buyer_power", "entry_threat", "substitute_threat", "rivalry"]:
         item = snapshot.pre_scoring["dimensions"][key]
-        lines.append(
-            f"### {item['label']}：{item['suggested_score']}/20 ({item['score_band']}，置信度 {item['confidence']})"
-        )
-        for reason in item["reasoning"]:
+        score = "未评分" if item["score"] is None else f"{item['score']}/20"
+        lines.append(f"### {item['label']}：{score}（证据 {item['evidence_count']}，置信度 {item['confidence']}）")
+        for gap in item["gaps"]:
+            lines.append(f"- 缺口：{gap['reason']}")
+        for reason in item["reasoning"][:3]:
             lines.append(f"- {reason}")
 
     lines.extend(["", "## 五力线索"])
@@ -1395,7 +1185,7 @@ def render_markdown(snapshot: Snapshot) -> str:
     if snapshot.data_gaps:
         lines.extend(["", "## 数据缺口"])
         for gap in snapshot.data_gaps:
-            lines.append(f"- {gap}")
+            lines.append(f"- {gap.get('field')}: {gap.get('reason')} ({gap.get('code')})")
 
     if snapshot.notes:
         lines.extend(["", "## 备注"])
@@ -1430,7 +1220,7 @@ def main() -> int:
             print(render_markdown(snapshot))
         else:
             print(render_text(snapshot))
-        return 0
+        return 1 if snapshot.upstream.get("status") == "failed" else 0
     except Exception as exc:
         print(f"五力数据抓取失败: {exc}")
         return 1

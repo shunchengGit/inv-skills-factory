@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "command": "snapshot",
+  "status": "failed",
+  "symbol": {"input": "TEST", "code": "TEST", "market": "us"},
+  "data_as_of": null,
+  "sources": [
+    {"name": "yahoo", "status": "failed", "fallback": false, "reason": "no response"},
+    {"name": "akshare", "status": "failed", "fallback": true, "reason": "no response"}
+  ],
+  "gaps": [
+    {"code": "all_sources_failed", "field": "data", "reason": "所有数据源均不可用", "retryable": true}
+  ],
+  "notes": [],
+  "data": {}
+}

@@ -47,11 +47,15 @@ from commands import (
 )
 
 
-def execute_command(command: str, symbol: str, *, proxy: str | None = None) -> dict:
-    """执行单个命令并返回 payload dict，供跨技能进程内直接调用。
-
-    代理策略：仅美港股设置代理，A 股/ETF 不做代理管理（AkShare 可直连或走代理）。
-    """
+def execute_command(
+    command: str,
+    symbol: str,
+    *,
+    proxy: str | None = None,
+    period: str = "1y",
+    limit: int | None = None,
+) -> dict:
+    """执行命令并返回 investment-data-contracts v1 envelope。"""
     code, market = parse_symbol(symbol)
 
     needs_yahoo = market in ("hk", "us")
@@ -62,57 +66,67 @@ def execute_command(command: str, symbol: str, *, proxy: str | None = None) -> d
     try:
         if command == "snapshot":
             if market == "a":
-                payload = cmd_snapshot_a(code)
+                payload = cmd_snapshot_a(code, raw_symbol=symbol)
             elif market == "etf":
-                payload = cmd_snapshot_etf(code)
+                payload = cmd_snapshot_etf(code, raw_symbol=symbol)
             else:
-                payload = cmd_snapshot_yahoo(code, market)
+                payload = cmd_snapshot_yahoo(code, market, raw_symbol=symbol)
         elif command == "daily":
-            payload = cmd_daily(code, market)
+            payload = cmd_daily(code, market, period=period, limit=limit, raw_symbol=symbol)
         elif command == "index-daily":
-            payload = cmd_index_daily(symbol)
+            payload = cmd_index_daily(symbol, period=period, limit=limit)
         elif command == "profile":
-            payload = cmd_profile(code, market)
+            payload = cmd_profile(code, market, raw_symbol=symbol)
         elif command == "financial":
-            payload = cmd_financial(code, market)
+            payload = cmd_financial(code, market, raw_symbol=symbol)
         elif command == "financials":
-            payload = cmd_financials(code, market)
+            payload = cmd_financials(code, market, raw_symbol=symbol)
         elif command == "all":
-            payload = cmd_all(code, market)
+            payload = cmd_all(code, market, raw_symbol=symbol)
         elif command == "description":
-            payload = cmd_description(code)
+            payload = cmd_description(code, raw_symbol=symbol)
         elif command == "announcements":
-            payload = cmd_announcements(code)
+            payload = cmd_announcements(code, raw_symbol=symbol)
         elif command == "relations":
-            payload = cmd_relations(code)
+            payload = cmd_relations(code, raw_symbol=symbol)
         else:
-            payload = {"error": f"未知命令: {command}"}
-    except Exception as e:
-        payload = {"error": str(e)[:200]}
+            raise ValueError(f"未知命令: {command}")
+    except Exception as exc:
+        from data_contract import make_envelope, make_gap, make_source, make_symbol
+        payload = make_envelope(
+            command,
+            "failed",
+            make_symbol(symbol, code, market),
+            {},
+            sources=[make_source("command", "failed", reason=str(exc)[:200])],
+            gaps=[make_gap("command_failed", "data", str(exc)[:200], retryable=False)],
+        )
 
     return _inject_proxy_note(payload, needs_yahoo, proxy_ok)
 
 
 def _inject_proxy_note(payload: dict, needs_yahoo: bool, proxy_ok: bool) -> dict:
-    """将代理状态注入 payload，供 agent 感知。"""
+    """将代理诊断加入 v1 notes/gaps，不再创建私有顶层字段。"""
     if not isinstance(payload, dict):
         return payload
-    notes = payload.get("notes") or payload.get("_notes") or []
-    if isinstance(notes, str):
-        notes = [notes] if notes else []
+    notes = payload.setdefault("notes", [])
     if needs_yahoo and not proxy_ok:
-        notes.insert(0, "[代理缺失] 未检测到代理，Yahoo Finance 请求大概率限流。请设置 HTTPS_PROXY 后重试")
-    elif needs_yahoo and proxy_ok:
-        has_data = bool(
-            payload.get("price") or
-            (isinstance(payload.get("fundamentals"), dict) and any(payload["fundamentals"].values())) or
-            (isinstance(payload.get("daily"), list) and len(payload.get("daily", [])) > 0)
-        )
-        if not has_data:
-            notes.append("[代理已设但Yahoo为空] HTTPS_PROXY 已设置但请求仍返回空数据。可能原因：代理节点被限流/Clash 未开系统代理/Yahoo 全局限流。尝试切换节点或等待数分钟后重试")
-    payload["_proxy_ok"] = proxy_ok
-    if notes:
-        payload["_notes"] = notes
+        notes.insert(0, "[代理缺失] 未检测到代理，Yahoo Finance 请求可能限流。请设置 HTTPS_PROXY 后重试")
+        payload.setdefault("sources", []).append({
+            "name": "proxy",
+            "status": "failed",
+            "fallback": False,
+            "reason": "未检测到 Yahoo 所需代理",
+        })
+        if payload.get("status") != "ok":
+            payload.setdefault("gaps", []).append({
+                "code": "proxy_unavailable",
+                "field": "sources.yahoo",
+                "reason": "未检测到 Yahoo 所需代理",
+                "retryable": True,
+            })
+    elif needs_yahoo and proxy_ok and payload.get("status") == "failed":
+        notes.append("[代理已设但数据为空] 可能是代理节点或 Yahoo 限流，请切换节点或稍后重试")
     return payload
 
 
@@ -126,16 +140,26 @@ def main() -> int:
     parser.add_argument("--output", choices=["json", "text"], default="json")
     parser.add_argument("--proxy", default=None,
                         help="手动指定代理地址，如 http://127.0.0.1:7890（覆盖自动检测）")
+    parser.add_argument("--period", choices=["1mo", "1y", "5y", "max"], default="1y",
+                        help="daily/index-daily 请求窗口")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="daily/index-daily 最多返回的最近观测数")
     args = parser.parse_args()
 
-    payload = execute_command(args.command, args.symbol, proxy=args.proxy)
+    payload = execute_command(
+        args.command,
+        args.symbol,
+        proxy=args.proxy,
+        period=args.period,
+        limit=args.limit,
+    )
 
     if args.output == "json":
         print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
     else:
         print(print_text(payload))
 
-    return 0
+    return 1 if payload.get("status") == "failed" else 0
 
 
 if __name__ == "__main__":

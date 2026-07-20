@@ -34,4 +34,6 @@
 
 ## 数据层统一
 
-其他投资技能（`inv-valuation-engine`、`inv-qarp-strategy`、`inv-porter-five-forces`）通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。本技能为所有投资相关技能的**唯一数据层**。
+其他投资技能（`inv-valuation-engine`、`inv-qarp-strategy`、`inv-porter-five-forces`）只能通过本技能的 v1 公共契约获取数据，不直接调用 AkShare / yfinance。本技能为所有投资相关技能的**唯一数据层**。
+
+所有命令统一返回 `schema_version/status/symbol/data_as_of/sources/gaps/notes/data`；日线另返回实际 `window`。`all` 固定只含 snapshot、financial、financials 三组件。调用方必须按 status 和结构化 gaps 分流，不得用空值猜测失败原因或读取供应商原始键。

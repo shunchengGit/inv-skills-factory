@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "command": "snapshot",
+  "status": "partial",
+  "symbol": {"input": "510000", "code": "510000", "market": "etf"},
+  "data_as_of": "2026-01-05",
+  "sources": [
+    {"name": "sina", "status": "ok", "fallback": false},
+    {"name": "eastmoney-nav", "status": "failed", "fallback": false, "reason": "empty"}
+  ],
+  "gaps": [
+    {"code": "field_unavailable", "field": "data.nav", "reason": "ETF 净值不可用", "retryable": true}
+  ],
+  "notes": [],
+  "data": {
+    "name": "示例 ETF",
+    "category": "宽基",
+    "price": 1.0,
+    "currency": "CNY",
+    "daily": [],
+    "nav": null
+  }
+}

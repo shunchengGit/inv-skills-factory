@@ -9,10 +9,12 @@
 export HTTP_PROXY=http://127.0.0.1:7890
 export HTTPS_PROXY=http://127.0.0.1:7890
 
-# ===== 首选：一次获取全量数据 =====
-# cs_stock_all 合并 snapshot + financial + financials，减少跨进程调用和限流风险
+# ===== 首选：获取三个核心组件 =====
+# v1 all.data.components 固定为 snapshot + financial + financials，不含日线/公告/关联
 uv run {stockDir}/scripts/cs_stock_info.py all AAPL --output json
 uv run {stockDir}/scripts/cs_stock_info.py all 600519 --output json
+# 长期指标必须显式请求历史窗口；实际覆盖见 window
+uv run {stockDir}/scripts/cs_stock_info.py daily AAPL --period 5y --output json
 
 # ===== 具体命令 =====
 # 1) 抓取估值快照（文本）

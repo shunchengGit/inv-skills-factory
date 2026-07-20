@@ -1,7 +1,7 @@
 ---
 name: inv-qarp-strategy
 description: 价值成长(QARP)选股与操作决策：叠加选股闸门、估值纪律、买入/卖出条件与组合约束。用于选股决策、买卖时点判断、持仓检查时
-version: 2.3.1
+version: 2.4.0
 trigger:
   - QARP
   - 选股分析
@@ -114,7 +114,9 @@ commands:
 
 ### 3.2 QARP 估值合理区间判断
 
-| 五档结论 | QARP 操作含义 |
+五档到操作的映射仅在 `valuation_status=ok` 时启用；`partial` 可保留受限结论但不转换为自动买入/加仓/减仓动作；`insufficient_for_valuation` 和 `upstream_failed` 必须补数或进入显式手工情景估值。
+
+| 五档结论（仅 status=ok） | QARP 操作含义 |
 |----------|--------------|
 | 低估 | 积极买入，可给核心仓位 |
 | 合理偏低 | 可以买入，正常仓位 |
@@ -122,7 +124,7 @@ commands:
 | 合理偏高 | 不买入，持有者可考虑减仓 |
 | 高估 | 不碰，持有者分批减仓 |
 
-**关键规则**：好公司但估值贵时，建议加入观察等回调，而非追高建仓。
+**关键规则**：好公司但估值贵时，建议加入观察等回调，而非追高建仓；估值门禁未通过时，不得填充五档结论来绕过门禁。
 
 ### 3.3 卖方共识交叉校验
 
@@ -161,7 +163,7 @@ commands:
 
 **阶段一（A/B 并行）**：
 
-1. **A. 估值快照**：`valuation_snapshot.py <代码> --output json`，检查 `data_gaps`
+1. **A. 估值快照与门禁**：运行 `valuation_report.py <代码> --output json`，检查 `valuation_status`、`upstream_status`、结构化 `data_gaps`、`data_time` 与 sources。`upstream_failed`/`insufficient_for_valuation` → 补数或手工情景，禁止自动五档和买卖动作；`partial` → 显著降置信度且 action 必须为空
 2. **B. 知识库 L2 深度搜索**：按 `inv-knowledge-curator/references/deep-mining-protocol.md` 执行，QARP 只保留本技能特有要求——输出必须映射到三道闸门、估值纪律和买入必答
 3. **原始资源回溯**（条目摘要不足时）：读条目 frontmatter `resource` 字段 → `km_import.py read --file {resource} --pages edges` 回溯 res/ 原始研报首尾页。触发条件：缺量化数据（毛利率驱动分解、关税敏感度）、需验证具体数字、缺风险段落措辞。`read` 只读无副作用
 4. **时效前置**：检查最晚条目时间戳，全部 aging（91-183天）或 stale（>183天）则标记"研报过期"，阶段二触发 Web 降级
@@ -169,7 +171,7 @@ commands:
 
 **阶段二**：检查数据/知识覆盖缺口。数据事实统一以 `inv-stock-data` 为准，脚本/字段缺口按 `references/data-fallback.md` 和上游数据层策略降级；若知识库有缺口，先输出结构化"知识缺口表"，再决定是否 WebFetch 补充。对美股/港股的估值字段缺口，优先直抓已知白名单页面（如 Yahoo Finance、MacroTrends），不要先依赖 `web_search` 找入口；`web_search` 仅用于发现链接或补公司动态/新闻。知识缺口表须标注每项缺口对后续分析环节的影响。
 
-**阶段三（顺序）**：五档结论 → 选股闸门 → 估值纪律 → 买入必答 6 问 → 组合检查 → 结论 + 机会成本对比
+**阶段三（顺序）**：估值就绪门禁 →（仅 ok/受限 partial 可继续）五档结论 → 选股闸门 → 估值纪律 → 买入必答 6 问 → 组合检查 → 结论 + 机会成本对比
 
 ### 9.2 对已有持仓：五步检查
 

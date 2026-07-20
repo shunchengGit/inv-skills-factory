@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "command": "snapshot",
+  "status": "partial",
+  "symbol": {"input": "00001", "code": "0001", "market": "hk"},
+  "data_as_of": "2026-01-05",
+  "sources": [
+    {"name": "yahoo", "status": "failed", "fallback": false, "reason": "rate limited"},
+    {"name": "sina", "status": "ok", "fallback": true}
+  ],
+  "gaps": [
+    {"code": "provider_unavailable", "field": "data.fundamentals", "reason": "Yahoo 不可用，降级源无基本面", "retryable": true}
+  ],
+  "notes": [],
+  "data": {
+    "name": "示例港股",
+    "industry": null,
+    "sector": null,
+    "price": 42.0,
+    "currency": "HKD",
+    "daily": [],
+    "fundamentals": null,
+    "description": null
+  }
+}
