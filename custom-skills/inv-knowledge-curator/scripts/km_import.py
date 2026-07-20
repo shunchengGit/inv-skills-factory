@@ -3,7 +3,7 @@ from __future__ import annotations
 
 # /// script
 # requires-python = ">=3.10"
-# dependencies = []
+# dependencies = ["pyyaml>=6.0"]
 # ///
 """知识导入：资源文件导入 + 知识条目存储 + 只读 PDF 提取。
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 URL 抓取改由 LLM 用 firecrawl_scrape MCP 工具完成，不再内置 fetch 子命令。
 
 用法:
-  uv run km_import.py store --title "标题" --resource ... --source_type url --content-file /tmp/x.md
+  uv run km_import.py store --title "标题" --resource ... --source_type url --content -
   uv run km_import.py res --file ~/xxx.pdf --target 腾讯控股
   uv run km_import.py read --file ~/.inv-knowledge/res/福耀玻璃/xxx.pdf --pages edges
 """
@@ -247,10 +247,7 @@ def cmd_store(
 
     _update_index(title, rel_path, description)
 
-    commit_msg = f"import: {title} ({source_type})"
-    git_result = _git_sync(KNOWLEDGE_DIR, commit_msg, branch=REPO_BRANCH)
-
-    # 追加 log.md
+    # 先更新日志，再进行一次 git sync，确保条目、索引和日志属于同一提交。
     try:
         log_file = KNOWLEDGE_DIR / "log.md"
         today_str = date.today().isoformat()
@@ -261,6 +258,9 @@ def cmd_store(
         log_file.write_text(existing.rstrip() + "\n" + log_entry + "\n", encoding="utf-8")
     except Exception:
         pass
+
+    commit_msg = f"import: {title} ({source_type})"
+    git_result = _git_sync(KNOWLEDGE_DIR, commit_msg, branch=REPO_BRANCH)
 
     # 图谱不在此更新：store 调用太频繁，改为 km_lint --fix 或用户 /km_graph 时生成
     return {
@@ -356,9 +356,13 @@ def _page_indices(page_count: int, mode: str, first_n: int, max_pages: int) -> l
 
 
 def _archive_file(src: Path, target_folder: str) -> Path:
-    """归档文件到 res/{target_folder}/，返回目标路径。"""
-    res_dir = KNOWLEDGE_DIR / "res"
-    target_dir = res_dir / target_folder
+    """归档文件到 res/{target_folder}/，拒绝路径穿越。"""
+    res_dir = (KNOWLEDGE_DIR / "res").resolve()
+    if not target_folder or Path(target_folder).is_absolute() or target_folder in {".", ".."} or any(sep in target_folder for sep in ("/", "\\")):
+        raise ValueError(f"非法 target: {target_folder}")
+    target_dir = (res_dir / target_folder).resolve()
+    if target_dir.parent != res_dir:
+        raise ValueError(f"target 超出 res 目录: {target_folder}")
     target_dir.mkdir(parents=True, exist_ok=True)
     target_path = target_dir / src.name
 
@@ -372,10 +376,6 @@ def _archive_file(src: Path, target_folder: str) -> Path:
     if target_path.exists():
         if _md5_file(src) == _md5_file(target_path):
             print(f"# 跳过重复: {src.name}", file=sys.stderr)
-            try:
-                src.unlink()
-            except Exception:
-                pass
             return target_path
         stem, suffix = target_path.stem, target_path.suffix
         counter = 2
@@ -467,7 +467,7 @@ def cmd_res(args: argparse.Namespace) -> int:
             texts.append(text)
 
     if not texts:
-        return 0
+        return 1
 
     sys.stdout.write("\n".join(texts))
     _regenerate_res_index()

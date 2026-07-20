@@ -21,6 +21,7 @@ v0.1 → v0.2 变更：
 from __future__ import annotations
 
 import re
+import yaml
 from collections import Counter
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -114,22 +115,15 @@ def build_entry(
     推荐: tags
     """
     ts = timestamp or now_iso()
-    tags_line = f"tags: [{', '.join(tags)}]" if tags else ""
-
-    lines = [
-        "---",
-        f"type: {entry_type}",
-        f"title: {title}",
-        f"description: {description}",
-        f"timestamp: {ts}",
-        f"resource: {resource}",
-        f"source_type: {source_type}",
-    ]
-    if tags_line:
-        lines.append(tags_line)
-    lines.append("---")
-
-    frontmatter = "\n".join(lines)
+    metadata = {
+        "type": entry_type, "title": title, "description": description,
+        "timestamp": ts, "resource": resource, "source_type": source_type,
+    }
+    if tags:
+        metadata["tags"] = tags
+    frontmatter = "---\n" + yaml.safe_dump(
+        metadata, allow_unicode=True, sort_keys=False, default_flow_style=False
+    ).rstrip() + "\n---"
     body = content.strip() if content.strip() else f"# {title}\n"
 
     return f"{frontmatter}\n\n{body}\n"
@@ -160,25 +154,14 @@ def validate_okf(file_path: Path) -> dict:
         result["errors"].append("缺少 YAML frontmatter (--- ... ---)")
         return result
 
-    fm_text = m.group(1)
-
-    # 解析 frontmatter 为 dict
-    fm: dict[str, str] = {}
-    current_key = None
-    current_val: list[str] = []
-    for line in fm_text.split("\n"):
-        if line.strip().startswith("#"):
-            continue
-        if ":" in line and not line.startswith((" ", "\t")):
-            if current_key:
-                fm[current_key] = "\n".join(current_val).strip()
-            key, _, val = line.partition(":")
-            current_key = key.strip()
-            current_val = [val.strip()] if val.strip() else []
-        elif current_key and (line.startswith("  ") or line.startswith("\t")):
-            current_val.append(line.strip())
-    if current_key:
-        fm[current_key] = "\n".join(current_val).strip()
+    try:
+        fm = yaml.load(m.group(1), Loader=yaml.BaseLoader) or {}
+        if not isinstance(fm, dict):
+            raise ValueError("frontmatter 不是映射")
+    except (yaml.YAMLError, ValueError) as exc:
+        result["valid"] = False
+        result["errors"].append(f"YAML frontmatter 解析失败: {exc}")
+        return result
 
     # 必需字段
     for field in OKF_REQUIRED:
@@ -188,20 +171,20 @@ def validate_okf(file_path: Path) -> dict:
 
     # timestamp 格式
     if "timestamp" in fm and fm["timestamp"]:
-        ts = fm["timestamp"].strip().strip('"').strip("'")
+        ts = str(fm["timestamp"]).strip().strip('"').strip("'")
         if not re.match(r"^\d{4}-\d{2}-\d{2}", ts):
             result["valid"] = False
             result["errors"].append(f"timestamp 格式无效: {ts}（期望 ISO 8601）")
 
     # source_type 取值校验
     if "source_type" in fm and fm["source_type"]:
-        st = fm["source_type"].strip().strip('"').strip("'")
+        st = str(fm["source_type"]).strip().strip('"').strip("'")
         if st not in VALID_SOURCE_TYPES:
             result["warnings"].append(f"source_type 值无效: {st}（期望: {', '.join(VALID_SOURCE_TYPES)}）")
 
     # type 取值校验
     if "type" in fm and fm["type"]:
-        et = fm["type"].strip().strip('"').strip("'")
+        et = str(fm["type"]).strip().strip('"').strip("'")
         if et not in VALID_ENTRY_TYPES:
             result["valid"] = False
             result["errors"].append(f"type 值无效: {et}（合法值: {', '.join(VALID_ENTRY_TYPES)}）")
@@ -213,20 +196,16 @@ def validate_okf(file_path: Path) -> dict:
     return result
 
 
-def _read_frontmatter(file_path: Path) -> dict[str, str]:
-    """读取文件的 YAML frontmatter 为简单 dict。"""
+def _read_frontmatter(file_path: Path) -> dict:
+    """使用 YAML 解析文件 frontmatter。"""
     try:
         text = file_path.read_text(encoding="utf-8")
         m = FRONTMATTER_RE.match(text)
         if not m:
             return {}
-        fm: dict[str, str] = {}
-        for line in m.group(1).splitlines():
-            if ":" in line and not line.startswith((" ", "\t", "#")):
-                key, _, val = line.partition(":")
-                fm[key.strip()] = val.strip().strip('"').strip("'")
-        return fm
-    except Exception:
+        fm = yaml.load(m.group(1), Loader=yaml.BaseLoader) or {}
+        return fm if isinstance(fm, dict) else {}
+    except (OSError, UnicodeError, yaml.YAMLError):
         return {}
 
 
@@ -302,10 +281,15 @@ def regenerate_tag_indexes(knowledge_dir: Path) -> dict:
 
     total_refs = 0
     for tag, items in sorted(tag_entries.items()):
+        if not tag or Path(tag).is_absolute() or tag in {".", ".."} or any(sep in tag for sep in ("/", "\\")):
+            raise ValueError(f"非法标签文件名: {tag}")
+        tag_file = (tag_dir / f"{tag}.md").resolve()
+        if tag_file.parent != tag_dir.resolve():
+            raise ValueError(f"标签路径超出 by-tag: {tag}")
         lines = [f"# {tag}\n"]
         for title, path, etype in sorted(items, key=lambda x: x[0].lower()):
             lines.append(f"- [{title}]({path}) — {etype}")
-        (tag_dir / f"{tag}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        tag_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
         total_refs += len(items)
 
     return {"tags": len(tag_entries), "total_refs": total_refs}

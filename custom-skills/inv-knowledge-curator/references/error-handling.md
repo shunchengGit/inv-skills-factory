@@ -74,7 +74,7 @@ for e in data.get('isolated_entries', []):
 ## km_lint --fix 自动化修复内容
 
 `km_lint.py --fix --skip-url-check` 自动处理：
-- 清除死链、修复孤立文件、补全缺失 resource
+- 从源条目安全清除失效 Markdown 链接、修复孤立文件、补全缺失 resource
 - 重建 `entries/index.md` 和 `entries/by-tag/` 标签索引
 - 重建知识图谱
 - 修复后再次 lint 验证

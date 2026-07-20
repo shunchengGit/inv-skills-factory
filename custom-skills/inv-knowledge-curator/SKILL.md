@@ -202,7 +202,7 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 2. 看 `summary` 找问题最多的项（`empty_summary:3` / `no_cross_refs:12` 等），LLM 优先修数量最多的项
 3. （`--fix`）自动重建 index/by-tag/图谱 + git push，再次 lint 验证
 
-✅ 完成：仅检查 → 返回 `summary` + 各项 issue 列表；`--fix` → index/by-tag/图谱重建 + git push 完成
+✅ 完成：仅检查 → 返回 `summary` + 各项 issue 列表；`--fix` → 安全清理正文死链、重建 index/by-tag/图谱并 git push；以 `severity.errors` 判断阻断性问题
 
 ### lint 修复工作流（LLM 驱动）
 
@@ -228,7 +228,7 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 
 核心要点：
 - **推荐写法**：subagent 内 `write_file()` 直写含完整 OKF frontmatter 的条目 → 主会话 `km_lint.py --fix --skip-url-check` 统一重建索引/标签/图谱/git push
-- **避免** `--content-file`（双重 frontmatter）、shell `$` 转义（用单引号或 write_file）
+- **批量导入避免** `--content-file`（完整 OKF 文件会形成双重 frontmatter）；单条正文可用 stdin。优先 write_file 避免 shell `$` 转义
 - **subagent 硬规则**：每条 25-50 行 MAX，禁止倾倒 PDF 原文
 - 批量后立即跑垃圾清理 grep（PDF 免责声明标题 / >200 行 / 无 frontmatter 幽灵条目）
 
@@ -266,4 +266,6 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 
 - `_shared/git.py` `_shared/dotenv.py` `_shared/proxy.py`
 - `pymupdf`（通过 `/tmp/research-pdf-venv`）
+- `PyYAML`（OKF frontmatter 安全解析）
+- `assets/cytoscape.min.js`（固定版本内嵌，图谱离线可用）
 - 远程仓库：`git@github.com:shunchengGit/inv-knowledge.git`

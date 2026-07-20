@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["pyyaml>=6.0"]
+# ///
 """知识图谱可视化：生成自包含 HTML，Cytoscape.js 力导向图。
 
 用法:
@@ -150,7 +154,7 @@ _TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>知识图谱 — __NODES__ 节点</title>
-<script src="https://cdn.jsdelivr.net/npm/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script>__CYTOSCAPE_JS__</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--text:#0f172a;--muted:#64748b;--accent:#3b82f6;--hover:#f1f5f9;--radius:8px}
@@ -268,8 +272,9 @@ document.querySelector('#type-chips [data-all]').addEventListener('click',()=>{
 // Legend
 const legend=document.getElementById('legend');
 B.types.forEach(t=>{
-  const c=p[t]||'#94a3b8';
-  legend.innerHTML+='<span class="legend-item"><span class="stats-dot" style="background:'+c+'"></span>'+t+'</span>';
+  const c=p[t]||'#94a3b8',item=document.createElement('span'),dot=document.createElement('span');
+  item.className='legend-item';dot.className='stats-dot';dot.style.background=c;
+  item.appendChild(dot);item.appendChild(document.createTextNode(t));legend.appendChild(item);
 });
 
 // Indices
@@ -346,8 +351,9 @@ function showDetail(nid){
     a.textContent=resource.length>80?resource.slice(0,77)+'...':resource;resEl.appendChild(a);
   }else{resEl.textContent=resource||'—';}
 
-  const tagsEl=document.getElementById('detail-tags');
-  tagsEl.innerHTML=d.tags?.length?d.tags.map(t=>'<span class="tag">'+t+'</span>').join(''):'—';
+  const tagsEl=document.getElementById('detail-tags');tagsEl.replaceChildren();
+  if(d.tags?.length){d.tags.forEach(t=>{const s=document.createElement('span');s.className='tag';s.textContent=t;tagsEl.appendChild(s)})}
+  else{tagsEl.textContent='—';}
 
   // Detail body: render markdown from bundle bodies
   const body=B.bodies[nid]||'';
@@ -379,8 +385,9 @@ function renderMD(t){
   h=h.replace(/^# (.+)$/gm,'<h1>$1</h1>');
   h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
   h=h.replace(/\*(.+?)\*/g,'<em>$1</em>');
-  h=h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<img alt="$1" src="$2">');
-  h=h.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // 不把不可信 Markdown URL 写入 HTML 属性，避免 javascript:/引号注入。
+  h=h.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,'<span>$1 ($2)</span>');
+  h=h.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<span>$1 ($2)</span>');
   h=h.replace(/^---$/gm,'<hr>');
   h=h.replace(/^[\*\-] (.+)$/gm,'<li>$1</li>');
   h=h.replace(/((?:<li>.*<\/li>\n?)+)/g,'<ul>$1</ul>');
@@ -401,8 +408,13 @@ if(initial)showDetail(initial.data.id);
 
 def generate_html(graph: dict, output_path: Path) -> None:
     stats = graph.get("stats", {})
+    asset = Path(__file__).resolve().parent.parent / "assets" / "cytoscape.min.js"
+    if not asset.is_file():
+        raise FileNotFoundError(f"缺少图谱运行库: {asset}")
+    cytoscape_js = asset.read_text(encoding="utf-8")
     html = (_TEMPLATE
-        .replace("__DATA__", json.dumps(graph, ensure_ascii=False))
+        .replace("__CYTOSCAPE_JS__", cytoscape_js)
+        .replace("__DATA__", json.dumps(graph, ensure_ascii=False).replace("</", "<\\/"))
         .replace("__NODES__", str(len(graph["nodes"])))
         .replace("__EDGES__", str(len(graph["edges"])))
         .replace("__ORPHANS__", str(stats.get("orphans", 0))))

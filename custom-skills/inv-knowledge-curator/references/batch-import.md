@@ -21,7 +21,7 @@ delegate_task(
 
 | 方式 | 适用场景 | 注意 |
 |------|---------|------|
-| `km_import.py store`（无 --content-file） | 单条或少量导入 | ✅ 自动更新 index/log/git push。传 `--content` 或 stdin，不要传 `--content-file`——**`--content-file` 会导致双重 frontmatter**（脚本生成自己的 frontmatter 追加到文件已有 frontmatter 后）。CLI 传 description 含 `$` 符号时用单引号 |
+| `km_import.py store`（正文用 stdin/--content） | 单条或少量导入 | ✅ 自动更新 index/log/git push。传 `--content` 或 stdin；不要把含完整 OKF frontmatter 的文件交给 `--content-file`，否则会形成双重 frontmatter（脚本生成自己的 frontmatter 追加到文件已有 frontmatter 后）。CLI 传 description 含 `$` 符号时用单引号 |
 | `write_file` 直写 entries/（含完整OKF frontmatter） | 批量导入（subagent）或避免shell转义问题 | 写入后必须运行 `km_lint --fix --skip-url-check` 重建索引/标签/图谱。**这是推荐的批量写入方式**——避免双重frontmatter和shell `$` 转义两个问题 |
 
 **安全拦截降级**：当 subagent 内 `km_import.py store` 被 Hermes 安全策略阻止时，改为 `write_file()` 直接写 `~/.inv-knowledge/entries/{slug}.md`。全部写入完成后在主会话运行 `km_lint.py --fix --skip-url-check` 统一重建索引、标签、图谱和 git push。

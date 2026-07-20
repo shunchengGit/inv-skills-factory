@@ -5,6 +5,7 @@ from __future__ import annotations
 # requires-python = ">=3.10"
 # dependencies = [
 #   "requests>=2.31.0",
+#   "pyyaml>=6.0",
 # ]
 # ///
 """知识库完整性检查：OKF v0.2 合规、死链、孤立文件、URL 可达性、重复检测、
@@ -13,7 +14,7 @@ PDF 配对、标签治理、时效预警、交叉关联、图谱过期。
 用法:
   uv run km_lint.py                           # 全量检查
   uv run km_lint.py --skip-url-check          # 跳过 URL 可达性
-  uv run km_lint.py --fix                     # 修复死链/孤立 + 重建索引 + 自动建立交叉关联
+  uv run km_lint.py --fix                     # 安全修复死链/孤立 + 重建索引和图谱
   uv run km_lint.py --check-duplicates        # 含重复检测
 """
 
@@ -298,7 +299,8 @@ def check_pdf_entry_pairing() -> list[dict]:
             fm = _read_frontmatter(md_file)
             if fm.get("source_type") == "pdf":
                 resource = fm.get("resource", "")
-                pdf_resources.add(resource)
+                values = resource if isinstance(resource, list) else re.split(r"\s*,\s*", str(resource))
+                pdf_resources.update(str(v).strip() for v in values if str(v).strip())
 
     # 检查 res/ 下的 PDF 是否都有对应条目
     if res_dir.is_dir():
@@ -329,15 +331,19 @@ def check_pdf_entry_pairing() -> list[dict]:
                 continue
             resource = fm.get("resource", "")
             rel = str(md_file.relative_to(KNOWLEDGE_DIR))
-            resource_clean = resource.rstrip("/")
-            if resource_clean.startswith("res/"):
-                target_dir = KNOWLEDGE_DIR / resource.rstrip("/")
-                if not target_dir.is_dir() or not any(target_dir.rglob("*.pdf")):
+            values = resource if isinstance(resource, list) else re.split(r"\s*,\s*", str(resource))
+            for value in values:
+                resource_clean = str(value).strip().rstrip("/")
+                if not resource_clean.startswith("res/"):
+                    continue
+                target = KNOWLEDGE_DIR / resource_clean
+                exists = target.is_file() or (target.is_dir() and any(target.rglob("*.pdf")))
+                if not exists:
                     issues.append({
                         "path": rel,
                         "issue": "pdf_resource_missing",
-                        "resource": resource,
-                        "hint": "resource 指向的 PDF 目录不存在或为空",
+                        "resource": resource_clean,
+                        "hint": "resource 指向的 PDF 文件/目录不存在或为空",
                     })
 
     return issues
@@ -405,8 +411,9 @@ def check_stale_entries() -> list[dict]:
         ts = fm.get("timestamp", "")
         if not ts:
             continue
+        ts_text = str(ts)
         try:
-            ts_date = date.fromisoformat(ts[:10])
+            ts_date = date.fromisoformat(ts_text[:10])
         except ValueError:
             continue
         if ts_date < cutoff:
@@ -415,7 +422,7 @@ def check_stale_entries() -> list[dict]:
             stale.append({
                 "path": rel,
                 "title": fm.get("title", ""),
-                "timestamp": ts[:10],
+                "timestamp": ts_text[:10],
                 "days_ago": days_ago,
                 "issue": "stale_entry",
                 "hint": f"该条目已 {days_ago} 天未更新，可能已过时",
@@ -534,9 +541,18 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
         len(isolated_entries) + len(graph_issues)
     )
 
+    error_count = len(dead_links) + len(missing_urls) + len(orphans) + sum(
+        1 for i in okf_issues if not str(i.get("issue", "")).startswith("okf_warn:")
+    ) + sum(1 for i in pdf_pairing if i.get("issue") == "pdf_resource_missing")
+    warning_count = len(dead_urls) + len(stale_entries) + len(isolated_entries) + len(graph_issues) + sum(
+        1 for i in pdf_pairing if i.get("issue") == "pdf_no_entry"
+    ) + sum(1 for i in okf_issues if str(i.get("issue", "")).startswith("okf_warn:"))
+    advisory_count = len(duplicates) + len(tag_issues)
+
     return {
         "total_entries": len(entries),
         "total_issues": total_issues,
+        "severity": {"errors": error_count, "warnings": warning_count, "advisories": advisory_count},
         "summary": {
             "okf_errors": len(okf_issues),
             "dead_links": len(dead_links),
@@ -549,6 +565,9 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
             "no_cross_refs": len(isolated_entries),
             "stale": len(stale_entries),
             "pdf_no_entry": len([i for i in pdf_pairing if i.get("issue") == "pdf_no_entry"]),
+            "pdf_resource_missing": len([i for i in pdf_pairing if i.get("issue") == "pdf_resource_missing"]),
+            "similar_tags": len([i for i in tag_issues if i.get("issue") == "similar_tags"]),
+            "low_frequency_tags": len([i for i in tag_issues if i.get("issue") == "low_frequency_tag"]),
         },
         "dead_links": dead_links,
         "dead_urls": dead_urls,
@@ -603,24 +622,22 @@ def build_pdf_pending_plan(knowledge_dir: Path, pdf_pairing: list[dict]) -> list
 
 
 def fix_dead_links(dead_links: list[dict]) -> list[dict]:
-    """自动修复死链：从 entries/index.md 中移除引用不存在的条目。"""
+    """安全修复死链：从源条目中仅移除对应 Markdown 链接。"""
     fixed = []
     for item in dead_links:
         path = item.get("source", item.get("path", ""))
-        title = item.get("title", "")
-        idx_file = KNOWLEDGE_DIR / ENTRIES_DIR / "index.md"
-        if not idx_file.exists():
+        target = item.get("target", "")
+        source_file = KNOWLEDGE_DIR / path
+        if not source_file.exists() or not target:
             continue
-        content = idx_file.read_text(encoding="utf-8")
-        if path not in content:
+        content = source_file.read_text(encoding="utf-8")
+        pattern = re.compile(rf"\[[^\]]*\]\({re.escape(target)}(?:#[^)]*)?\)")
+        new_content, count = pattern.subn("", content)
+        if not count:
             continue
-        new_lines = []
-        for line in content.splitlines():
-            if path in line and title and title in line:
-                continue
-            new_lines.append(line)
-        idx_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-        fixed.append({"path": path, "title": title, "action": "removed_from_index"})
+        new_content = re.sub(r"(?m)^-\s*(?:—|——|-)?\s*$\n?", "", new_content)
+        source_file.write_text(new_content, encoding="utf-8")
+        fixed.append({"path": path, "target": target, "action": "removed_dead_link"})
     return fixed
 
 
