@@ -299,7 +299,8 @@ def check_pdf_entry_pairing() -> list[dict]:
             fm = _read_frontmatter(md_file)
             if fm.get("source_type") == "pdf":
                 resource = fm.get("resource", "")
-                values = resource if isinstance(resource, list) else re.split(r"\s*,\s*", str(resource))
+                # 仅在逗号后紧跟下一个 res/ 时拆分多资源；PDF 文件名本身可能含英文逗号。
+                values = resource if isinstance(resource, list) else re.split(r",\s*(?=res/)", str(resource))
                 pdf_resources.update(str(v).strip() for v in values if str(v).strip())
 
     # 检查 res/ 下的 PDF 是否都有对应条目
@@ -331,7 +332,8 @@ def check_pdf_entry_pairing() -> list[dict]:
                 continue
             resource = fm.get("resource", "")
             rel = str(md_file.relative_to(KNOWLEDGE_DIR))
-            values = resource if isinstance(resource, list) else re.split(r"\s*,\s*", str(resource))
+            # 与上方收集逻辑一致：只分隔多个 res/，保留文件名中的逗号。
+            values = resource if isinstance(resource, list) else re.split(r",\s*(?=res/)", str(resource))
             for value in values:
                 resource_clean = str(value).strip().rstrip("/")
                 if not resource_clean.startswith("res/"):
