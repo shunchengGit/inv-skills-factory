@@ -43,6 +43,10 @@ def fetch_ths_financial(code: str) -> dict | None:
     df = safe_call(ak.stock_financial_abstract_ths, symbol=code, indicator="按报告期")
     if df is None or df.empty:
         return None
+    # 确保报告期降序排列，以便首行是最新数据
+    if "报告期" in df.columns:
+        df["报告期_temp"] = pd.to_datetime(df["报告期"], errors="coerce")
+        df = df.sort_values("报告期_temp", ascending=False).drop(columns=["报告期_temp"])
     latest = df.iloc[0].to_dict()
     return latest
 

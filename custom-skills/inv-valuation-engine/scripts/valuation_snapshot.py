@@ -268,6 +268,9 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
     net_margin = first_not_none(sina_num("销售净利率"), fin_num("销售净利率"))
     debt_to_asset = first_not_none(sina_num("资产负债率"), fin_num("资产负债率"))
     pe_ttm = number(valuation.get("pe_ttm"))
+    # 如果百度 PE TTM 缺失，降级使用静态 PE
+    if pe_ttm is None:
+        pe_ttm = number(valuation.get("pe_static"))
     pb = number(valuation.get("pb"))
     current_price = first_not_none(number(snap.get("price")), history["latest_close"])
 
