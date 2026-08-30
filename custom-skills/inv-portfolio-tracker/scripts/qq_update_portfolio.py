@@ -5,6 +5,7 @@ QQ Finance 持仓更新脚本
 
 用法:
   python update_portfolio.py                    # 输出更新后的持仓（stdout）
+  python update_portfolio.py --report            # 锁定格式的终端持仓报告（等宽对齐表格）
   python update_portfolio.py --write             # 直接写回 PORTFOLIO.md
   python update_portfolio.py --json              # JSON 格式输出
   python update_portfolio.py --check             # 仅检查数据可用性
@@ -14,6 +15,7 @@ import re
 import sys
 import json
 import argparse
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -65,9 +67,9 @@ def load_constraints() -> dict:
     constraints = {
         "max_single_pct": 40,
         "max_sector_pct": 55,
-        "min_cash_pct": 2,
-        "cash_target_low": 5,
-        "cash_target_high": 10,
+        "min_cash_pct": 0,
+        "cash_target_low": 0,
+        "cash_target_high": 100,
     }
     if not USER_PATH.exists():
         return constraints
@@ -82,7 +84,10 @@ def load_constraints() -> dict:
     m = re.search(r"现金[^\n]*?>=\s*([\d.]+)%", content)
     if m:
         constraints["min_cash_pct"] = float(m.group(1))
-    m = re.search(r"([\d.]+)\s*-\s*([\d.]+)%", content)
+    elif re.search(r"现金[^\n]*(?:不强制|不得透支|<\s*0%)", content):
+        constraints["min_cash_pct"] = 0
+    # 必须限定在现金规则所在行，避免把“年化收益 15-20%”误判为现金目标。
+    m = re.search(r"现金[^\n]*?([\d.]+)\s*-\s*([\d.]+)%", content)
     if m:
         constraints["cash_target_low"] = float(m.group(1))
         constraints["cash_target_high"] = float(m.group(2))
@@ -285,8 +290,9 @@ def calculate(portfolio: dict, market_data: dict) -> dict:
         results.append({**h, **md, "value_wan": round(value, 2)})
 
     # 现金
+    cash_hkd_wan = portfolio["cash_hkd"] * hkd_cny / 10000
     cash_value = (
-        portfolio["cash_hkd"] * hkd_cny / 10000
+        cash_hkd_wan
         + portfolio["cash_cny"] / 10000
         + portfolio["cash_usd"] * usd_cny / 10000
     )
@@ -315,6 +321,7 @@ def calculate(portfolio: dict, market_data: dict) -> dict:
         "total_assets": round(total_assets, 2),
         "total_stock": round(total_stock, 2),
         "cash_value": round(cash_value, 2),
+        "cash_hkd_wan": round(cash_hkd_wan, 2),
         "cash_pct": round(cash_value / total_assets * 100, 1),
         "sectors": sectors,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -334,6 +341,150 @@ def format_pe(holding: dict) -> str:
     return "—"
 
 
+# ========== 锁定格式报告渲染（确定性，禁止手工改写） ==========
+# 列与顺序固定，是用户侧持仓报告的契约：
+REPORT_COLUMNS = ["标的", "代码", "股数", "价格", "市值(万)", "仓位", "PE", "52w位", "备注"]
+
+
+def char_width(text: str) -> int:
+    """终端显示宽度：宽字符（W/F）记 2，其余记 1。"""
+    return sum(2 if unicodedata.east_asian_width(c) in ("W", "F") else 1 for c in text)
+
+
+def pad_cell(text: str, width: int, numeric: bool = False) -> str:
+    """按终端宽度补齐单元格；数字右对齐，其余左对齐。"""
+    pad = max(0, width - char_width(text))
+    return (" " * pad + text) if numeric else (text + " " * pad)
+
+
+def _is_numeric_col(index: int) -> bool:
+    # 股数/价格/市值 右对齐；仓位/PE/52w位 为混合文本，左对齐
+    return index in (2, 3, 4)
+
+
+def render_table(rows: list) -> str:
+    """渲染等宽对齐的终端表格（返回纯文本）。"""
+    widths = []
+    for i in range(len(REPORT_COLUMNS)):
+        widths.append(max(
+            [char_width(REPORT_COLUMNS[i])] + [char_width(r[i]) for r in rows]
+        ))
+    lines = []
+    for idx, row in enumerate([REPORT_COLUMNS] + rows):
+        cells = [pad_cell(c, widths[i], _is_numeric_col(i)) for i, c in enumerate(row)]
+        lines.append("| " + " | ".join(cells) + " |")
+        if idx == 0:
+            lines.append("|-" + "-|-".join("-" * w for w in widths) + "-|")
+    return "\n".join(lines)
+
+
+def _price_display(holding: dict) -> str:
+    price = holding["price"]
+    if holding["market"] == "HK":
+        return f"HK${price:g}"
+    if holding["market"] == "US":
+        return f"${price:g}"
+    return f"¥{price:g}"
+
+
+def _shares_display(shares: float) -> str:
+    return f"{int(shares):,}" if shares == int(shares) else f"{shares:g}"
+
+
+def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
+    """渲染锁定格式的持仓报告（用户侧输出的唯一格式来源）。"""
+    constraints = constraints or load_constraints()
+    hkd_cny = portfolio["hkd_cny"]
+    usd_cny = portfolio["usd_cny"]
+    border = "=" * 86
+
+    # ---- 组合概览 ----
+    lines = [
+        border,
+        f"[ 组合概览 ] 行情截至: {calc['timestamp']} | 汇率: USD/CNY={usd_cny}, HKD/CNY={hkd_cny}",
+        f"- 总资产: {calc['total_assets']} 万元 (CNY)",
+        f"- 现金: {calc['cash_value']} 万元 (占比 {calc['cash_pct']}%)",
+        f"  - 人民币现金: {portfolio['cash_cny'] / 10000:.2f} 万元 (CNY)",
+        f"  - 港币现金: {int(portfolio['cash_hkd']):,} HKD (约 {calc['cash_hkd_wan']:.2f} 万 CNY)",
+        f"  - 美元现金: {int(portfolio['cash_usd'])} USD",
+        border,
+        "",
+    ]
+
+    # ---- 持仓表 ----
+    rows = []
+    for r in calc["holdings"]:
+        notes = f"{'盘中' if r['market'] == 'US' else '收盘'}{r['change_pct']:+.2f}%"
+        if r["pos_52w"] >= 70:
+            notes += " ⚠️ 52w高位"
+        rows.append([
+            r["name"],
+            r["code"],
+            _shares_display(r["shares"]),
+            _price_display(r),
+            f"{r['value_wan']:.2f}",
+            f"{r['position_pct']}%",
+            format_pe(r),
+            f"{r['pos_52w']}%",
+            notes,
+        ])
+
+    if calc["cash_pct"] < constraints["min_cash_pct"]:
+        cash_note = "⚠️ 现金水位不足"
+    elif calc["cash_pct"] < constraints["cash_target_low"]:
+        cash_note = "⚠️ 低于建议区间"
+    else:
+        cash_note = ""
+    rows.append([
+        "现金", "—", "—", "—",
+        f"{calc['cash_value']:.2f}",
+        f"{calc['cash_pct']}%",
+        "—", "—",
+        cash_note,
+    ])
+    lines.append(render_table(rows))
+
+    # ---- 纪律检查 ----
+    max_pos = max(calc["holdings"], key=lambda x: x["position_pct"])
+    single_ok = max_pos["position_pct"] <= constraints["max_single_pct"]
+    cash_min_ok = calc["cash_pct"] >= constraints["min_cash_pct"]
+    lines += [
+        "",
+        "[ 纪律检查 ]",
+        f"- 单只上限 (<= {constraints['max_single_pct']:.0f}%): "
+        f"{max_pos['name']} 占比 {max_pos['position_pct']}% ({'达标' if single_ok else '超限'})",
+        f"- 现金比例 (>= {constraints['min_cash_pct']:.0f}%): "
+        f"当前 {calc['cash_pct']}% ({'达标' if cash_min_ok else '未达标，现金偏低'})",
+    ]
+    for sector_name, pct in calc["sectors"].items():
+        status = "达标" if pct <= constraints["max_sector_pct"] else "超限，不可再加仓"
+        lines.append(
+            f"- 行业集中度 (<= {constraints['max_sector_pct']:.0f}%): {sector_name} {pct}% ({status})"
+        )
+
+    # ---- 关键关注 ----
+    watch = []
+    if not cash_min_ok:
+        watch.append(
+            f"- 现金水位: 现金占比 {calc['cash_pct']}% 低于 {constraints['min_cash_pct']:.0f}% 下限，"
+            f"优先补充现金至 {constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% 区间"
+        )
+    if not single_ok:
+        watch.append(
+            f"- 集中风险: {max_pos['name']} 占比 {max_pos['position_pct']}% 超过单只上限，暂停对该标的加仓"
+        )
+    for r in calc["holdings"]:
+        if r["pos_52w"] >= 70:
+            watch.append(
+                f"- {r['name']} 估值: 52 周分位数 {r['pos_52w']}% 处于较高水位，加仓前需重新评估估值"
+            )
+    if not watch:
+        watch.append("- 各约束均在合规区间，暂无触发项；维持既定监控")
+    lines += ["", "[ 关键关注 ]"] + watch
+
+    return "\n".join(lines)
+
+
 def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
     constraints = constraints or load_constraints()
     """生成更新后的 PORTFOLIO.md 当前持仓部分"""
@@ -350,7 +501,10 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
     lines.append(f"  - 港币现金：**{int(hkd_cash):,} HKD**（约 **{hkd_cny_val:.2f}万 CNY**）")
     lines.append(f"  - 人民币现金：**{portfolio['cash_cny'] / 10000:.2f}万 CNY**")
     lines.append(f"  - 美元现金：**{int(portfolio['cash_usd'])}**")
-    lines.append(f"- **现金建议区间**：{constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% {'✅ 合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️ 需调整'}\n")
+    if constraints["cash_target_low"] == 0 and constraints["cash_target_high"] == 100:
+        lines.append("- **现金规则**：不强制最低比例；现金不得透支\n")
+    else:
+        lines.append(f"- **现金建议区间**：{constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% {'✅ 合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️ 需调整'}\n")
 
     # 表头
     lines.append("| 标的 | 代码 | 市场 | 板块 | 股数 | 价格 | 币种 | 市值(万CNY) | 仓位 | PE | 52w位 | 核心风险 | 备注 |")
@@ -407,6 +561,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
 def main():
     parser = argparse.ArgumentParser(description="QQ Finance 持仓更新")
     parser.add_argument("--write", action="store_true", help="写回 PORTFOLIO.md")
+    parser.add_argument("--report", action="store_true", help="锁定格式的终端持仓报告")
     parser.add_argument("--json", action="store_true", help="JSON 格式输出")
     parser.add_argument("--check", action="store_true", help="仅检查数据可用性")
     parser.add_argument("--portfolio", type=str, default=str(PORTFOLIO_PATH), help="PORTFOLIO.md 路径")
@@ -512,6 +667,10 @@ def main():
         print(f"   总资产: {calc['total_assets']}万 | 现金: {calc['cash_value']}万({calc['cash_pct']}%)", file=sys.stderr)
         for r in calc["holdings"]:
             print(f"   {r['name']}: {int(r['shares'])}股 × {r['price']} = {r['value_wan']}万 ({r['change_pct']:+.2f}%) | PE={format_pe(r)} | 52w位={r['pos_52w']}%", file=sys.stderr)
+        return
+
+    if args.report:
+        print(build_report(calc, portfolio, load_constraints()))
         return
 
     if args.json:

@@ -24,6 +24,11 @@ commands:
 
 **架构**：本技能依赖 `inv-valuation-engine` 提供估值引擎（脚本 + 定量评分框架），自身聚焦 QARP 特有的操作决策层：选股闸门 → 估值纪律 → 买入/持有/卖出 → 组合约束。
 
+### 原文与交叉验证第一原则（不可降级）
+
+1. **原文优先**：影响核心结论的关键数字（TAM、EPS 预测、目标价、增速假设）必须回溯 `res/` 原始研报核验——条目摘要是二手加工，未经原文确认的数字标注"摘要级证据"并降置信度，不得当作已验证事实。执行细则见 `references/knowledge-deep-search.md`。
+2. **交叉验证**：影响买入/卖出决策的定性命题（护城河、行业空间、管理层、风险）至少需 2 个独立来源印证；单一来源只能产出"待验证假设"；来源冲突时不折中平均，定位分歧变量并解释。信号强度与裁决见 `references/research-cross-validation.md`。
+
 ### 三个命令的使用场景
 
 | 命令 | 场景 | 执行范围 |
@@ -32,14 +37,12 @@ commands:
 | `/qarp_screen` | 快速筛选是否值得深入研究 | 只跑选股闸门（三道），不跑完整估值。通过则输出"值得深入研究，建议 /qarp"，不通过则输出原因 |
 | `/qarp_check` | 对已有持仓做持有/加仓/减仓检查 | 跳过闸门，直走估值快照 → 逻辑检查 → 估值检查 → 组合检查 → 持有/加仓/减仓/卖出结论 |
 
+估值脚本统一走 `inv-valuation-engine`，详见 `references/commands-quickref.md`。
+
 **完成标志**：
 - `/qarp` ✅ 完成：知识库 L2+ 覆盖门禁通过（检索审计 + 时间线 + 反方证据 + 原文回溯 + 证据矩阵）后，输出五档结论 + 三道闸门 + 估值纪律 + 买入必答 6 问 + 组合检查 + 机会成本对比，给出明确买入/观察/不买结论
 - `/qarp_screen` ✅ 完成：输出三道闸门逐项通过/不通过 + 一句话结论（"值得深入研究，建议 /qarp" 或 "不通过：{原因}"）
 - `/qarp_check` ✅ 完成：知识库至少 L2，核验最新事实、观点漂移及打脸条件；输出估值检查 + 组合检查 + 明确持有/加仓/减仓/卖出结论及触发条件
-
-## 快速命令
-
-估值脚本统一走 `inv-valuation-engine`。详见 `references/commands-quickref.md`。
 
 ## 一、估值框架（五档结论）
 
@@ -69,8 +72,8 @@ commands:
 
 | 维度 | 要求 | 判断方法 |
 |------|------|----------|
-| 行业空间 | TAM 足够大，或渗透率仍在提升 | 查行业报告/研报，看行业增速 CAGR。**知识库来源**：搜 `{标的} 行业`/`{标的} TAM` 标签条目，≥2 份不同券商交叉验证；条目缺量化数据时 `km_import.py read` 回溯 res/ 原始研报 |
-| 竞争结构 | 集中度提升中，或龙头护城河清晰 | CR3/CR5 趋势 + Porter 五力速判。**知识库来源**：搜 `{标的} 竞争`/`competitive-advantage` 标签条目读卖方格局判断 |
+| 行业空间 | TAM 足够大，或渗透率仍在提升 | 行业增速 CAGR，≥2 份不同券商交叉验证，关键数字回溯原文（检索与回溯协议见 `knowledge-deep-search.md`） |
+| 竞争结构 | 集中度提升中，或龙头护城河清晰 | CR3/CR5 趋势 + Porter 五力速判 + 知识库卖方格局判断 |
 | 商业模式 | 能说清"谁付钱、为什么付、凭什么持续付" | 用三句话测试，说不清则不通过 |
 | 周期属性 | 明确标的属于成长/消费/周期/金融哪类 | 决定后续估值口径和持有逻辑 |
 
@@ -96,10 +99,8 @@ commands:
 ### 2.3 第三道：管理层评估（加分项）
 
 - 资本配置纪律、激励一致性、对股东回报的态度（实际行动 > 口号）
-- **管理层评价来源**：从知识库搜 `{标的} 管理层`/`{标的} 资本配置` 标签条目读卖方评价。按信号强度分级——仅 1 份研报提及（弱信号）不作为核心依据，多份独立券商印证（中/强信号）方可影响仓位判断
+- **管理层评价来源**：知识库卖方评价按信号强度分级——仅 1 份研报提及（弱信号）不作为核心依据，多份独立券商印证（中/强信号）方可影响仓位判断
 - **管理层不达标不直接否决，但影响仓位上限（最多卫星仓位 2-5%）**
-
-> 三道闸门中的研报输入细则（行业/TAM/竞争/财务趋势/管理层评价的提取方法 + 信号强度分级 + 冲突优先级）详见 `references/research-cross-validation.md`。
 
 ## 三、估值纪律（QARP 核心）
 
@@ -142,6 +143,8 @@ commands:
 - 卖方一致预期可作为增速假设参考，但必须人工校验合理性
 - 卖方暗含风险应纳入本技能的风险框架
 - 冲突时以财报事实为准
+- **进入估值模型的卖方数字（EPS 增速、目标价、利润率假设）必须回溯原始研报原文核验**——条目摘要中的数字未经原文确认前，只能用于方向性参考，不能写进增速假设或安全边际计算
+- 一致预期必须来自 ≥2 家独立机构的原文级核验；同机构多篇、共享同一数据终端（如 Bloomberg 一致预期）的"一致"不计为独立交叉验证
 
 ## 四、买入执行与组合管理
 
@@ -155,7 +158,7 @@ commands:
 
 ## 八、市场环境适配
 
-详见 `references/trade-execution-rules.md`。核心：牛市不追高、震荡正常持、熊市加仓核心、利率上行偏价值。
+牛市不追高、震荡正常持、熊市加仓核心、利率上行偏价值。详见 `references/trade-execution-rules.md`。
 
 ## 九、执行流程
 
@@ -165,7 +168,7 @@ commands:
 
 1. **A. 估值快照与门禁**：运行 `valuation_report.py <代码> --output json`，检查 `valuation_status`、`upstream_status`、结构化 `data_gaps`、`data_time` 与 sources。`upstream_failed`/`insufficient_for_valuation` → 补数或手工情景，禁止自动五档和买卖动作；`partial` → 显著降置信度且 action 必须为空
 2. **B. 知识库 L2+ 深挖**：严格执行 `references/knowledge-deep-search.md`。必须实际完成 ≥6 个检索篮子、候选去重与机构独立性判断、核心条目关联链、≥2 个标签导航、反向回链、时间线/观点漂移、反方证据搜索和证据矩阵；不得用“读 index + 3 篇摘要”冒充 L2
-3. **原始资源回溯（有最低配额）**：`/qarp` 至少回溯 2 份原始研报（最新核心 + 关键反方/分歧），`/qarp_check` 至少 1 份、涉及调仓至少 2 份。使用 `km_import.py read --file {绝对路径或res/路径} --pages edges`；关键数字记录口径、预测期和资源路径。仅当库内资源数量不足时才允许低于配额，并必须标注
+3. **原始资源回溯（有最低配额，原文优先）**：`/qarp` 至少回溯 2 份原始研报（最新核心 + 关键反方/分歧），`/qarp_check` 至少 1 份、涉及调仓至少 2 份。使用 `km_import.py read --file {绝对路径或res/路径} --pages edges`。回溯不是形式：每个进入结论的关键数字（TAM、EPS 预测、目标价、增速）都要在原文中定位到具体表述，记录数值、口径、预测期、资源路径；条目摘要与原文不一致时以原文为准并标注差异。仅当库内资源数量不足时才允许低于配额，并必须标注
 4. **时效与观点漂移**：按日期排列最早基准、最新财报/研报和中间变化，区分预测上修/下修、基本面变化与纯估值变化；aging 标注、stale 默认不进入当前共识
 5. **知识门禁**：输出 `knowledge_status=ok|partial|insufficient`。影响核心结论的检索、反方、原文或来源独立性缺失时为 `insufficient`，只允许“继续研究/观察”，禁止买入/加仓；非核心缺口为 `partial`，降低置信度与仓位上限
 6. **结构化输出**：先给检索审计、覆盖度、时间线、共识/分歧/反方、原文回溯清单和证据矩阵，再映射至三道闸门、估值纪律、打脸条件与仓位。只罗列研报标题不算完成
@@ -179,10 +182,8 @@ commands:
 估值快照 + 知识库 L2（最新事实/反方/时间线/至少1份原文；调仓时至少2份）→ 逻辑检查（买入理由/打脸条件）→ 估值检查（透支?）→ 组合检查（仓位/集中度）→ 知识门禁 → 结论（持有/加仓/减仓/卖出）
 
 ### 9.3 完整分析流程
-
 ```
-阶段一(并行): A.估值快照 + B.知识库L2+深挖(检索矩阵→去重→关联/反链→标签→时间线→原文→证据矩阵) → 阶段二: 知识门禁与缺口检查(缺口表→按需WebFetch补缺)
-→ 阶段三(顺序): 五档结论 → 选股闸门 → 估值纪律 → 买入必答 → 组合检查 → 结论+机会成本对比
+阶段一(并行): A.估值快照 + B.知识库L2+深挖(检索矩阵→去重→关联/反链→标签→时间线→原文→证据矩阵) → 阶段二: 知识门禁与缺口检查(缺口表→按需WebFetch补缺) → 阶段三(顺序): 五档结论 → 选股闸门 → 估值纪律 → 买入必答 → 组合检查 → 结论+机会成本对比
 ```
 
 研报结构化输出流入各环节：卖方盈利预测→五档、行业/TAM→闸门、增速假设→估值纪律、核心风险→买入必答。
@@ -196,16 +197,5 @@ commands:
 
 ## 参考文件
 
-- `inv-valuation-engine/references/scoring-rules.md`：定量阈值、行业口径、五档结论映射的人类说明（与 `scripts/scoring_rules.json` 同步）
-- `inv-valuation-engine/references/master-frameworks.md`：大师框架的适用范围、判断逻辑和注意事项
-- `inv-valuation-engine/references/internet-platform-valuation.md`：互联网平台公司 GAAP 净利润失真、Normalized 利润计算、SOTP 分部估值
-- `inv-valuation-engine/references/us-hk-data-workaround.md`：美股/港股 data_gaps 手动补全流程
-- `inv-valuation-engine` 的 `scripts/valuation_snapshot.py`：估值快照
-- `inv-valuation-engine` 的 `scripts/valuation_report.py`：五档估值报告
-- `inv-valuation-engine` 的 `scripts/valuation_compare.py`：多股比较
-- `inv-valuation-engine` 的 `scripts/valuation_manual_compute.py`：手动计算
-- 本技能 `references/output-template.md`：新标的和持仓 QARP 分析的输出模板
-- 本技能 `references/common-pitfalls.md`：常见陷阱与防范
-- 本技能 `references/data-fallback.md`：数据源脚本优先级、data_gaps 降级、搜索补充策略
-- 本技能 `references/research-cross-validation.md`：研报与决策框架的交叉验证方法论
-- 本技能 `references/knowledge-deep-search.md`：QARP 专用知识库 L2+/L3 深挖、原文回溯配额、证据矩阵与覆盖门禁
+- `inv-valuation-engine/references/`：`scoring-rules.md`（定量阈值与五档映射）、`master-frameworks.md`、`internet-platform-valuation.md`（GAAP 失真与 SOTP）、`us-hk-data-workaround.md`（data_gaps 补全）；脚本 `valuation_snapshot.py` / `valuation_report.py` / `valuation_compare.py` / `valuation_manual_compute.py`
+- 本技能 `references/`：`output-template.md`（输出模板）、`common-pitfalls.md`（常见陷阱）、`data-fallback.md`（数据源降级）、`research-cross-validation.md`（研报交叉验证方法论）、`knowledge-deep-search.md`（L2+/L3 深挖、原文回溯配额、证据矩阵与覆盖门禁）
