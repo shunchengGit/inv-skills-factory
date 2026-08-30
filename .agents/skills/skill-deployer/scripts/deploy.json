@@ -1,0 +1,10 @@
+{
+  "agents": {
+    "hermes": {
+      "skills_dir": "~/.hermes/skills"
+    },
+    "workbuddy": {
+      "skills_dir": "~/.workbuddy/skills"
+    }
+  }
+}

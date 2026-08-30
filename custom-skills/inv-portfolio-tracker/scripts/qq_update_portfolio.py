@@ -365,8 +365,8 @@ def generate_portfolio_md(calc: dict, portfolio: dict) -> str:
     # 现金行
     cash_pct_str = f"**{calc['cash_pct']}%**"
     lines.append(
-        f"| 现金 | — | — | — | — | — | — | — | CNY | "
-        f"**{calc['cash_value']}** | {cash_pct_str} | — | — | "
+        f"| 现金 | — | — | — | — | — | CNY | "
+        f"**{calc['cash_value']}** | {cash_pct_str} | — | — | — | "
         f"{'✅5-10%合理区间' if 5 <= calc['cash_pct'] <= 10 else '⚠️需调整'} |"
     )
 
@@ -456,7 +456,9 @@ def main():
         gap_end = updated.find("\n## ", gap_start + 10) if gap_start != -1 else -1
         if gap_end == -1 and gap_start != -1:
             gap_end = updated.find("\n---\n", gap_start + 10)
-        if gap_start != -1 and gap_end != -1:
+        if gap_end == -1 and gap_start != -1:
+            gap_end = len(updated)
+        if gap_start != -1:
             gap_lines = ["## 数据缺口说明\n"]
             for r in calc["holdings"]:
                 pe_str = format_pe(r)

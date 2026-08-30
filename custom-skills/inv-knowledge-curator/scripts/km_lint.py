@@ -190,16 +190,20 @@ def check_duplicates(entries: list[dict]) -> list[dict]:
         resource = entry.get("resource", "")
         title = entry.get("title", "").lower()
 
-        # resource 重复
-        if resource and resource != "manual":
-            if resource in seen_resources:
+        # resource 可为单个路径或多资源列表；逐项归一化后检查重复。
+        resources = resource if isinstance(resource, list) else [resource]
+        for item in resources:
+            if not item or item == "manual":
+                continue
+            resource_key = str(item)
+            if resource_key in seen_resources:
                 duplicates.append({
                     "type": "resource_duplicate",
-                    "resource": resource,
-                    "entries": [{"title": e["title"], "path": e["path"]} for e in seen_resources[resource]] + [{"title": entry["title"], "path": entry["path"]}],
+                    "resource": resource_key,
+                    "entries": [{"title": e["title"], "path": e["path"]} for e in seen_resources[resource_key]] + [{"title": entry["title"], "path": entry["path"]}],
                 })
             else:
-                seen_resources[resource] = [entry]
+                seen_resources[resource_key] = [entry]
 
     # 标题相似检测
     for i in range(len(entries)):
