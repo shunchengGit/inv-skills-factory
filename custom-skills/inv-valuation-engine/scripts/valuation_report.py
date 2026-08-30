@@ -26,6 +26,21 @@ from typing import Any
 
 from valuation_snapshot import Snapshot, build_snapshot
 
+from scoring_rules import (
+    ANALYST_UPSIDE_RANGES,
+    DIVIDEND_YIELD_HIGH,
+    DIVIDEND_YIELD_MEDIUM,
+    EARNINGS_GROWTH_HIGH,
+    EARNINGS_GROWTH_LOW,
+    EARNINGS_YIELD_RANGES,
+    FORWARD_PE_IMPLIED_GROWTH_LIMIT,
+    PB_ROE_THRESHOLD,
+    PE_RANGES_BY_TYPE,
+    PEG_RANGES,
+    PERCENTILE_RANGES,
+    PS_RANGES,
+)
+
 
 RATINGS = ["低估", "合理偏低", "合理", "合理偏高", "高估"]
 RATING_SCORE = {name: idx for idx, name in enumerate(RATINGS)}
@@ -135,16 +150,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
             MetricView(
                 name="PEG",
                 value=peg,
-                rating=metric_rating_by_ranges(
-                    peg,
-                    [
-                        (None, 0.6, "低估"),
-                        (0.6, 0.8, "合理偏低"),
-                        (0.8, 1.2, "合理"),
-                        (1.2, 1.5, "合理偏高"),
-                        (1.5, None, "高估"),
-                    ],
-                ),
+                rating=metric_rating_by_ranges(peg, PEG_RANGES),
                 comment="来自 `PE / 利润增速`，适合成长型公司。",
             )
         )
@@ -154,31 +160,13 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
             MetricView(
                 name="历史分位代理",
                 value=percentile,
-                rating=metric_rating_by_ranges(
-                    percentile,
-                    [
-                        (None, 20, "低估"),
-                        (20, 30, "合理偏低"),
-                        (30, 70, "合理"),
-                        (70, 90, "合理偏高"),
-                        (90, None, "高估"),
-                    ],
-                ),
+                rating=metric_rating_by_ranges(percentile, PERCENTILE_RANGES),
                 comment="当前仅为价格分位代理，保守使用。",
             )
         )
 
     if analyst_upside is not None:
-        analyst_rating = metric_rating_by_ranges(
-            analyst_upside,
-            [
-                (20, None, "低估"),
-                (10, 20, "合理偏低"),
-                (0, 10, "合理"),
-                (-10, 0, "合理偏高"),
-                (None, -10, "高估"),
-            ],
-        )
+        analyst_rating = metric_rating_by_ranges(analyst_upside, ANALYST_UPSIDE_RANGES)
         views.append(
             MetricView(
                 name="目标价上行空间",
@@ -193,16 +181,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
             MetricView(
                 name="PS(TTM)",
                 value=ps_ttm,
-                rating=metric_rating_by_ranges(
-                    ps_ttm,
-                    [
-                        (None, 2, "低估"),
-                        (2, 4, "合理偏低"),
-                        (4, 8, "合理"),
-                        (8, 15, "合理偏高"),
-                        (15, None, "高估"),
-                    ],
-                ),
+                rating=metric_rating_by_ranges(ps_ttm, PS_RANGES),
                 comment="成长股辅助估值指标。",
             )
         )
@@ -213,7 +192,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
             MetricView(
                 name="PB-ROE代理",
                 value=pb_roe_ratio,
-                rating=score_to_rating(2.0 if pb_roe_ratio is not None and pb_roe_ratio < 15 else 3.0)
+                rating=score_to_rating(2.0 if pb_roe_ratio is not None and pb_roe_ratio < PB_ROE_THRESHOLD else 3.0)
                 if pb_roe_ratio is not None
                 else None,
                 comment="仅作 PB-ROE 代理，非严格行业比较。",
@@ -221,7 +200,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
         )
 
     if company_type in {"消费/医疗", "金融/地产"} and dividend_yield is not None:
-        dividend_rating = "合理偏低" if dividend_yield >= 4 else "合理" if dividend_yield >= 2 else "合理偏高"
+        dividend_rating = "合理偏低" if dividend_yield >= DIVIDEND_YIELD_HIGH else "合理" if dividend_yield >= DIVIDEND_YIELD_MEDIUM else "合理偏高"
         views.append(
             MetricView(
                 name="股息率",
@@ -237,7 +216,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
     pe_anchor_source = "forward_pe" if forward_pe is not None else "trailing_pe"
     if forward_pe is not None and trailing_pe is not None and trailing_pe > 0:
         implied_growth = (trailing_pe / forward_pe - 1) * 100
-        if implied_growth > 30:
+        if implied_growth > FORWARD_PE_IMPLIED_GROWTH_LIMIT:
             pe_anchor = trailing_pe
             pe_anchor_source = "trailing_pe(fwd_pe_implied_{:.0f}pct_growth_suspect)".format(implied_growth)
             notes_for_report.append(
@@ -247,31 +226,8 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
             )
     if pe_anchor is not None:
         pe_comment = "行业 PE 参考锚（{}）。".format(pe_anchor_source)
-        if company_type == "消费/医疗":
-            pe_rating = metric_rating_by_ranges(
-                pe_anchor,
-                [(None, 16, "低估"), (16, 20, "合理偏低"), (20, 30, "合理"), (30, 35, "合理偏高"), (35, None, "高估")],
-            )
-        elif company_type == "互联网/软件":
-            pe_rating = metric_rating_by_ranges(
-                pe_anchor,
-                [(None, 12, "低估"), (12, 15, "合理偏低"), (15, 40, "合理"), (40, 50, "合理偏高"), (50, None, "高估")],
-            )
-        elif company_type == "半导体/科技制造":
-            pe_rating = metric_rating_by_ranges(
-                pe_anchor,
-                [(None, 10, "低估"), (10, 15, "合理偏低"), (15, 35, "合理"), (35, 45, "合理偏高"), (45, None, "高估")],
-            )
-        elif company_type == "周期行业":
-            pe_rating = metric_rating_by_ranges(
-                pe_anchor,
-                [(None, 5, "低估"), (5, 8, "合理偏低"), (8, 15, "合理"), (15, 20, "合理偏高"), (20, None, "高估")],
-            )
-        else:
-            pe_rating = metric_rating_by_ranges(
-                pe_anchor,
-                [(None, 8, "低估"), (8, 10, "合理偏低"), (10, 20, "合理"), (20, 30, "合理偏高"), (30, None, "高估")],
-            )
+        pe_ranges = PE_RANGES_BY_TYPE.get(company_type, PE_RANGES_BY_TYPE["default"])
+        pe_rating = metric_rating_by_ranges(pe_anchor, pe_ranges)
         views.append(MetricView(name="PE锚", value=pe_anchor, rating=pe_rating, comment=pe_comment))
 
     if fcf is not None:
@@ -289,16 +245,7 @@ def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list
             MetricView(
                 name="盈利收益率",
                 value=earnings_yield,
-                rating=metric_rating_by_ranges(
-                    earnings_yield,
-                    [
-                        (8, None, "低估"),
-                        (6, 8, "合理偏低"),
-                        (4, 6, "合理"),
-                        (2.5, 4, "合理偏高"),
-                        (None, 2.5, "高估"),
-                    ],
-                ),
+                rating=metric_rating_by_ranges(earnings_yield, EARNINGS_YIELD_RANGES),
                 comment="PE 的倒数，便于和债券/股息收益率对照。",
             )
         )
@@ -428,12 +375,12 @@ def build_assumptions(metrics: dict[str, Any]) -> list[str]:
     if earnings_growth is not None:
         # 合理性校验：Yahoo earningsGrowth 对互联网/平台公司常严重失真
         # 若增速 >40% 或 < -30%，大概率是 GAAP 单季度扭曲，标记警告而非直接采信
-        if earnings_growth > 40:
+        if earnings_growth > EARNINGS_GROWTH_HIGH:
             assumptions.append(
                 f"⚠ 数据源利润增速 {earnings_growth}% 异常偏高（疑似GAAP单季度扭曲），"
                 "请用 Normalized/Non-GAAP 净利润手动重算增速，勿直接采信此值。"
             )
-        elif earnings_growth < -30:
+        elif earnings_growth < EARNINGS_GROWTH_LOW:
             assumptions.append(
                 f"⚠ 数据源利润增速 {earnings_growth}% 异常偏低（疑似一次性项目拖累），"
                 "请确认是否为 Non-GAAP 口径，勿直接采信此值。"

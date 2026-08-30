@@ -204,12 +204,24 @@ def _raw_snapshot_yahoo(code: str, market: str) -> dict:
     yahoo_symbol = to_yahoo_symbol(code, market)
     _has_proxy = bool(os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY"))
 
-    # 并行获取 info 和 history，减少串行等待
+    # 并行获取 info 和 history；单个源异常不中断整体（后续走降级路径）
+    yahoo_info = None
+    yahoo_hist = None
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_info = executor.submit(fetch_yahoo_info, yahoo_symbol)
-        future_hist = executor.submit(fetch_yahoo_history, yahoo_symbol)
-        yahoo_info = future_info.result()
-        yahoo_hist = future_hist.result()
+        futures = {
+            executor.submit(fetch_yahoo_info, yahoo_symbol): "info",
+            executor.submit(fetch_yahoo_history, yahoo_symbol): "history",
+        }
+        for future in as_completed(futures):
+            fname = futures[future]
+            try:
+                result = future.result()
+            except Exception:
+                continue
+            if fname == "info":
+                yahoo_info = result
+            else:
+                yahoo_hist = result
 
     if yahoo_info and yahoo_hist is not None:
         # Yahoo 主路径成功
@@ -630,9 +642,37 @@ def cmd_snapshot_a(code: str, *, raw_symbol: str | None = None) -> dict:
     valuation = raw.get("valuation") or {}
 
     def local_number(value: object) -> float | None:
+        """解析带中文量级单位（亿/万）与百分号的数值。
+
+        - "104.13亿" → 10413000000.0
+        - "2.3万"    → 23000.0
+        - "38.5%"    → 38.5
+        """
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip().replace(",", "")
+        if not s:
+            return None
+        multiplier = 1.0
+        if "万亿" in s:
+            multiplier = 1e12
+            s = s.replace("万亿", "")
+        elif "亿" in s:
+            multiplier = 1e8
+            s = s.replace("亿", "")
+        elif "万" in s:
+            multiplier = 1e4
+            s = s.replace("万", "")
+        if s.endswith("%"):
+            s = s[:-1]
+        s = s.strip()
+        if not s:
+            return None
         try:
-            return float(str(value).replace("%", "").replace("亿", "").replace("万", ""))
-        except (TypeError, ValueError):
+            return float(s) * multiplier
+        except ValueError:
             return None
 
     revenue = local_number(sina.get("营业总收入") or sina.get("营业收入"))
