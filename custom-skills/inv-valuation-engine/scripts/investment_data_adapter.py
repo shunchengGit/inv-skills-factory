@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+import sys
 from typing import Any, Mapping
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+from numeric import parse_number
 
 
 class UnsupportedSchemaError(ValueError):
@@ -108,35 +113,4 @@ def merge_gaps(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _number(value: Any) -> float | None:
-    """解析带中文量级单位（亿/万）与百分号的数值。
-
-    - "104.13亿" → 10413000000.0
-    - "2.3万"    → 23000.0
-    - "38.5%"    → 38.5
-    """
-    if value is None or value is False:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    s = str(value).strip().replace(",", "")
-    if not s:
-        return None
-    multiplier = 1.0
-    if "万亿" in s:
-        multiplier = 1e12
-        s = s.replace("万亿", "")
-    elif "亿" in s:
-        multiplier = 1e8
-        s = s.replace("亿", "")
-    elif "万" in s:
-        multiplier = 1e4
-        s = s.replace("万", "")
-    if s.endswith("%"):
-        s = s[:-1]
-    s = s.strip()
-    if not s:
-        return None
-    try:
-        return float(s) * multiplier
-    except ValueError:
-        return None
+    return parse_number(value)

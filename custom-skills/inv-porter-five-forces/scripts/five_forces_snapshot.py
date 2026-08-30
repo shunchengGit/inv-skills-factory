@@ -20,8 +20,13 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_shared"))
+from numeric import parse_percent
 
 import pandas as pd
 
@@ -180,16 +185,7 @@ def first_not_none(*values: Any) -> Any:
 
 def _parse_pct(val) -> float | None:
     """将百分比字符串或数值转为 float。'48.01%' → 48.01, 0.4801 → 48.01, None → None"""
-    if val is None or val is False:
-        return None
-    if isinstance(val, (int, float)):
-        v = float(val)
-        return v if v > 1 else round(v * 100, 2)
-    s = str(val).strip().rstrip("%").replace(",", "")
-    try:
-        return float(s)
-    except (ValueError, TypeError):
-        return None
+    return parse_percent(val)
 
 
 def _parse_num(val) -> float | None:

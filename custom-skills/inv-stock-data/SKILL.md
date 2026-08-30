@@ -109,6 +109,7 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 11. 脚本返回的 `notes` / `error` 必须原样关注；缺数据时说明缺口，不要编造。
 12. **禁止管道执行**：**绝不**使用 `uv run ... --output json | python3 -c "..."` 模式。管道传递的 JSON 可能因截断、换行或转义导致解析错误，且触发安全审批。正确做法：`uv run ... --output json > /tmp/stock_data.json`，再 `python3 -c "import json; d=json.load(open('/tmp/stock_data.json')); ..."`。
 13. **Yahoo 限流**：连续 Yahoo 请求（snapshot + financials + daily）必须间隔 ≥3 秒。脚本内置退避重试，但连续快速调用仍会触发 `YFRateLimitError`。优先用 `cs_stock_all` 合并调用。
+14. **批处理边界**：数据层允许 `cs_stock_all` 合并抓取单标的；组合层批量刷新只允许走受控脚本（如 `qq_update_portfolio.py`），不要自行写批量跨市场抓取脚本。
 
 ## 代码与市场识别
 

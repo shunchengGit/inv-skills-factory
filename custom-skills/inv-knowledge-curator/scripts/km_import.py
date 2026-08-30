@@ -508,6 +508,55 @@ def cmd_read(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_batch_store(args: argparse.Namespace) -> dict:
+    """批量写入条目（目录或文件列表），复用 cmd_store 的校验与同步逻辑。"""
+    items: list[dict] = []
+    if args.manifest:
+        manifest_path = Path(args.manifest).expanduser()
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list):
+            return {"success": False, "error": "manifest 必须是 JSON list"}
+        items = payload
+    elif args.dir:
+        base = Path(args.dir).expanduser()
+        for path in sorted(base.glob("*.md")):
+            items.append({
+                "title": path.stem,
+                "resource": args.resource,
+                "content_file": str(path),
+                "source_type": args.source_type,
+                "type": args.type,
+                "description": args.description,
+                "tags": args.tags,
+            })
+    else:
+        return {"success": False, "error": "batch-store 需要 --manifest 或 --dir"}
+
+    results = []
+    for item in items:
+        content = item.get("content", "")
+        content_file = item.get("content_file")
+        if content_file:
+            content = Path(content_file).expanduser().read_text(encoding="utf-8")
+        tags = item.get("tags")
+        if isinstance(tags, str):
+            tags = [t.strip() for t in tags.split(",") if t.strip()]
+        result = cmd_store(
+            title=item.get("title", ""),
+            resource=item.get("resource", args.resource),
+            content=content,
+            source_type=item.get("source_type", args.source_type),
+            min_content_length=int(item.get("min_content_length", args.min_content_length)),
+            tags=tags,
+            entry_type=item.get("type", args.type),
+            description=item.get("description", args.description),
+        )
+        results.append(result)
+
+    success = all(item.get("success") for item in results)
+    return {"success": success, "results": results}
+
+
 # ─── main ─────────────────────────────────────────────────
 
 
@@ -537,6 +586,16 @@ def main():
     p_store.add_argument("--tags", default="", help="标签列表，逗号分隔。示例: python,async,performance")
 
     # read 子命令：只读提取已归档 PDF（无副作用，下游技能用）
+    p_batch = sub.add_parser("batch-store", help="批量存储知识条目（manifest 或目录）")
+    p_batch.add_argument("--manifest", help="JSON manifest，元素为 {title,resource,content|content_file,...}")
+    p_batch.add_argument("--dir", help="包含 .md 文件的目录，逐文件入库")
+    p_batch.add_argument("--resource", required=True, help="默认资源路径（manifest 可覆盖）")
+    p_batch.add_argument("--source_type", default="pdf", choices=("url", "pdf", "note"))
+    p_batch.add_argument("--type", default="Analysis")
+    p_batch.add_argument("--description", default="")
+    p_batch.add_argument("--tags", default="")
+    p_batch.add_argument("--min-content-length", type=int, default=100)
+
     p_read = sub.add_parser("read", help="只读提取已归档 PDF 文本（无副作用，下游技能读原始研报用）")
     p_read.add_argument("--file", action="append", required=True, help="res/ 下 PDF 路径（可多次指定）")
     p_read.add_argument("--pages", choices=("edges", "all", "first-n"), default="edges")
@@ -554,6 +613,8 @@ def main():
         sys.exit(cmd_res(args))
     elif args.command == "read":
         sys.exit(cmd_read(args))
+    elif args.command == "batch-store":
+        result = cmd_batch_store(args)
     elif args.command == "store":
         content = args.content
         if hasattr(args, 'content_file') and args.content_file:

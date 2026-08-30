@@ -25,6 +25,7 @@ except ImportError:
 
 # ========== 配置 ==========
 PORTFOLIO_PATH = Path.home() / ".hermes" / "memories" / "PORTFOLIO.md"
+USER_PATH = Path.home() / ".hermes" / "memories" / "USER.md"
 
 # QQ Finance 市场前缀映射
 MARKET_PREFIX = {
@@ -57,6 +58,35 @@ FIELD_MAP = {
         "high_52w": 48, "low_52w": 49,
     },
 }
+
+
+def load_constraints() -> dict:
+    """从 USER.md 读取组合约束；缺失时回退到当前默认。"""
+    constraints = {
+        "max_single_pct": 40,
+        "max_sector_pct": 55,
+        "min_cash_pct": 2,
+        "cash_target_low": 5,
+        "cash_target_high": 10,
+    }
+    if not USER_PATH.exists():
+        return constraints
+
+    content = USER_PATH.read_text(encoding="utf-8")
+    m = re.search(r"单只股票仓位上限[:：]\s*`?<=?\s*([\d.]+)%?", content)
+    if m:
+        constraints["max_single_pct"] = float(m.group(1))
+    m = re.search(r"单一行业集中度[:：]\s*`?<=?\s*([\d.]+)%?", content)
+    if m:
+        constraints["max_sector_pct"] = float(m.group(1))
+    m = re.search(r"现金[^\n]*?>=\s*([\d.]+)%", content)
+    if m:
+        constraints["min_cash_pct"] = float(m.group(1))
+    m = re.search(r"([\d.]+)\s*-\s*([\d.]+)%", content)
+    if m:
+        constraints["cash_target_low"] = float(m.group(1))
+        constraints["cash_target_high"] = float(m.group(2))
+    return constraints
 
 
 def get_qq_code(code: str, market: str) -> str:
@@ -304,7 +334,8 @@ def format_pe(holding: dict) -> str:
     return "—"
 
 
-def generate_portfolio_md(calc: dict, portfolio: dict) -> str:
+def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
+    constraints = constraints or load_constraints()
     """生成更新后的 PORTFOLIO.md 当前持仓部分"""
     lines = []
     lines.append("## 当前持仓\n")
@@ -319,7 +350,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict) -> str:
     lines.append(f"  - 港币现金：**{int(hkd_cash):,} HKD**（约 **{hkd_cny_val:.2f}万 CNY**）")
     lines.append(f"  - 人民币现金：**{portfolio['cash_cny'] / 10000:.2f}万 CNY**")
     lines.append(f"  - 美元现金：**{int(portfolio['cash_usd'])}**")
-    lines.append(f"- **现金建议区间**：5-10% {'✅ 合理区间' if 5 <= calc['cash_pct'] <= 10 else '⚠️ 需调整'}\n")
+    lines.append(f"- **现金建议区间**：{constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% {'✅ 合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️ 需调整'}\n")
 
     # 表头
     lines.append("| 标的 | 代码 | 市场 | 板块 | 股数 | 价格 | 币种 | 市值(万CNY) | 仓位 | PE | 52w位 | 核心风险 | 备注 |")
@@ -367,7 +398,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict) -> str:
     lines.append(
         f"| 现金 | — | — | — | — | — | CNY | "
         f"**{calc['cash_value']}** | {cash_pct_str} | — | — | — | "
-        f"{'✅5-10%合理区间' if 5 <= calc['cash_pct'] <= 10 else '⚠️需调整'} |"
+        f"{'✅' + format(constraints['cash_target_low'], '.0f') + '-' + format(constraints['cash_target_high'], '.0f') + '%合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️需调整'} |"
     )
 
     return "\n".join(lines)
@@ -419,7 +450,8 @@ def main():
     # 4. 输出 / 写回
     if args.write:
         # 生成内容并写回 PORTFOLIO.md
-        md_content = generate_portfolio_md(calc, portfolio)
+        constraints = load_constraints()
+        md_content = generate_portfolio_md(calc, portfolio, constraints)
         original = portfolio_path.read_text(encoding="utf-8")
         
         # 替换「当前持仓」section
@@ -444,11 +476,11 @@ def main():
         if disc_start != -1 and disc_end != -1:
             disc_lines = ["## 纪律检查\n"]
             max_pos = max(calc["holdings"], key=lambda x: x["position_pct"])
-            disc_lines.append(f"- 单只上限 `<= 40%`：{max_pos['name']} {max_pos['position_pct']}% {'✅' if max_pos['position_pct'] <= 40 else '❌超限'}")
-            disc_lines.append(f"- 现金 `>= 2%`：**当前 {calc['cash_pct']}%，{'5-10%合理区间' if 5 <= calc['cash_pct'] <= 10 else '⚠️需调整'}** {'✅' if calc['cash_pct'] >= 2 else '❌不足'}")
-            disc_lines.append("- 行业集中度 `<= 55%`：")
+            disc_lines.append(f"- 单只上限 `<= {constraints['max_single_pct']:.0f}%`：{max_pos['name']} {max_pos['position_pct']}% {'✅' if max_pos['position_pct'] <= constraints['max_single_pct'] else '❌超限'}")
+            disc_lines.append(f"- 现金 `>= {constraints['min_cash_pct']:.0f}%`：**当前 {calc['cash_pct']}%，{'%s-%s%%合理区间' % (constraints['cash_target_low'], constraints['cash_target_high']) if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️需调整'}** {'✅' if calc['cash_pct'] >= constraints['min_cash_pct'] else '❌不足'}")
+            disc_lines.append(f"- 行业集中度 `<= {constraints['max_sector_pct']:.0f}%`：")
             for sector_name, pct in calc["sectors"].items():
-                disc_lines.append(f"  - {sector_name}：**{pct}%** {'✅' if pct <= 55 else '❌超限'}")
+                disc_lines.append(f"  - {sector_name}：**{pct}%** {'✅' if pct <= constraints['max_sector_pct'] else '❌超限'}")
             updated = updated[:disc_start] + "\n".join(disc_lines) + "\n" + updated[disc_end:]
         
         # 替换「数据缺口说明」
@@ -485,7 +517,8 @@ def main():
     if args.json:
         print(json.dumps(calc, ensure_ascii=False, indent=2))
     else:
-        md_content = generate_portfolio_md(calc, portfolio)
+        constraints = load_constraints()
+        md_content = generate_portfolio_md(calc, portfolio, constraints)
         print(md_content)
 
         # 行业集中度
@@ -496,10 +529,10 @@ def main():
         # 纪律检查
         print("\n## 纪律检查")
         max_pos = max(calc["holdings"], key=lambda x: x["position_pct"])
-        print(f"- 单只上限 <=40%：{max_pos['name']} {max_pos['position_pct']}% {'✅' if max_pos['position_pct'] <= 40 else '⚠️超限'}")
-        print(f"- 现金 >=2%：{calc['cash_pct']}% {'✅' if calc['cash_pct'] >= 2 else '⚠️不足'}")
+        print(f"- 单只上限 <={constraints['max_single_pct']:.0f}%：{max_pos['name']} {max_pos['position_pct']}% {'✅' if max_pos['position_pct'] <= constraints['max_single_pct'] else '⚠️超限'}")
+        print(f"- 现金 >={constraints['min_cash_pct']:.0f}%：{calc['cash_pct']}% {'✅' if calc['cash_pct'] >= constraints['min_cash_pct'] else '⚠️不足'}")
         for sector_name, pct in calc["sectors"].items():
-            print(f"- {sector_name} <=55%：{pct}% {'✅' if pct <= 55 else '⚠️超限'}")
+            print(f"- {sector_name} <={constraints['max_sector_pct']:.0f}%：{pct}% {'✅' if pct <= constraints['max_sector_pct'] else '⚠️超限'}")
 
 
 if __name__ == "__main__":
