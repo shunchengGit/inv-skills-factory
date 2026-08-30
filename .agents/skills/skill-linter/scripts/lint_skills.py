@@ -309,16 +309,23 @@ def check_claude_md(skills: dict[str, Path]) -> None:
 # ── 6. SKILL.md 行数 ─────────────────────────────────────────────────────
 
 def check_skill_length(skills: dict[str, Path]) -> None:
-    print("\n── 6. SKILL.md 行数 ──")
+    print("\n── 6. SKILL.md 内容行数 ──")
 
     for name, skill_dir in sorted(skills.items()):
-        lines = len((skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines())
-        if lines > 300:
-            warn(f"{name}: {lines} 行（严重超标，建议 <200）")
-        elif lines > 200:
-            warn(f"{name}: {lines} 行（略超 200 行建议值）")
+        lines = (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines()
+        content_lines = sum(bool(line.strip()) for line in lines)
+        if content_lines > 300:
+            warn(
+                f"{name}: {content_lines} 内容行/{len(lines)} 总行"
+                "（严重超标，建议 <200 内容行）"
+            )
+        elif content_lines > 200:
+            warn(
+                f"{name}: {content_lines} 内容行/{len(lines)} 总行"
+                "（略超 200 内容行建议值）"
+            )
 
-    ok("行数检查完成")
+    ok("内容行数检查完成")
 
 # ── 7. 脚本可执行性验证 ──────────────────────────────────────────────────
 

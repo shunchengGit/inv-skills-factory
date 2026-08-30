@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.10"
+# dependencies = ["requests>=2.28.0"]
+# ///
 """
 QQ Finance 持仓更新脚本
 读取 PORTFOLIO.md，通过 QQ Finance API 获取实时行情，计算并输出更新后的持仓数据。
