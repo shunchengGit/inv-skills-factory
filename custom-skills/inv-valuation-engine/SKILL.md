@@ -32,9 +32,9 @@ commands:
 3. 用户要直接结论：优先运行 `scripts/valuation_report.py`。
 4. 用户要比较几家公司谁更便宜/更贵：优先运行 `scripts/valuation_compare.py`。
 5. 若脚本超时或字段缺失，按 `inv-stock-data` 的数据层策略降级，先检查 `data_gaps`，必要时再用 `financials` + `valuation_manual_compute.py` 补全。
-6. 定量判断只按 `references/scoring-rules.md` 执行，定性解释再用 `references/master-frameworks.md`。
+6. 定量判断按 `references/scoring-rules.md` 的人类说明执行；脚本阈值以 `scripts/scoring_rules.json` 为机器来源，两者必须同步。定性解释再用 `references/master-frameworks.md`。
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点。
-8. **查阅知识库**（`inv-knowledge-curator`）：估值分析默认最低 L2，按 `inv-knowledge-curator/references/deep-mining-protocol.md` 执行。保留本技能特有约束：Reference 类条目优先作为数据锚点；条目摘要不足时，可用 `km_import read --file <res/...pdf> --pages edges` 回溯原始 PDF。定量结论仍以 `scoring-rules.md` 为准。
+8. **查阅知识库**（`inv-knowledge-curator`）：估值分析默认最低 L2，按 `inv-knowledge-curator/references/deep-mining-protocol.md` 执行。保留本技能特有约束：Reference 类条目优先作为数据锚点；条目摘要不足时，可用 `km_import read --file <res/...pdf> --pages edges` 回溯原始 PDF。定量结论仍按 `scoring-rules.md` 的说明判断。
 
 ## 数据源说明（新增）
 - 所有数据统一通过 `inv-stock-data` CLI 获取，不直接调用 yfinance/AkShare。
@@ -69,7 +69,7 @@ commands:
 3. 尽可能使用最新数据：优先采用最近交易日价格、最新财报、最近十二个月（TTM）指标、最新一致预期和最新可得行业数据。
 4. 若无法拿到最新数据，必须明确说明缺失项、数据日期、无法更新的原因，以及这会如何影响估值结论的置信度。
 5. 若不同指标的数据时点不一致，必须明确标注各自日期，并优先采用最近一期且口径一致的数据。
-6. 定量阈值以 `references/scoring-rules.md` 为唯一标准来源，主文件不重复定义冲突阈值。
+6. `scripts/scoring_rules.json` 是脚本阈值的唯一机器可读来源，`references/scoring-rules.md` 是同步维护的人类说明；主文件不重复定义冲突阈值。
 7. 定性框架用于解释和修正结论置信度，不覆盖明显失真的定量结论。
 8. 缺少数据时可使用内置手动计算脚本 `{baseDir}/scripts/valuation_manual_compute.py`，从 inv-stock-data `financials` + 知识库已有数据补全核心指标。
 9. 所有结论都要写明核心假设、风险条件和适用边界，不把估值结论表达成确定性预测。

@@ -43,7 +43,7 @@ commands:
 
 ## 一、估值框架（五档结论）
 
-估值定量框架（公司类型识别、定量阈值、结论生成规则）以 `inv-valuation-engine/references/scoring-rules.md` 为权威标准，本技能只补充 QARP 特有的约束。
+估值定量框架（公司类型识别、定量阈值、结论生成规则）采用 `inv-valuation-engine/references/scoring-rules.md` 的人类说明；脚本执行阈值以该技能的 `scripts/scoring_rules.json` 为机器来源，两者必须同步。本技能只补充 QARP 特有的约束。
 
 ### 1.1 QARP 安全边际要求
 
@@ -196,7 +196,7 @@ commands:
 
 ## 参考文件
 
-- `inv-valuation-engine/references/scoring-rules.md`：定量阈值、行业口径、五档结论映射（权威标准）
+- `inv-valuation-engine/references/scoring-rules.md`：定量阈值、行业口径、五档结论映射的人类说明（与 `scripts/scoring_rules.json` 同步）
 - `inv-valuation-engine/references/master-frameworks.md`：大师框架的适用范围、判断逻辑和注意事项
 - `inv-valuation-engine/references/internet-platform-valuation.md`：互联网平台公司 GAAP 净利润失真、Normalized 利润计算、SOTP 分部估值
 - `inv-valuation-engine/references/us-hk-data-workaround.md`：美股/港股 data_gaps 手动补全流程

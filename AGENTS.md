@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 ## 仓库定位
 
@@ -13,26 +13,42 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 修改任何业务技能（`SKILL.md`、脚本或 references）后运行仓库级 linter：
 
 ```bash
-python3 .Codex/skills/skill-linter/scripts/lint_skills.py
+python3 .agents/skills/skill-linter/scripts/lint_skills.py
 ```
 
 linter 检查 frontmatter、目录命名、文档长度、引用深度、路径、软链接兼容性以及已部署入口脚本的 `--help`；它不是业务测试套件。入口运行检查依赖 `~/.hermes/skills/inv-skills/` 中已有部署，未部署时会跳过部分检查。
 
-目前唯一的自动化单元测试位于 `inv-knowledge-curator`，使用标准库 `unittest`。其 `requirements.txt` 未包含源码实际需要的 PyYAML，因此测试命令需显式补齐依赖：
+确定性单元测试使用标准库 `unittest`，分布在以下技能：
+
+- `inv-knowledge-curator`
+- `inv-stock-data`
+- `inv-valuation-engine`
+- `inv-porter-five-forces`
+- `inv-portfolio-tracker`
+
+仓库没有统一测试环境；测试会直接导入各技能脚本。运行全部测试时显式补齐当前所需依赖（尤其是 curator 源码使用但 `requirements.txt` 未声明的 PyYAML）：
 
 ```bash
-# 运行该技能的全部测试
-uv run --with pyyaml --with pymupdf --with requests \
-  python -m unittest discover \
-  -s custom-skills/inv-knowledge-curator/tests -v
-
-# 运行一个测试方法
-uv run --with pyyaml --with pymupdf --with requests \
-  python custom-skills/inv-knowledge-curator/tests/test_high_priority.py \
-  TempKnowledgeTest.test_frontmatter_special_characters_round_trip -v
+for skill in \
+  inv-knowledge-curator \
+  inv-stock-data \
+  inv-valuation-engine \
+  inv-porter-five-forces \
+  inv-portfolio-tracker
+do
+  uv run --with pyyaml --with pymupdf --with requests --with pandas \
+    python -m unittest discover -s "custom-skills/$skill/tests" -v || exit 1
+done
 ```
 
-其他技能没有统一测试入口。验证具体脚本时先阅读对应 `SKILL.md`，再用 `uv run` 执行；例如：
+运行单个测试模块时按其导入补充依赖，例如：
+
+```bash
+uv run --with pandas \
+  python custom-skills/inv-stock-data/tests/test_data_contract.py -v
+```
+
+没有测试目录的技能不代表无需验证。验证具体脚本时先阅读对应 `SKILL.md`，再用 `uv run` 执行；例如：
 
 ```bash
 uv run custom-skills/inv-stock-data/scripts/cs_stock_info.py snapshot 600519 --output json
@@ -43,7 +59,7 @@ uv run custom-skills/inv-valuation-engine/scripts/valuation_snapshot.py AAPL --o
 
 ## 部署
 
-部署目标由 `.Codex/skills/skill-deployer/scripts/deploy.json` 定义，目前为 Hermes 与 WorkBuddy。部署前须在 `.env` 显式设置部署子目录；脚本没有代码层默认值：
+部署目标由 `.agents/skills/skill-deployer/scripts/deploy.json` 定义，目前为 Hermes 与 WorkBuddy。部署前须在 `.env` 显式设置部署子目录；脚本没有代码层默认值：
 
 ```dotenv
 DEPLOY_SKILLS_DIR=inv-skills
@@ -51,11 +67,11 @@ DEPLOY_SKILLS_DIR=inv-skills
 
 ```bash
 # 仅显示目标，不修改部署目录
-python3 .Codex/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
+python3 .agents/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 
 # 部署一个或全部目标
-python3 .Codex/skills/skill-deployer/scripts/sync.py --agent hermes
-python3 .Codex/skills/skill-deployer/scripts/sync.py --agent all
+python3 .agents/skills/skill-deployer/scripts/sync.py --agent hermes
+python3 .agents/skills/skill-deployer/scripts/sync.py --agent all
 ```
 
 修改既有技能内容后通常无需重新部署，只需 lint。首次部署、新增/删除技能、修复链接或变更目标配置后才需 sync。sync 会增删目标目录中的链接；`--force` 还可能替换非空真实目录，使用前先检查目标。即使是 `--list`，缺少 `DEPLOY_SKILLS_DIR` 时也会交互询问并写入 `.env`。
@@ -65,9 +81,10 @@ python3 .Codex/skills/skill-deployer/scripts/sync.py --agent all
 ### 源码、共享层与 harness
 
 - `custom-skills/<skill-name>/`：可部署的业务技能，保持扁平一级结构；目录必须包含 `SKILL.md`。
-- `custom-skills/_shared/`：跨技能复用的 dotenv、代理、git 等基础工具，不放投资业务逻辑。
-- `.Codex/skills/` 与 `.Codex/commands/`：维护本仓库的 harness 能力，不作为业务技能部署。
-- `openspec/`：变更规格与记录。`openspec/config.yaml` 中仍有旧的分类目录、`_meta.json` 和已删除技能描述；当前目录结构以实际文件系统和 deployer 的扫描逻辑为准。
+- `custom-skills/_shared/`：跨技能复用的 dotenv、代理、git、数值解析等基础工具，不放投资业务逻辑。
+- `.agents/skills/`：coding agent harness 能力的镜像，不作为业务技能部署。
+- `.claude/skills/` 与 `.claude/commands/`：Claude Code harness 能力，不作为业务技能部署。
+- `openspec/`：变更规格、当前能力规格与归档记录；项目上下文以 `openspec/config.yaml` 为准。
 
 新增技能目录名使用 `{前缀}-{语义名}` 的 kebab-case 格式，例如 `inv-example`。脚本经软链接执行，因此凡由 `__file__` 推导路径的代码必须先使用 `Path(__file__).resolve()`（或等价的 `abspath`）。
 
@@ -93,7 +110,7 @@ inv-topic-researcher（信息采集框架）
 关键边界：
 
 - `inv-stock-data` 是行情和财务数据的统一入口。上层投资技能不得绕过它直接新增 AkShare / yfinance 调用。
-- `inv-valuation-engine/references/scoring-rules.md` 是估值阈值的权威来源；QARP 调用估值引擎，不复制评分规则。
+- `inv-valuation-engine/scripts/scoring_rules.json` 是估值阈值与映射的唯一机器可读来源，`scoring_rules.py` 只负责加载；修改规则时必须同步更新面向人的 `references/scoring-rules.md`。QARP 调用估值引擎，不复制评分规则。
 - `inv-portfolio-tracker` 持有组合流程和持仓主数据，但价格仍来自 `inv-stock-data`。
 - `inv-hk-ipo-analysis` 是相对独立的港股 IPO 分析流程，不进入上述个股估值链。
 
@@ -109,7 +126,7 @@ inv-topic-researcher（信息采集框架）
 
 ### 数据源与代理边界
 
-美股/港股的 Yahoo 请求需要代理；A 股/ETF 请求应清除代理。不要在同一批处理混用两类市场。连续 Yahoo 请求需限流，优先使用技能提供的合并命令；脚本返回的 `notes` 和 `error` 是数据质量契约，不能忽略或以猜测补齐缺失值。具体规则以 `custom-skills/inv-stock-data/SKILL.md` 为准。
+美股/港股的 Yahoo 请求需要代理；A 股/ETF 请求应清除代理。不要在同一批处理混用两类市场。连续 Yahoo 请求需限流，优先使用技能提供的合并命令；脚本返回的 `status`、`gaps`、`notes` 和 `error` 是数据质量契约，不能忽略或以猜测补齐缺失值。具体规则以 `custom-skills/inv-stock-data/SKILL.md` 为准。
 
 ## 环境变量
 
@@ -119,4 +136,4 @@ inv-topic-researcher（信息采集框架）
 | `INV_KNOWLEDGE_ROOT` | 外部知识库本地目录 | 默认 `~/.inv-knowledge` |
 | `DEPLOY_SKILLS_DIR` | Agent 技能部署子目录 | 须显式配置，通常为 `inv-skills` |
 
-研报已合并到知识库的 `res/`；`INV_REPORT_REPO_URL` 与 `RESEARCH_PDF_ROOT` 是废弃变量。`.env.example` 仍残留这两个旧变量，不应据此恢复双仓库模型。
+研报已合并到知识库的 `res/`；不要恢复已废弃的 `INV_REPORT_REPO_URL`、`RESEARCH_PDF_ROOT` 或双仓库模型。

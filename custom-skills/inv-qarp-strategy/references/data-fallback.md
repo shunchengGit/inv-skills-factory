@@ -13,7 +13,7 @@
 3. 用户要比较几家公司：优先运行 `{valuationDir}/scripts/valuation_compare.py`
 4. **脚本超时降级**：若 `uv run` 因依赖下载超时，降级为 inv-stock-data `financials` 子命令获取财务三表数据，再按估值框架手动计算。不得因脚本超时而放弃数据获取
 5. 脚本返回后，先检查 `data_gaps`，明确缺口和置信度影响
-6. 定量判断按 `inv-valuation-engine` 的 `references/scoring-rules.md` 执行，定性解释再用 `inv-valuation-engine` 的 `references/master-frameworks.md`
+6. 定量判断按 `inv-valuation-engine` 的 `references/scoring-rules.md` 人类说明执行；脚本阈值以该技能的 `scripts/scoring_rules.json` 为机器来源，两者必须同步。定性解释再用 `references/master-frameworks.md`
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点
 
 ## 美股/港股 data_gaps 降级

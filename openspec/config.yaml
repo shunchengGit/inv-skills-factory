@@ -2,41 +2,52 @@ schema: spec-driven
 
 context: |
   ## 项目概述
-  这是一个 Skills 管理和开发仓库，通过软链接将技能和 hooks 按场景部署到各 Agent 目录。
+  这是一个投资 Skills 的源码与部署仓库。`custom-skills/` 是业务技能的事实来源；
+  部署器将技能目录软链接到 Hermes / WorkBuddy，仓库本身不是单体应用。
 
-  ## 命名规范
-  技能目录名格式：`{分类前缀}-{语义名}`
-  - base → `base-`
-  - general → `gen-`
-  - invest → `inv-`
+  ## 目录与元数据
+  - 可部署技能位于 `custom-skills/<skill-name>/`，保持扁平一级结构。
+  - 每个技能必须包含 `SKILL.md`；name、version、description、dependencies 等元数据统一写在 YAML frontmatter。
+  - `custom-skills/_shared/` 只存放跨技能基础工具，不是可部署技能，也不承载投资业务规则。
+  - `.claude/skills/`、`.claude/commands/` 与 `.agents/skills/` 属于仓库 harness，不随业务技能部署。
+  - 新技能目录使用 `{前缀}-{语义名}` 的 kebab-case，例如 `inv-example`；Python 脚本使用 snake_case。
+  - 技能经软链接执行，凡由 `__file__` 推导路径的代码必须先 resolve/abspath。
 
-  ## 技能结构
-  每个 skill 位于 `custom-skills/<category>/<name>/`，包含：
-  - `SKILL.md` — 技能定义文件（YAML frontmatter + Markdown 指令）
-  - `_meta.json` — 元数据（name/version/description/commands/scripts/references/dependencies/derivedFrom）
-  - `scripts/` — Python 数据脚本
-  - `references/` — 参考文档
+  ## 运行与验证
+  - 仓库没有根级 pyproject、锁文件、统一 build 或 `uv sync` 流程。
+  - 可执行脚本优先使用 PEP 723 内联依赖，通过 `uv run` 启动。
+  - 修改业务技能后运行 `python3 .claude/skills/skill-linter/scripts/lint_skills.py`。
+  - unittest 分布在 inv-knowledge-curator、inv-stock-data、inv-valuation-engine、
+    inv-porter-five-forces 与 inv-portfolio-tracker；按测试导入显式补齐依赖。
 
-  ## 技术栈
-  - Python 3.10+
-  - 数据源：akshare（A股）、yfinance（美港股）、pymupdf（PDF 提取）、playwright（浏览器抓取）
-  - 包管理：uv (venv + pip)
-  - 行情数据管道：inv-stock-data（统一入口）→ inv-valuation-engine（估值引擎）→ inv-qarp-strategy（操作决策）
+  ## 投资技能边界
+  - inv-stock-data：A 股 / ETF / 港股 / 美股行情与财务数据的唯一入口。
+  - inv-valuation-engine：估值计算与评分；`scripts/scoring_rules.json` 是规则的唯一机器可读来源，
+    `references/scoring-rules.md` 是同步维护的人类说明。
+  - inv-qarp-strategy：依赖 inv-stock-data 与 inv-valuation-engine 形成操作决策，不复制估值阈值。
+  - inv-porter-five-forces：依赖 inv-stock-data 获取结构化事实。
+  - inv-portfolio-tracker：持有组合流程和持仓主数据，价格来自 inv-stock-data；可使用 inv-topic-researcher。
+  - inv-topic-researcher：多源信息采集框架。
+  - inv-hk-ipo-analysis：相对独立的港股 IPO 分析流程。
 
-  ## 依赖关系
-  - `inv-stock-data` — 数据层，所有投资技能的底层依赖
-  - `inv-valuation-engine` — 估值引擎，依赖 inv-stock-data
-  - `inv-qarp-strategy` — 操作决策层，依赖 inv-stock-data + inv-valuation-engine
-  - `inv-porter-five-forces` — 五力分析，依赖 inv-stock-data
-  - `inv-research-analyzer` — 研报分析（独立脚本）
+  ## 知识库边界
+  inv-knowledge-curator 是外部知识库（默认 `~/.inv-knowledge`）的唯一写入者。
+  其他技能只允许通过 `/km_search` 检索，或通过 `km_import read` 只读回溯 res/ 中的 PDF；
+  不得调用 `km_import store`、`km_import res`、`km_lint --fix` 等写库操作。
+  研报已归入知识库 res/，不要恢复独立研报仓库或废弃环境变量。
 
-  ## 命名约定
-  - Skill 目录名：`{前缀}-{语义名}` kebab-case
-  - 脚本文件：snake_case.py
+  ## 数据与代理
+  美股/港股 Yahoo 请求需要代理；A 股/ETF 请求应清除代理，不在同一批处理混用两类市场。
+  上层技能不得新增绕过 inv-stock-data 的 AkShare / yfinance 调用。
+  `status`、`gaps`、`notes`、`error` 属于数据质量契约，缺失数据不得猜测补齐。
 
 rules:
   proposal:
     - 用中文写
-    - 涉及 skill 依赖变更时标注影响的 skill
+    - 涉及技能依赖或分层边界变更时，明确列出受影响技能
+    - 涉及估值规则变更时，同时说明 scoring_rules.json 与 scoring-rules.md 的同步要求
+    - 涉及知识库写入时，验证是否仍由 inv-knowledge-curator 独占写入边界
   tasks:
-    - 每个 task 控制在可一次完成的范围
+    - 每个 task 控制在可一次完成并验证的范围
+    - 业务技能修改必须包含仓库级 linter 验证
+    - 有对应 unittest 的技能必须包含确定性测试
