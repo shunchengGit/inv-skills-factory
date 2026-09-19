@@ -231,6 +231,7 @@ L2/L3 结束按检查清单自查，覆盖不足时按 4.5 知识缺口格式输
 - **批量导入避免** `--content-file`（完整 OKF 文件会形成双重 frontmatter）；单条正文可用 stdin。优先 write_file 避免 shell `$` 转义
 - **subagent 硬规则**：每条 25-50 行 MAX，禁止倾倒 PDF 原文
 - 批量后立即跑垃圾清理 grep（PDF 免责声明标题 / >200 行 / 无 frontmatter 幽灵条目）
+- `store` CLI 参数详解、按 PDF 数量选策略、多附件对账口径，以及报告去重／招股书取得／财报补库等 8 份专题参考的索引，均在 `references/batch-import.md`
 
 ---
 

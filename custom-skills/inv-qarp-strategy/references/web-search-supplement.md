@@ -29,6 +29,8 @@
 
 **硬规则**：对中国 `.sina.com.cn` / `.eastmoney.com` / `.qq.com` / `.thepaper.cn` / `.xueqiu.com` / `miit.gov.cn` 等域名，**永远不要用 web_extract**，直接用 browser_navigate。浪费时间去重试是无效的。
 
+**检索词防歧义**：港美股中概公司的中文名常与通用词/官网域名撞车（"阿里巴巴"命中 alibaba.com 批发站首页，"东方电气"被分词拆散），中文直搜会返回一批无效首页链接。查询一律带代码或交易所后缀（如 `"BABA" 9988.HK 财报`、`"Dongfang Electric" 600875`）；若知识库已有该标的近期条目，优先用库内证据替代泛搜索。
+
 ## 搜索补充流程
 
 1. `web_search` 搜 2-3 个方向（行业数据、政策风险、公司动态）

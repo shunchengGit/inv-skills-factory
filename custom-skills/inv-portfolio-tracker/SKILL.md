@@ -50,8 +50,12 @@ trigger:
 当用户要求"输出持仓""查看持仓""我的持仓"时，**必须**通过脚本确定性渲染，禁止手工组织表格：
 
 ```bash
-python3 {baseDir}/scripts/qq_update_portfolio.py --report
+cd /tmp && uv run --with requests python {baseDir}/scripts/qq_update_portfolio.py --report
 ```
+
+注意：系统 python3 未安装 requests，直接 `python3 脚本` 会以 exit 1 退出并向 stderr 打印
+"需要安装 requests"。始终用 `uv run --with requests python ...`（先 cd 到无 pyproject 的目录，
+如 /tmp，避免 uv 误加载仓库项目环境）。
 
 **【重要原则：严格引用实时数据，绝不输出陈旧快照】**
 运行脚本后即得到最新行情与总资产/现金数字。严禁复用前序会话/历史分析中的旧时间戳或旧资产数字。
@@ -114,9 +118,9 @@ python3 {baseDir}/scripts/qq_update_portfolio.py --report
 当用户说"更新持仓/行情"且无调仓时，直接运行内置脚本：
 
 ```bash
-python3 {baseDir}/scripts/qq_update_portfolio.py --write
+cd /tmp && uv run --with requests python {baseDir}/scripts/qq_update_portfolio.py --write
 # 需要向用户展示时改用锁定格式报告：
-python3 {baseDir}/scripts/qq_update_portfolio.py --report
+cd /tmp && uv run --with requests python {baseDir}/scripts/qq_update_portfolio.py --report
 ```
 
 纯 QQ Finance 方案，~0.4秒完成，覆盖 A股/港股/美股/ETF。脚本自动完成：拉取行情 → 计算市值/仓位/行业集中度 → 更新 PORTFOLIO.md 的「当前持仓」「纪律检查」「数据缺口说明」三个 section。

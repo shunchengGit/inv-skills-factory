@@ -68,6 +68,24 @@ Yahoo snapshot may return `trailingPE=0`, `fiftyTwoWeekHigh=0`, `fiftyTwoWeekLow
 When Yahoo triggers `YFRateLimitError` even for single snapshot calls, switch to QQ Finance batch query:
 `http://qt.gtimg.cn/q=sh600660,sh588000,sh513010,hk00700,hk07709,usMSFT,usTSM`
 
+## 脚本缺 requests 依赖
+
+`qq_update_portfolio.py` 直接用 `python3` 跑会报 `需要安装 requests`。改用 `uv run --with requests scripts/qq_update_portfolio.py --write`，无需预装环境。
+
 ## read_file 行号前缀导致 patch 失败
 
 `hermes_tools.read_file` 返回的内容可能带有行号前缀，直接用 `patch` 工具匹配会失败。Workaround: 使用 Python 原生 `open()` 读写文件。
+
+## 定时任务（T1-T4）在大目录下运行的避坑规则
+
+**症状**：定时任务（如 T1 持仓晨报、T2 日常回顾）未限定工作目录和绝对路径时，可能默认在 `~` 下运行，并触发大批量 `search_files` 去寻找 `cs_stock_info.py`、`PORTFOLIO.md` 等文件，引发 macOS `Operation not permitted`，最终因重试过多在 Turn 上限内未完成而报错。
+
+**规则**：
+
+1. **绝对路径与确定性动作**：定时任务的 prompt 与技能中**严禁用模糊 `search_files` 做大目录遍历**。一律以绝对路径指明文件读写（如 `read_file` 目标 `~/.hermes/memories/PORTFOLIO.md`）或绝对路径执行脚本。
+2. **起手直接执行脚本**：T1 晨报直接调用绝对路径脚本一键更新，不要串行拉各标的快照再手动解析拼装：
+   ```bash
+   python3 ~/.hermes/skills/inv-skills/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
+   ```
+3. **定向探测而非全目录检索**：T2 每日回顾检测当天有无新会话时，直接 `read_file` 探测 `~/.hermes/memories/YYYY-MM-DD.md`，或用脚本计算当日会话情况；若无则立即走安静日极速返回。
+4. **绑定模型**：定时任务显式锁定稳定推理模型，避免轮询到弱模型时代码能力退化。

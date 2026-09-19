@@ -122,7 +122,7 @@ ps_ratio = 市值 / 年化收入
 
 ## 常见陷阱
 
-详见 `references/common-pitfalls.md`（21 条踩坑记录，含数据源降级、DR/HDR特殊框架、A+H孖展误判等）。
+详见 `references/common-pitfalls.md`（23 条踩坑记录，含数据源降级、DR/HDR特殊框架、A+H孖展误判、A股泡沫时的AH折价陷阱等）。
 
 ## 参考文件
 
@@ -133,4 +133,6 @@ ps_ratio = 市值 / 年化收入
 | `references/hk-ipo-data-sources.md` | 港股IPO抓取数据源清单：一/二/三级源、已知403/Cloudflare拦截清单、降级路径、多源交叉验证规则 |
 | `references/hk-ipo-batch-comparison.md` | 多只新股横向对比工作流：每只标的5步标准化、上市日错位、7维度评分卡、迭代追加时的重排规则 |
 | `references/hk-dr-second-listing-analysis.md` | DR/HDR第二上市专用框架：母股折让计算、旧股转让陷阱、流动性结构、MSCI重分类风险 |
-| `references/hk-a-plus-h-listing-analysis.md` | A+H双重上市专用框架：AH折价计算公式、孖展冷淡反向解读、A股股东摊薄、短打+长持策略分层 |
+| `references/hk-a-plus-h-listing-analysis.md` | A+H双重上市专用框架：AH折价计算公式、A股PE分位打分表与泡沫陷阱、孖展冷淡反向解读、A股股东摊薄、短打+长持策略分层 |
+| `references/case-study-9630-cfmee.md` | 芯碁微装 9630 全量数据：A股PE 188x/YTD+273% 的泡沫型A+H案例，AH折价55%属虚假安全垫 |
+| `references/case-study-3661-sg-micro.md` | 圣邦微 3661 全量数据：PE 139x 但3年分位仅54.6% 的非泡沫反例，用于校准「绝对PE高≠泡沫」 |

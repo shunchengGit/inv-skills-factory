@@ -10,6 +10,9 @@ trigger:
   - PB
   - 估值对比
   - valuation
+  - 周期股估值
+  - 峰值盈利
+  - 超级周期
 commands:
   - /valuation - 价值估值判断（先抓数据再结论）
   - /valuation_data - 仅抓取估值数据快照
@@ -146,6 +149,12 @@ commands:
 
 运行脚本后**必做检查清单**见 `references/valuation-traps.md` 末尾（5 项）。
 
+## 极端周期股（峰值盈利）
+
+对存储/面板/航运/化工/锂/钢铁等商品化制造标的，**在跑五档结论之前**先套用 `references/cyclical-peak-valuation.md`。触发信号：forward PE 掉到 2-5x 而 trailing PE 仍有 20-30x、现货价同比 +200%、卖方模型 2 年内营收增长 3 倍、当期 OPM 处历史最高——命中任意 2 条即适用。
+
+核心规则：周期顶部的低 PE 是分母失真而非安全边际；**PE 历史分位对周期股无判别力**，改用「峰值净利 × 30~40% × 中周期 PE 8~10x」的正常化盈利估值，安全边际要求 ≥50%。
+
 ## 输出模板
 
 详见 `references/output-template.md`。
@@ -180,3 +189,5 @@ commands:
 - `references/valuation-traps.md`：常见陷阱（数据层/估值层/脚本输出），含运行后必做检查清单
 - `references/report-formatting-guide.md`：公众号/可发表格式报告输出规范
 - `references/cdmo-industry-valuation.md`：CDMO/CRDMO 行业 QARP 估值指南——管线驱动收入、FCF 随产能周期波动、CapEx 质量判断、可比公司数据获取限制
+- `references/cyclical-peak-valuation.md`：极端周期股峰值盈利估值纪律——峰值三检验、正常化盈利估值替代 PE 分位、修正方向一阶导、反方覆盖强制要求、杠杆工具禁用
+- `references/sk-hynix-2026-memory-supercycle.md`：存储超级周期完整实战案例（数据、时间线、正常化测算、触发条件），可作为周期股纪律的填充模板
