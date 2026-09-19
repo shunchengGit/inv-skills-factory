@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to coding agents (Claude Code / Codex) working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 ## 仓库定位
 
@@ -83,7 +83,6 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
 - `custom-skills/<skill-name>/`：可部署的业务技能，保持扁平一级结构；目录必须包含 `SKILL.md`。
 - `custom-skills/_shared/`：跨技能复用的 dotenv、代理、git、数值解析等基础工具，不放投资业务逻辑。
 - `.claude/skills/` 与 `.claude/commands/`：Claude Code harness 能力，不作为业务技能部署。
-- `.agents/skills/`：Codex harness 能力（含 `source-command-opsx-*` 专属技能），不作为业务技能部署。本文档命令中的 harness 前缀以 `.claude/` 为例，Codex 将 `.claude/` 换成 `.agents/` 即可。
 - `openspec/`：变更规格、当前能力规格与归档记录；项目上下文以 `openspec/config.yaml` 为准。
 
 新增技能目录名使用 `{前缀}-{语义名}` 的 kebab-case 格式，例如 `inv-example`。脚本经软链接执行，因此凡由 `__file__` 推导路径的代码必须先使用 `Path(__file__).resolve()`（或等价的 `abspath`）。

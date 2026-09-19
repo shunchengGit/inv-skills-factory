@@ -22,7 +22,7 @@ ROOT = _find_repo_root()
 SKILLS_DIR = ROOT / "custom-skills"
 HERMES_SKILLS = Path.home() / ".hermes" / "skills" / "inv-skills"
 DEPLOY_JSON = ROOT / ".claude" / "skills" / "skill-deployer" / "scripts" / "deploy.json"
-CLAUDE_MD = ROOT / "CLAUDE.md"
+AGENTS_MD = ROOT / "AGENTS.md"
 
 ERRORS = 0
 WARNINGS = 0
@@ -290,35 +290,42 @@ def check_deploy_json(skills: dict[str, Path]) -> None:
 
     ok("deploy.json 一致性检查完成")
 
-# ── 5. CLAUDE.md 一致性 ──────────────────────────────────────────────────
+# ── 5. AGENTS.md 一致性 ──────────────────────────────────────────────────
 
-def check_claude_md(skills: dict[str, Path]) -> None:
-    print("\n── 5. CLAUDE.md 一致性 ──")
+def check_agents_md(skills: dict[str, Path]) -> None:
+    print("\n── 5. AGENTS.md 一致性 ──")
 
-    if not CLAUDE_MD.exists():
-        err(f"CLAUDE.md 不存在: {CLAUDE_MD}")
+    if not AGENTS_MD.exists():
+        err(f"AGENTS.md 不存在: {AGENTS_MD}")
         return
 
-    claude_text = CLAUDE_MD.read_text(encoding="utf-8")
+    agents_text = AGENTS_MD.read_text(encoding="utf-8")
     for name in sorted(skills.keys()):
-        if name not in claude_text:
-            warn(f"{name}: 未在 CLAUDE.md 中找到")
+        if name not in agents_text:
+            warn(f"{name}: 未在 AGENTS.md 中找到")
 
-    ok("CLAUDE.md 一致性检查完成")
+    ok("AGENTS.md 一致性检查完成")
 
 # ── 6. SKILL.md 行数 ─────────────────────────────────────────────────────
 
 def check_skill_length(skills: dict[str, Path]) -> None:
-    print("\n── 6. SKILL.md 行数 ──")
+    print("\n── 6. SKILL.md 内容行数 ──")
 
     for name, skill_dir in sorted(skills.items()):
-        lines = len((skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines())
-        if lines > 300:
-            warn(f"{name}: {lines} 行（严重超标，建议 <200）")
-        elif lines > 200:
-            warn(f"{name}: {lines} 行（略超 200 行建议值）")
+        lines = (skill_dir / "SKILL.md").read_text(encoding="utf-8").splitlines()
+        content_lines = sum(bool(line.strip()) for line in lines)
+        if content_lines > 300:
+            warn(
+                f"{name}: {content_lines} 内容行/{len(lines)} 总行"
+                "（严重超标，建议 <200 内容行）"
+            )
+        elif content_lines > 200:
+            warn(
+                f"{name}: {content_lines} 内容行/{len(lines)} 总行"
+                "（略超 200 内容行建议值）"
+            )
 
-    ok("行数检查完成")
+    ok("内容行数检查完成")
 
 # ── 7. 脚本可执行性验证 ──────────────────────────────────────────────────
 
@@ -873,7 +880,7 @@ def main() -> int:
     check_naming(skills)
     check_empty_dirs()
     check_deploy_json(skills)
-    check_claude_md(skills)
+    check_agents_md(skills)
     check_skill_length(skills)
     check_scripts(skills)
     check_path_resolution()

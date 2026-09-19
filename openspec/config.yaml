@@ -9,7 +9,7 @@ context: |
   - 可部署技能位于 `custom-skills/<skill-name>/`，保持扁平一级结构。
   - 每个技能必须包含 `SKILL.md`；name、version、description、dependencies 等元数据统一写在 YAML frontmatter。
   - `custom-skills/_shared/` 只存放跨技能基础工具，不是可部署技能，也不承载投资业务规则。
-  - `.claude/skills/`、`.claude/commands/` 与 `.agents/skills/` 属于仓库 harness，不随业务技能部署。
+  - `.claude/skills/` 与 `.claude/commands/` 属于仓库 harness，不随业务技能部署。
   - 新技能目录使用 `{前缀}-{语义名}` 的 kebab-case，例如 `inv-example`；Python 脚本使用 snake_case。
   - 技能经软链接执行，凡由 `__file__` 推导路径的代码必须先 resolve/abspath。
 
