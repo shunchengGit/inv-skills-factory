@@ -104,6 +104,19 @@ inv-knowledge-curator（知识库唯一写入边界）
 
 inv-topic-researcher（信息采集框架）
   └─ inv-portfolio-tracker
+
+inv-opportunity-explorer（新标的发现：日筛 / 周研，cron 驱动）
+  ├─ inv-qarp-strategy
+  ├─ inv-stock-data
+  ├─ inv-valuation-engine
+  └─ inv-knowledge-curator
+
+决策与专题层（挂在 QARP / 估值链之下，不自行取数）
+  ├─ inv-position-addition（加仓决策）
+  ├─ inv-position-reduction（减仓决策）
+  ├─ inv-etf-comparison（主题 ETF 与持仓对比）
+  ├─ inv-technical-analysis（短线量价择时）
+  └─ inv-ai-industry-economics（AI 产业成本曲线与利润池）
 ```
 
 关键边界：
@@ -112,6 +125,10 @@ inv-topic-researcher（信息采集框架）
 - `inv-valuation-engine/scripts/scoring_rules.json` 是估值阈值与映射的唯一机器可读来源，`scoring_rules.py` 只负责加载；修改规则时必须同步更新面向人的 `references/scoring-rules.md`。QARP 调用估值引擎，不复制评分规则。
 - `inv-portfolio-tracker` 持有组合流程和持仓主数据，但价格仍来自 `inv-stock-data`。
 - `inv-hk-ipo-analysis` 是相对独立的港股 IPO 分析流程，不进入上述个股估值链。
+- `inv-position-addition` 与 `inv-position-reduction` 是组合操作决策层，依赖 QARP 闸门与 `PORTFOLIO.md` 现状，不复制估值阈值。
+- `inv-technical-analysis` 仅在用户显式要求短线／趋势／技术分析时适用；该场景下 QARP 估值纪律不适用，两套结论不得混用。
+- `inv-opportunity-explorer` 由 cron 驱动（日筛 + 周研），台账为 `~/.hermes/memories/opportunity-explorer/ledger.sqlite3`，只经 `scripts/ledger.py` 写入，不直接改数据库。
+- 定时任务摘要一律经 cron 投递到微信；技能内不手动调用 message/send。
 
 ### 知识库单写入者模型
 

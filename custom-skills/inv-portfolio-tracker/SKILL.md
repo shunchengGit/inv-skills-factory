@@ -104,14 +104,14 @@ cd /tmp && uv run --with requests python {baseDir}/scripts/qq_update_portfolio.p
 
 | Task | 时间 | Cron | 输出 |
 |------|------|------|--------|
-| T1 持仓晨报 | 工作日 08:30 | `30 8 * * 1-5` | 当日 `YYYY-MM-DD.md` + 飞书 |
-| T2 日常回顾 | 每日 22:30 | `30 22 * * *` | 当日 `YYYY-MM-DD.md` + 飞书 |
-| T3 周中回顾 | 周三 21:00 | `0 21 * * 3` | 当日主记录 + 飞书 |
-| T4 周复盘 | 周日 21:00 | `0 21 * * 0` | `YYYY-MM-DD-weekly-review.md` + 飞书 |
+| T1 持仓晨报 | 工作日 08:30 | `30 8 * * 1-5` | 当日 `YYYY-MM-DD.md` + 微信 |
+| T2 日常回顾 | 每日 22:30 | `30 22 * * *` | 当日 `YYYY-MM-DD.md` + 微信 |
+| T3 周中回顾 | 周三 21:00 | `0 21 * * 3` | 当日主记录 + 微信 |
+| T4 周复盘 | 周日 21:00 | `0 21 * * 0` | `YYYY-MM-DD-weekly-review.md` + 微信 |
 
 - **使用技能**：`inv-stock-data`（snapshot/price/PE）+ `inv-portfolio-tracker`（组合结构与流程）
 - **关键规则**：所有 `inv-stock-data snapshot` 调用必须用 `&` 并行 + `wait`
-- **投递**：经 cron 投递到飞书；不要手动调 message/send
+- **投递**：经 cron 投递到微信；不要手动调 message/send
 
 ## 行情刷新流程（无调仓）
 
