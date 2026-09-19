@@ -41,7 +41,7 @@ def parse_percent(value: object) -> float | None:
         return None
     if isinstance(value, (int, float)):
         v = float(value)
-        return v if v > 1 else round(v * 100, 2)
+        return v if v >= 1 else round(v * 100, 2)
 
     s = str(value).strip().rstrip("%").replace(",", "")
     if not s:

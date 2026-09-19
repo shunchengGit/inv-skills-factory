@@ -106,7 +106,7 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 8. 用户要 **A 股指数日线**：运行 `index-daily <指数代码>`。
 9. 美港股遇 `YFRateLimitError` / `Too Many Requests`：设置 **`HTTPS_PROXY`** 环境变量后再执行。
 10. **命中率**：脚本对 AkShare 与 Yahoo 请求均带**有限次退避重试**；美港股 `snapshot` **先拉日线再拉 info**，并在报价缺失时用日线收盘回填；同花顺财务在「按报告期」失败时会尝试 **「按单季度」**。
-11. 脚本返回的 `notes` / `error` 必须原样关注；缺数据时说明缺口，不要编造。
+11. 脚本返回的 `notes` / `gaps` 必须原样关注；缺数据时说明缺口，不要编造。
 12. **禁止管道执行**：**绝不**使用 `uv run ... --output json | python3 -c "..."` 模式。管道传递的 JSON 可能因截断、换行或转义导致解析错误，且触发安全审批。正确做法：`uv run ... --output json > /tmp/stock_data.json`，再 `python3 -c "import json; d=json.load(open('/tmp/stock_data.json')); ..."`。
 13. **Yahoo 限流**：连续 Yahoo 请求（snapshot + financials + daily）必须间隔 ≥3 秒。脚本内置退避重试，但连续快速调用仍会触发 `YFRateLimitError`。优先用 `cs_stock_all` 合并调用。
 14. **批处理边界**：数据层允许 `cs_stock_all` 合并抓取单标的；组合层批量刷新只允许走受控脚本（如 `qq_update_portfolio.py`），不要自行写批量跨市场抓取脚本。
@@ -210,7 +210,7 @@ uv pip install --python .venv/bin/python akshare pandas yfinance
 1. **先加载本技能再执行投资分析**：不得跳过技能直接用浏览器/curl/yfinance——技能封装了代理管理、降级策略、数据校验等逻辑。
 2. 先跑脚本再组织语言，输出中注明数据时点。
 3. 不输出投资建议。
-4. 网络失败时根据 `notes`/`error` 重试、切换代理或检查本机网络。
+4. 网络失败时根据 `notes`/`gaps` 重试、切换代理或检查本机网络。
 5. 韩股/日股不支持，用搜索替代。
 6. 遇数据异常或脚本失败（PE 缺失、日线空、Yahoo 限流、同花顺远古数据等），查阅 `references/known-issues.md` 中的降级策略。
 7. **不要在同一对话中混用 A 股和美股调用**：代理状态反复切换必然出错。同一批次只处理一种市场。

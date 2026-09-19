@@ -91,8 +91,8 @@ def sort_rows(rows: list[CompareRow]) -> list[CompareRow]:
     def key_fn(row: CompareRow) -> tuple[float, float, float, float]:
         rateable = 0.0 if row.valuation_status in {"ok", "partial"} else 1.0
         rating_score = float(RATING_SCORE.get(row.conclusion, 99))
-        percentile = row.percentile_proxy if row.percentile_proxy is not None else 50.0
-        peg = row.peg if row.peg is not None else 1.2
+        percentile = row.percentile_proxy if row.percentile_proxy is not None else float("inf")
+        peg = row.peg if row.peg is not None else float("inf")
         return (rateable, rating_score, percentile, peg)
 
     return sorted(rows, key=key_fn)

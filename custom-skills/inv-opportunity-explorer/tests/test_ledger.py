@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).resolve().with_name('ledger.py')
+SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'ledger.py'
 
 
 class LedgerTests(unittest.TestCase):

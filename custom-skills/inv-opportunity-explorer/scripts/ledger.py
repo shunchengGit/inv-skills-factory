@@ -118,7 +118,6 @@ def check(db, args):
             raise ValueError('event-date cannot be in the future or after as-of')
     elif args.event_date or args.evidence is not None or args.resolves_hard_risk:
         raise ValueError('event options require --event')
-    db.execute('BEGIN')
     company = resolve(db, args.company)
     review = latest(db, company)
     result = {'company_id': company, 'allowed': True, 'auto_selected': False,
@@ -173,7 +172,6 @@ def main():
         if args.command == 'record':
             return record(db, json.loads(Path(args.file).read_text(encoding='utf-8')))
         if args.command == 'status':
-            db.execute('BEGIN')
             return {'companies': [latest(db, r[0]) for r in db.execute('SELECT company_id FROM companies ORDER BY company_id').fetchall()]}
         return check(db, args)
     finally:

@@ -13,7 +13,7 @@
 - 持仓检查需要交叉验证：官方财报 vs 脚本数据、分析师共识 vs 自建估值
 
 **增量信息获取优先级**：
-1. yfinance info + financials + history（已覆盖 90% 需求）
+1. 数据层 snapshot + financial + daily（已覆盖 90% 需求）
 2. 本地券商研报 PDF（inv-knowledge-curator）
 3. Agent WebFetch / browser_navigate 直抓特定页面（仅当上述不够时）
 4. `web_search`（仅用于发现链接、公司动态、新闻验证；不要把它当金融字段主数据源）

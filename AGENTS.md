@@ -25,6 +25,7 @@ linter 检查 frontmatter、目录命名、文档长度、引用深度、路径�
 - `inv-valuation-engine`
 - `inv-porter-five-forces`
 - `inv-portfolio-tracker`
+- `inv-opportunity-explorer`
 
 仓库没有统一测试环境；测试会直接导入各技能脚本。运行全部测试时显式补齐当前所需依赖（尤其是 curator 源码使用但 `requirements.txt` 未声明的 PyYAML）：
 
@@ -34,7 +35,8 @@ for skill in \
   inv-stock-data \
   inv-valuation-engine \
   inv-porter-five-forces \
-  inv-portfolio-tracker
+  inv-portfolio-tracker \
+  inv-opportunity-explorer
 do
   uv run --with pyyaml --with pymupdf --with requests --with pandas \
     python -m unittest discover -s "custom-skills/$skill/tests" -v || exit 1
@@ -142,7 +144,7 @@ inv-opportunity-explorer（新标的发现：日筛 / 周研，cron 驱动）
 
 ### 数据源与代理边界
 
-美股/港股的 Yahoo 请求需要代理；A 股/ETF 请求应清除代理。不要在同一批处理混用两类市场。连续 Yahoo 请求需限流，优先使用技能提供的合并命令；脚本返回的 `status`、`gaps`、`notes` 和 `error` 是数据质量契约，不能忽略或以猜测补齐缺失值。具体规则以 `custom-skills/inv-stock-data/SKILL.md` 为准。
+美股/港股的 Yahoo 请求需要代理；A 股/ETF 请求应清除代理。不要在同一批处理混用两类市场。连续 Yahoo 请求需限流，优先使用技能提供的合并命令；脚本返回的 `status`、`gaps`、`notes` 是数据质量契约，不能忽略或以猜测补齐缺失值。具体规则以 `custom-skills/inv-stock-data/SKILL.md` 为准。
 
 ## 环境变量
 

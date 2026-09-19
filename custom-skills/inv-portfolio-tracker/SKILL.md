@@ -210,7 +210,7 @@ auto = sum(auto holdings mv)
 # 纪律检查
 # - 单只上限: read from USER.md (currently ≤40%)
 # - 现金 >= 2% (理想 5-10%)
-# - 行业 <= 40%
+# - 行业 <= 55%
 ```
 
 ### 新增标的模板

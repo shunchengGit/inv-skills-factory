@@ -120,9 +120,9 @@ def parse_portfolio(filepath: Path) -> dict:
 
     content = filepath.read_text(encoding="utf-8")
 
-    # 提取汇率
-    usd_cny = 6.77
-    hkd_cny = 0.863
+    # 提取汇率（缺失时不猜测，留 None 由调用方检查）
+    usd_cny = None
+    hkd_cny = None
     m = re.search(r"USD/CNY\s*=\s*([\d.]+)", content)
     if m:
         usd_cny = float(m.group(1))
@@ -245,11 +245,11 @@ def fetch_qq_data(holdings: list) -> dict:
                         pe_ttm = pe
                         source_note = "52周"
 
-                    # 52周位置
+                    # 52周位置（高低点缺失时不编造 0%，留 None 显示 N/A）
                     if high_52w > low_52w > 0:
                         pos_52w = round((price - low_52w) / (high_52w - low_52w) * 100)
                     else:
-                        pos_52w = 0
+                        pos_52w = None
 
                     results[h["name"]] = {
                         "price": price,
@@ -276,9 +276,11 @@ def calculate(portfolio: dict, market_data: dict) -> dict:
     hkd_cny = portfolio["hkd_cny"]
 
     results = []
+    skipped = []
     for h in portfolio["holdings"]:
         md = market_data.get(h["name"])
         if md is None:
+            skipped.append(h["name"])
             continue
 
         # 市值（万CNY）
@@ -328,6 +330,7 @@ def calculate(portfolio: dict, market_data: dict) -> dict:
         "cash_hkd_wan": round(cash_hkd_wan, 2),
         "cash_pct": round(cash_value / total_assets * 100, 1),
         "sectors": sectors,
+        "skipped": skipped,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
 
@@ -419,7 +422,7 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
     rows = []
     for r in calc["holdings"]:
         notes = f"{'盘中' if r['market'] == 'US' else '收盘'}{r['change_pct']:+.2f}%"
-        if r["pos_52w"] >= 70:
+        if r["pos_52w"] is not None and r["pos_52w"] >= 70:
             notes += " ⚠️ 52w高位"
         rows.append([
             r["name"],
@@ -429,7 +432,7 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
             f"{r['value_wan']:.2f}",
             f"{r['position_pct']}%",
             format_pe(r),
-            f"{r['pos_52w']}%",
+            f"{r['pos_52w']}%" if r["pos_52w"] is not None else "N/A",
             notes,
         ])
 
@@ -478,7 +481,7 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
             f"- 集中风险: {max_pos['name']} 占比 {max_pos['position_pct']}% 超过单只上限，暂停对该标的加仓"
         )
     for r in calc["holdings"]:
-        if r["pos_52w"] >= 70:
+        if r["pos_52w"] is not None and r["pos_52w"] >= 70:
             watch.append(
                 f"- {r['name']} 估值: 52 周分位数 {r['pos_52w']}% 处于较高水位，加仓前需重新评估估值"
             )
@@ -519,7 +522,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
         value_str = f"**{r['value_wan']}**"
         pct_str = f"**{r['position_pct']}%**"
         pe_str = format_pe(r)
-        pos_str = f"{r['pos_52w']}%"
+        pos_str = f"{r['pos_52w']}%" if r["pos_52w"] is not None else "N/A"
         change_str = f"{r['change_pct']:+.2f}%"
 
         if r["market"] == "HK":
@@ -533,14 +536,15 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
             price_display = price_str
 
         # 52周位置标注
-        if r["pos_52w"] >= 90:
+        if r["pos_52w"] is not None and r["pos_52w"] >= 90:
             pos_tag = "🔴"
-        elif r["pos_52w"] >= 70:
+        elif r["pos_52w"] is not None and r["pos_52w"] >= 70:
             pos_tag = "🟡"
         else:
             pos_tag = ""
 
-        notes = f"{calc['timestamp'].split()[0]} {'盘中' if 'US' in r['market'] else '收盘'}{change_str}；{r['source_note']}:{r['low_52w']}-{r['high_52w']}"
+        range_str = f"{r['low_52w']}-{r['high_52w']}" if r["pos_52w"] is not None else "N/A"
+        notes = f"{calc['timestamp'].split()[0]} {'盘中' if 'US' in r['market'] else '收盘'}{change_str}；{r['source_note']}:{range_str}"
 
         shares_display = f"**{int(r['shares']):,}**" if r['shares'] == int(r['shares']) else f"**{r['shares']}**"
 
@@ -584,6 +588,10 @@ def main():
         print("❌ 未解析到任何持仓", file=sys.stderr)
         sys.exit(1)
 
+    if portfolio["usd_cny"] is None or portfolio["hkd_cny"] is None:
+        print("❌ PORTFOLIO.md 缺少汇率（USD/CNY、HKD/CNY），请填写后再运行", file=sys.stderr)
+        sys.exit(1)
+
     print(f"📊 解析到 {len(portfolio['holdings'])} 个持仓标的", file=sys.stderr)
 
     # 2. 获取行情
@@ -598,7 +606,8 @@ def main():
     if args.check:
         for name, md in market_data.items():
             if md:
-                print(f"✅ {name}: {md['price']} (PE={format_pe(md)}, 52w位={md['pos_52w']}%)")
+                pos_disp = f"{md['pos_52w']}%" if md['pos_52w'] is not None else "N/A"
+                print(f"✅ {name}: {md['price']} (PE={format_pe(md)}, 52w位={pos_disp})")
             else:
                 print(f"❌ {name}: 数据缺失")
         return

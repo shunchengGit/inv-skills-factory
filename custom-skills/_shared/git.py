@@ -94,7 +94,8 @@ def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: Optional[str] = 
          max_retries: int = 2) -> dict:
     """pull --rebase → add → commit → push（push 失败自动重试）。
 
-    返回 {success, push_failed?, error?, no_change?}。
+    返回 {success, push_failed?, error?, no_change?, local_committed?}。
+    push 失败时 success=False 且 push_failed=True、local_committed=True（本地已提交，仅远程未推送）。
     """
     branch = branch or _resolve_branch(cwd)
     if not branch:
@@ -133,8 +134,9 @@ def sync(cwd: Path, commit_msg: str, files: str = "-A", branch: Optional[str] = 
                 return {"success": False, "step": "pull", "error": "合并冲突，请手动解决后重试"}
 
     return {
-        "success": True,
+        "success": False,
         "push_failed": True,
-        "hint": f"push 失败，本地已保存。稍后手动: git -C {cwd} push",
+        "local_committed": True,
+        "hint": f"push 失败，本地已提交。稍后手动: git -C {cwd} push",
         "push_error": r_push.stderr.strip()[:300],
     }

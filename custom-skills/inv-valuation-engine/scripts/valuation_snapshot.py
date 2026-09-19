@@ -268,9 +268,11 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
     net_margin = first_not_none(sina_num("销售净利率"), fin_num("销售净利率"))
     debt_to_asset = first_not_none(sina_num("资产负债率"), fin_num("资产负债率"))
     pe_ttm = number(valuation.get("pe_ttm"))
-    # 如果百度 PE TTM 缺失，降级使用静态 PE
+    pe_ttm_fallback = False
+    # 如果 PE TTM 缺失，降级使用静态 PE（口径不同，需记录 gap）
     if pe_ttm is None:
         pe_ttm = number(valuation.get("pe_static"))
+        pe_ttm_fallback = pe_ttm is not None
     pb = number(valuation.get("pb"))
     current_price = first_not_none(number(snap.get("price")), history["latest_close"])
 
@@ -309,6 +311,11 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
         for key in ("trailing_pe", "pb", "roe_pct", "gross_margin_pct")
         if metrics.get(key) is None
     ]
+    if pe_ttm_fallback:
+        computed_gaps.append(
+            make_gap("field_unavailable", "metrics.trailing_pe",
+                     "PE TTM 缺失，降级使用静态 PE（口径不同，仅作参考）", retryable=False)
+        )
     gaps = merge_gaps(
         all_envelope.gaps,
         _component_gaps(components["snapshot"]),
