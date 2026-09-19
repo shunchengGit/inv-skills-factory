@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file provides guidance to coding agents working with code in this repository.
+This file provides guidance to coding agents (Claude Code / Codex) working with code in this repository.
 
 ## 仓库定位
 
@@ -13,7 +13,7 @@ This file provides guidance to coding agents working with code in this repositor
 修改任何业务技能（`SKILL.md`、脚本或 references）后运行仓库级 linter：
 
 ```bash
-python3 .agents/skills/skill-linter/scripts/lint_skills.py
+python3 .claude/skills/skill-linter/scripts/lint_skills.py
 ```
 
 linter 检查 frontmatter、目录命名、文档长度、引用深度、路径、软链接兼容性以及已部署入口脚本的 `--help`；它不是业务测试套件。入口运行检查依赖 `~/.hermes/skills/inv-skills/` 中已有部署，未部署时会跳过部分检查。
@@ -59,7 +59,7 @@ uv run custom-skills/inv-valuation-engine/scripts/valuation_snapshot.py AAPL --o
 
 ## 部署
 
-部署目标由 `.agents/skills/skill-deployer/scripts/deploy.json` 定义，目前为 Hermes 与 WorkBuddy。部署前须在 `.env` 显式设置部署子目录；脚本没有代码层默认值：
+部署目标由 `.claude/skills/skill-deployer/scripts/deploy.json` 定义，目前为 Hermes 与 WorkBuddy。部署前须在 `.env` 显式设置部署子目录；脚本没有代码层默认值：
 
 ```dotenv
 DEPLOY_SKILLS_DIR=inv-skills
@@ -67,11 +67,11 @@ DEPLOY_SKILLS_DIR=inv-skills
 
 ```bash
 # 仅显示目标，不修改部署目录
-python3 .agents/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 
 # 部署一个或全部目标
-python3 .agents/skills/skill-deployer/scripts/sync.py --agent hermes
-python3 .agents/skills/skill-deployer/scripts/sync.py --agent all
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes
+python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
 ```
 
 修改既有技能内容后通常无需重新部署，只需 lint。首次部署、新增/删除技能、修复链接或变更目标配置后才需 sync。sync 会增删目标目录中的链接；`--force` 还可能替换非空真实目录，使用前先检查目标。即使是 `--list`，缺少 `DEPLOY_SKILLS_DIR` 时也会交互询问并写入 `.env`。
@@ -82,8 +82,8 @@ python3 .agents/skills/skill-deployer/scripts/sync.py --agent all
 
 - `custom-skills/<skill-name>/`：可部署的业务技能，保持扁平一级结构；目录必须包含 `SKILL.md`。
 - `custom-skills/_shared/`：跨技能复用的 dotenv、代理、git、数值解析等基础工具，不放投资业务逻辑。
-- `.agents/skills/`：coding agent harness 能力的镜像，不作为业务技能部署。
 - `.claude/skills/` 与 `.claude/commands/`：Claude Code harness 能力，不作为业务技能部署。
+- `.agents/skills/`：Codex harness 能力（含 `source-command-opsx-*` 专属技能），不作为业务技能部署。本文档命令中的 harness 前缀以 `.claude/` 为例，Codex 将 `.claude/` 换成 `.agents/` 即可。
 - `openspec/`：变更规格、当前能力规格与归档记录；项目上下文以 `openspec/config.yaml` 为准。
 
 新增技能目录名使用 `{前缀}-{语义名}` 的 kebab-case 格式，例如 `inv-example`。脚本经软链接执行，因此凡由 `__file__` 推导路径的代码必须先使用 `Path(__file__).resolve()`（或等价的 `abspath`）。
