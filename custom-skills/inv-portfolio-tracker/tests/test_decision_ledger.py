@@ -43,7 +43,11 @@ class LedgerTest(unittest.TestCase):
         return self.cli('apply', {'key':key, 'records':list(records)}, ok=ok)
 
     def record(self, kind, id='x', version=1, **kw):
-        return dict(kind=kind, id=id, version=version, symbol='TSM', **kw)
+        rec = dict(kind=kind, id=id, version=version, symbol='TSM', **kw)
+        if kind == 'evidence' and rec.get('status') == 'verified':
+            rec.setdefault('excerpt', 'original text excerpt')
+            rec.setdefault('locator', 'p.1')
+        return rec
 
     def test_research_gates_and_financial_event_invalidation(self):
         self.cli('init')
@@ -114,6 +118,20 @@ class LedgerTest(unittest.TestCase):
         self.assertEqual(self.cli('audit')['rows'][0]['status'], 'decision_ready')
         self.put('reopen', self.record('issue', version=3, status='open', impact='rating', next_action='new evidence'))
         self.assertEqual(self.cli('audit')['rows'][0]['status'], 'needs_review')
+
+    def test_material_risk_event_revokes_ready_like_financial_report(self):
+        self.cli('init')
+        self.put('ready', self.record('evidence', source='fixture', date='2026-09-25', basis='original', status='verified'), self.record('research', status='decision_ready', evidence_ids=['x']))
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'decision_ready')
+        self.put('risk', self.record('event', event_type='material_risk', date='2026-09-26', source='fixture disclosure'))
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'needs_review')
+        stale_evidence = next(x for x in self.cli('audit')['records'] if x['kind']=='evidence')
+        self.assertEqual(stale_evidence.get('effective_status'), 'invalidated')
+
+    def test_verified_evidence_requires_excerpt_and_locator(self):
+        self.cli('init')
+        self.put('no-excerpt', self.record('evidence', source='fixture', date='2026-09-25', basis='original', status='verified', excerpt=None, locator='p.1'), ok=False)
+        self.put('no-locator', self.record('evidence', source='fixture', date='2026-09-25', basis='original', status='verified', excerpt='text', locator=None), ok=False)
 
     def test_malformed_batches_fail_cleanly_without_writes(self):
         self.cli('init')

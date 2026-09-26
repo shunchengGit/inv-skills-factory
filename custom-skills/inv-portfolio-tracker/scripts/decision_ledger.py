@@ -20,7 +20,7 @@ def latest(db):
 def validate(db, r):
     from datetime import date
     kind = r['kind']
-    for field in ('id', 'symbol', 'source', 'basis', 'metric', 'impact', 'next_action', 'text', 'confirmation_source', 'execution_source'):
+    for field in ('id', 'symbol', 'source', 'basis', 'metric', 'impact', 'next_action', 'text', 'confirmation_source', 'execution_source', 'excerpt', 'locator'):
         if field in r and (not isinstance(r[field], str) or not r[field].strip()):
             raise ValueError('nonblank string required: '+field)
     for field in ('evidence_ids', 'closure_evidence_ids'):
@@ -49,10 +49,11 @@ def validate(db, r):
     same = [x for x in records if x['symbol']==r['symbol']]
     def verified(ids):
         evidence = {x['id']:x for x in same if x['kind']=='evidence'}
-        events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type')=='financial_report']
+        events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
         return bool(ids) and all(i in evidence and evidence[i].get('status')=='verified'
             and evidence[i].get('basis') not in {'earningsGrowth','price_position','52w_position'}
             and not evidence[i].get('anomalous',False)
+            and evidence[i].get('excerpt') and evidence[i].get('locator')
             and (not events or (evidence[i].get('date') or '')>=max(events)) for i in ids)
     if kind in {'evidence','quote','event'}:
         if not r.get('source') or not r.get('status',kind=='event'):
@@ -62,6 +63,8 @@ def validate(db, r):
             raise ValueError('evidence basis/status required')
         if r['status']=='verified' and (not r.get('date') or r.get('anomalous') or r['basis'] in {'earningsGrowth','price_position','52w_position'}):
             raise ValueError('cannot certify abnormal growth or price position')
+        if r['status']=='verified' and (not r.get('excerpt') or not r.get('locator')):
+            raise ValueError('verified evidence requires excerpt and locator (original text position)')
     if kind=='event' and r.get('event_type') not in {'financial_report','material_risk'}:
         raise ValueError('event_type must be financial_report or material_risk')
     if kind=='event' and not r.get('date'):
@@ -80,9 +83,9 @@ def validate(db, r):
             closed = [x for x in same if x['kind']=='issue' and x.get('status')=='closed']
             if any(r.get('reviewed_issues', {}).get(x['id']) != x['version'] for x in closed) or (closed and not r.get('review_source')):
                 raise ValueError('closed issue impact requires explicit versioned conclusion review')
-            events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type')=='financial_report']
+            events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
             if events and (r.get('reviewed_through') or '') < max(events):
-                raise ValueError('financial event requires explicit research review')
+                raise ValueError('financial or material risk event requires explicit research review')
             if not verified(r.get('evidence_ids')) or any(x['kind']=='issue' and x.get('status')!='closed' for x in same):
                 raise ValueError('missing verified evidence/open issues')
             if any(x['status']=='suspended' for x in audit(db)['conditions'] if x['symbol']==r['symbol']):
@@ -143,7 +146,7 @@ def audit(db):
         c['evaluation']='unknown'
     for r in rows:
         same=[x for x in records if x['symbol']==r['symbol']]
-        events=[x['date'] for x in same if x['kind']=='event' and x.get('event_type')=='financial_report']
+        events=[x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
         closed=[x for x in same if x['kind']=='issue' and x.get('status')=='closed' and x.get('impact')]
         r['gaps']=[{'id':x['id'],'impact':x['impact'],'next_action':x['next_action']} for x in same if x['kind']=='issue' and x.get('status')=='open']
         pending_closed = any(r.get('reviewed_issues', {}).get(x['id']) != x['version'] for x in closed) or (closed and not r.get('review_source'))
@@ -153,13 +156,13 @@ def audit(db):
             evidence = {x['id']:x for x in same if x['kind']=='evidence'}
             ids = r.get('evidence_ids')
             if (not isinstance(ids, list) or not ids or
-                    any(i not in evidence or evidence[i].get('status')!='verified' or evidence[i].get('anomalous') or evidence[i].get('basis') in {'earningsGrowth','price_position','52w_position'} or (events and (evidence[i].get('date') or '')<max(events)) for i in ids) or
+                    any(i not in evidence or evidence[i].get('status')!='verified' or evidence[i].get('anomalous') or evidence[i].get('basis') in {'earningsGrowth','price_position','52w_position'} or not evidence[i].get('excerpt') or not evidence[i].get('locator') or (events and (evidence[i].get('date') or '')<max(events)) for i in ids) or
                     any(c['symbol']==r['symbol'] and c['status']=='suspended' for c in conditions)):
                 r['status']='needs_review'
         r['quote_refresh_is_research']=False
     for e in records:
         if e['kind']=='evidence':
-            dates=[x['date'] for x in records if x['symbol']==e['symbol'] and x['kind']=='event' and x.get('event_type')=='financial_report']
+            dates=[x['date'] for x in records if x['symbol']==e['symbol'] and x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
             if dates and (e.get('date') or '')<max(dates):
                 e['effective_status']='invalidated'
     return {'schema_version':1, 'coverage':len(rows), 'rows':rows, 'records':records, 'conditions':conditions,
