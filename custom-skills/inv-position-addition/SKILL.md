@@ -25,6 +25,7 @@ trigger:
 3. 质量端一段（为什么逻辑没坏）→ 不加的理由分条（为什么现在不动手）→ **触发条件写死**（if X then buy N shares）→ 打脸条件。
 4. 触发条件必须可机械核对：具体价格区间、具体财务阈值、具体事件（复产/财报），并写明资金来源与分批节奏。
 5. 结尾一句问是否挂提醒。不要总结已说过的内容。
+6. **判断记录（强制）**：收尾必须按 `inv-qarp-strategy/references/judgment-journal.md` 向 `~/.hermes/memories/JUDGMENTS.md` 追加一条记录（结论/依据/关键假设/失效条件/状态）；分析前先 grep 该文件复用该标的上次判断，未触发失效条件则沿用而非重做。
 
 ## 执行步骤
 
@@ -88,3 +89,10 @@ trigger:
 - **卖方链内排序要看全**：建银国际等机构常给出"零部件 > OEM"的链内排序；引用牛方覆盖时必须同时点出其链内定位，避免把"中国 OEM 首选"误读为全链首选。
 - **出口期权定价**：目标市值中若含大额"出口期权"（如 25 台燃机 × 高毛利），该部分可白拿不应付钱买；安全边际测算须基于核心业务可持续净利，期权部分单独列出。
 - **公告接口失败降级**：`cs_stock_info.py announcements <A股代码>` 失败（exit≠0）时，降级为交易所公告（上交所/巨潮）或 web_search 带引号+代码检索，不得跳过 A 股近期事件核查。
+
+
+## 受控决策闭环（当前协议）
+
+研究、证据、假设、条件、决策与issues统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入默认profile的 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；详见 `inv-portfolio-tracker/references/decision-ledger.md`。PORTFOLIO仅持仓/现金/成交权威；CURRENT.md生成只读，不与档案/观察表双写。
+
+报价更新不更新研究；历史摘要仅historical/partial/needs_review。缺原文证据、异常PEG、冲突条件不得decision_ready；价格位置不代表估值。新财报事件使旧证据失效并待复核，未知财报日期不编造，不再采用90/120天机械fresh。issue关闭需证据，影响结论仍须复核。建议、用户确认、实际执行分离；用户讨论不改持仓，成交无论有无卡都真实记账。独立突发风险可启动研究，不限预先写死触发。USER.md为唯一组合约束，不恢复现金最低/月一次旧规则。脚本仅验证结构，不能证明经济判断正确。

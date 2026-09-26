@@ -23,6 +23,27 @@ import unicodedata
 from datetime import datetime
 from pathlib import Path
 
+
+def quote_date_and_session(raw: str, market: str) -> tuple[str, str]:
+    """Use the exchange quote timestamp, never the local report generation date."""
+    match = re.search(r"(\d{4})[-/]?(\d{2})[-/]?(\d{2})[ T]?(\d{2})?:?(\d{2})?", raw or "")
+    if not match:
+        return "报价日待核", "交易状态待核"
+    year, month, day, hour, minute = match.groups()
+    try:
+        datetime(int(year), int(month), int(day))
+    except ValueError:
+        return "报价日待核", "交易状态待核"
+    clock = int(hour) if hour is not None else None
+    if market == "US":
+        session = "美东收盘" if clock is not None and clock >= 16 else "美东盘中/待核"
+    elif market == "HK":
+        session = "收盘" if clock is not None and clock >= 16 else "盘中/延迟"
+    else:
+        session = "收盘" if clock is not None and clock >= 15 else "盘中/待核"
+    return f"{year}-{month}-{day}", session
+
+
 try:
     import requests
 except ImportError:
@@ -245,7 +266,8 @@ def fetch_qq_data(holdings: list) -> dict:
                         pe_ttm = pe
                         source_note = "52周"
 
-                    # 52周位置（高低点缺失时不编造 0%，留 None 显示 N/A）
+                    quote_date, quote_session = quote_date_and_session(fields[30] if len(fields) > 30 else "", market)
+                    # A股字段47/48是年内高低，并非52周；变量名保留用于兼容现有计算。
                     if high_52w > low_52w > 0:
                         pos_52w = round((price - low_52w) / (high_52w - low_52w) * 100)
                     else:
@@ -261,6 +283,8 @@ def fetch_qq_data(holdings: list) -> dict:
                         "pe_static": pe_static,
                         "pe_ttm": pe_ttm,
                         "source_note": source_note,
+                        "quote_date": quote_date,
+                        "quote_session": quote_session,
                     }
                 except (ValueError, IndexError) as e:
                     print(f"⚠️ 解析 {h['name']} 失败: {e}", file=sys.stderr)
@@ -350,7 +374,7 @@ def format_pe(holding: dict) -> str:
 
 # ========== 锁定格式报告渲染（确定性，禁止手工改写） ==========
 # 列与顺序固定，是用户侧持仓报告的契约：
-REPORT_COLUMNS = ["标的", "代码", "股数", "价格", "市值(万)", "仓位", "PE", "52w位", "备注"]
+REPORT_COLUMNS = ["标的", "代码", "股数", "价格", "市值(万)", "仓位", "PE", "区间位", "备注"]
 
 
 def char_width(text: str) -> int:
@@ -408,7 +432,7 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
     # ---- 组合概览 ----
     lines = [
         border,
-        f"[ 组合概览 ] 行情截至: {calc['timestamp']} | 汇率: USD/CNY={usd_cny}, HKD/CNY={hkd_cny}",
+        f"[ 组合概览 ] 快照生成: {calc['timestamp']}（各市场报价日见备注） | 汇率: USD/CNY={usd_cny}, HKD/CNY={hkd_cny}",
         f"- 总资产: {calc['total_assets']} 万元 (CNY)",
         f"- 现金: {calc['cash_value']} 万元 (占比 {calc['cash_pct']}%)",
         f"  - 人民币现金: {portfolio['cash_cny'] / 10000:.2f} 万元 (CNY)",
@@ -421,8 +445,8 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
     # ---- 持仓表 ----
     rows = []
     for r in calc["holdings"]:
-        notes = f"{'盘中' if r['market'] == 'US' else '收盘'}{r['change_pct']:+.2f}%"
-        if r["pos_52w"] is not None and r["pos_52w"] >= 70:
+        notes = f"{r.get('quote_date', '报价日待核')} {r.get('quote_session', '交易状态待核')}{r['change_pct']:+.2f}%"
+        if r["pos_52w"] is not None and r["pos_52w"] >= 70 and r.get("source_note", "52周") == "52周":
             notes += " ⚠️ 52w高位"
         rows.append([
             r["name"],
@@ -432,7 +456,8 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
             f"{r['value_wan']:.2f}",
             f"{r['position_pct']}%",
             format_pe(r),
-            f"{r['pos_52w']}%" if r["pos_52w"] is not None else "N/A",
+            (f"{r['pos_52w']}%{'(年内)' if r.get('source_note') == '年内高/低' else ''}"
+             if r["pos_52w"] is not None else "N/A"),
             notes,
         ])
 
@@ -482,8 +507,9 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
         )
     for r in calc["holdings"]:
         if r["pos_52w"] is not None and r["pos_52w"] >= 70:
+            window = '年内' if r.get('source_note') == '年内高/低' else '52周'
             watch.append(
-                f"- {r['name']} 估值: 52 周分位数 {r['pos_52w']}% 处于较高水位，加仓前需重新评估估值"
+                f"- {r['name']} {window}价格位置 {r['pos_52w']}% 处于较高水位（非估值分位），加仓前需重新评估估值"
             )
     if not watch:
         watch.append("- 各约束均在合规区间，暂无触发项；维持既定监控")
@@ -497,7 +523,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
     """生成更新后的 PORTFOLIO.md 当前持仓部分"""
     lines = []
     lines.append("## 当前持仓\n")
-    lines.append(f"- **行情数据截至**：{calc['timestamp']}（QQ Finance 实时行情）")
+    lines.append(f"- **估值生成时间**：{calc['timestamp']}（各市场报价日期/状态见持仓行；不得将生成时间冒充同日收盘）")
     lines.append("- **数据来源**：QQ Finance API（qt.gtimg.cn）")
     lines.append(f"- **汇率**：USD/CNY={portfolio['usd_cny']}，HKD/CNY={portfolio['hkd_cny']}")
     lines.append(f"- **总资产**：**{calc['total_assets']} 万元**")
@@ -514,7 +540,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
         lines.append(f"- **现金建议区间**：{constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% {'✅ 合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️ 需调整'}\n")
 
     # 表头
-    lines.append("| 标的 | 代码 | 市场 | 板块 | 股数 | 价格 | 币种 | 市值(万CNY) | 仓位 | PE | 52w位 | 核心风险 | 备注 |")
+    lines.append("| 标的 | 代码 | 市场 | 板块 | 股数 | 价格 | 币种 | 市值(万CNY) | 仓位 | PE | 价格区间位 | 核心风险 | 备注 |")
     lines.append("|------|------|------|------|------|------|------|------------|------|-----|-------|---------|------|")
 
     for r in calc["holdings"]:
@@ -522,7 +548,8 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
         value_str = f"**{r['value_wan']}**"
         pct_str = f"**{r['position_pct']}%**"
         pe_str = format_pe(r)
-        pos_str = f"{r['pos_52w']}%" if r["pos_52w"] is not None else "N/A"
+        pos_str = (f"{r['pos_52w']}%{'(年内)' if r.get('source_note') == '年内高/低' else ''}"
+                   if r["pos_52w"] is not None else "N/A")
         change_str = f"{r['change_pct']:+.2f}%"
 
         if r["market"] == "HK":
@@ -535,7 +562,7 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
             currency = "CNY"
             price_display = price_str
 
-        # 52周位置标注
+        # 价格位置标注（A股/ETF可能为年内区间，非估值分位）
         if r["pos_52w"] is not None and r["pos_52w"] >= 90:
             pos_tag = "🔴"
         elif r["pos_52w"] is not None and r["pos_52w"] >= 70:
@@ -544,7 +571,8 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
             pos_tag = ""
 
         range_str = f"{r['low_52w']}-{r['high_52w']}" if r["pos_52w"] is not None else "N/A"
-        notes = f"{calc['timestamp'].split()[0]} {'盘中' if 'US' in r['market'] else '收盘'}{change_str}；{r['source_note']}:{range_str}"
+        notes = (f"{r.get('quote_date', '报价日待核')} {r.get('quote_session', '交易状态待核')}{change_str}；"
+                 f"{r['source_note']}:{range_str}")
 
         shares_display = f"**{int(r['shares']):,}**" if r['shares'] == int(r['shares']) else f"**{r['shares']}**"
 
@@ -607,7 +635,7 @@ def main():
         for name, md in market_data.items():
             if md:
                 pos_disp = f"{md['pos_52w']}%" if md['pos_52w'] is not None else "N/A"
-                print(f"✅ {name}: {md['price']} (PE={format_pe(md)}, 52w位={pos_disp})")
+                print(f"✅ {name}: {md['price']} ({md['quote_date']} {md['quote_session']}, PE={format_pe(md)}, {md['source_note']}位={pos_disp})")
             else:
                 print(f"❌ {name}: 数据缺失")
         return
@@ -662,24 +690,23 @@ def main():
             gap_lines = ["## 数据缺口说明\n"]
             for r in calc["holdings"]:
                 pe_str = format_pe(r)
-                market_status = "盘中" if r["market"] == "US" else "收盘"
                 gap_lines.append(
-                    f"- **{r['name']} {r['code']}**：{calc['timestamp'].split()[0]} {market_status} "
-                    f"{r['price']}（{r['change_pct']:+.2f}%）；PE={pe_str}；"
-                    f"{r['source_note']}位{r['pos_52w']}%（{r['low_52w']}-{r['high_52w']}）；"
+                    f"- **{r['name']} {r['code']}**：{r.get('quote_date', '报价日待核')} "
+                    f"{r.get('quote_session', '交易状态待核')} {r['price']}（{r['change_pct']:+.2f}%）；PE={pe_str}；"
+                    f"{r['source_note']}位{r['pos_52w']}%（{r['low_52w']}-{r['high_52w']}，价格位置非估值分位）；"
                     f"仓位{r['position_pct']}%"
                 )
             updated = updated[:gap_start] + "\n".join(gap_lines) + "\n" + updated[gap_end:]
         
         # 更新时间戳
-        updated = re.sub(r"\*\*行情数据截至\*\*：[^\n]+", f"**行情数据截至**：{calc['timestamp']}（QQ Finance）", updated)
+        updated = re.sub(r"\*\*(?:行情数据截至|估值生成时间|组合估值快照生成)\*\*：[^\n]+", f"**估值生成时间**：{calc['timestamp']}（QQ Finance；各市场交易日/状态见持仓行）", updated)
         updated = re.sub(r"\*\*数据来源\*\*：[^\n]+", f"**数据来源**：QQ Finance API（qt.gtimg.cn）", updated)
         
         portfolio_path.write_text(updated, encoding="utf-8")
         print(f"✅ 已更新 {portfolio_path}", file=sys.stderr)
         print(f"   总资产: {calc['total_assets']}万 | 现金: {calc['cash_value']}万({calc['cash_pct']}%)", file=sys.stderr)
         for r in calc["holdings"]:
-            print(f"   {r['name']}: {int(r['shares'])}股 × {r['price']} = {r['value_wan']}万 ({r['change_pct']:+.2f}%) | PE={format_pe(r)} | 52w位={r['pos_52w']}%", file=sys.stderr)
+            print(f"   {r['name']}: {int(r['shares'])}股 × {r['price']} = {r['value_wan']}万 ({r['quote_date']} {r['quote_session']} {r['change_pct']:+.2f}%) | PE={format_pe(r)} | {r['source_note']}位={r['pos_52w']}%", file=sys.stderr)
         return
 
     if args.report:

@@ -111,6 +111,11 @@ trigger:
 - 跨股类使用相应买入价乘全股本的等价估值比较每股权益，另列真实A/H合计市值；不默认AH折价收敛。研究排序与可执行换仓结论分开。
 - 反向估值公式、交付证据分级及复核清单见 `references/incumbent-business-and-new-business-options.md`。
 
+## 判断记录（强制）
+
+- **分析前**：对涉及标的先 grep `~/.hermes/memories/JUDGMENTS.md` 找最近一次记录；有记录先复述上次结论/关键假设/失效条件，未触发失效条件且证据无实质新增时沿用旧结论，不重新估值。
+- **收尾时**：减仓/换仓结论给出后，必须按 `inv-qarp-strategy/references/judgment-journal.md` 向 JUDGMENTS.md 追加一条记录（含"减A换B"时A、B两侧各一条，或一条换仓对比记录同时覆盖两侧）；缺记录不算完成。
+
 ## 浮亏减仓的心理纪律
 
 浮亏减仓可能来自风险预算调整、机会成本变化或原判断被证伪，不能一概归为仓位管理失误。先判断未来收益、风险和替代机会，再说明是否存在需要复盘的错误。
@@ -132,3 +137,10 @@ trigger:
 | 估值透支 | 分 2-3 次减仓 | 按 QARP 卖出条件 |
 | **仓位过大 + 公司不错** | 减至目标仓位，补现金优先 | 本框架 |
 | **换仓**（卖出A→买入B） | 先按本框架减A，现金到位后再看B | 本框架 + QARP 买入规则 |
+
+
+## 受控决策闭环（当前协议）
+
+研究、证据、假设、条件、决策与issues统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入默认profile的 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；详见 `inv-portfolio-tracker/references/decision-ledger.md`。PORTFOLIO仅持仓/现金/成交权威；CURRENT.md生成只读，不与档案/观察表双写。
+
+报价更新不更新研究；历史摘要仅historical/partial/needs_review。缺原文证据、异常PEG、冲突条件不得decision_ready；价格位置不代表估值。新财报事件使旧证据失效并待复核，未知财报日期不编造，不再采用90/120天机械fresh。issue关闭需证据，影响结论仍须复核。建议、用户确认、实际执行分离；用户讨论不改持仓，成交无论有无卡都真实记账。独立突发风险可启动研究，不限预先写死触发。USER.md为唯一组合约束，不恢复现金最低/月一次旧规则。脚本仅验证结构，不能证明经济判断正确。
