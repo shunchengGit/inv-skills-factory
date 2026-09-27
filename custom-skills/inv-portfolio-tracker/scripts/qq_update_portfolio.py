@@ -88,34 +88,45 @@ FIELD_MAP = {
 
 
 def load_constraints() -> dict:
-    """从 USER.md 读取组合约束；缺失时回退到当前默认。"""
-    constraints = {
-        "max_single_pct": 40,
-        "max_sector_pct": 55,
-        "min_cash_pct": 0,
-        "cash_target_low": 0,
-        "cash_target_high": 100,
-    }
+    """仅从 USER.md 读取组合约束；缺失规则时拒绝使用旧默认值。"""
     if not USER_PATH.exists():
-        return constraints
-
+        raise FileNotFoundError(f"USER.md 不存在: {USER_PATH}")
+    constraints = {
+        "min_cash_pct": 0.0,
+        "cash_target_low": 0.0,
+        "cash_target_high": 100.0,
+    }
     content = USER_PATH.read_text(encoding="utf-8")
-    m = re.search(r"单只股票仓位上限[:：]\s*`?<=?\s*([\d.]+)%?", content)
-    if m:
-        constraints["max_single_pct"] = float(m.group(1))
-    m = re.search(r"单一行业集中度[:：]\s*`?<=?\s*([\d.]+)%?", content)
-    if m:
-        constraints["max_sector_pct"] = float(m.group(1))
-    m = re.search(r"现金[^\n]*?>=\s*([\d.]+)%", content)
-    if m:
-        constraints["min_cash_pct"] = float(m.group(1))
-    elif re.search(r"现金[^\n]*(?:不强制|不得透支|<\s*0%)", content):
-        constraints["min_cash_pct"] = 0
-    # 必须限定在现金规则所在行，避免把“年化收益 15-20%”误判为现金目标。
-    m = re.search(r"现金[^\n]*?([\d.]+)\s*-\s*([\d.]+)%", content)
-    if m:
-        constraints["cash_target_low"] = float(m.group(1))
-        constraints["cash_target_high"] = float(m.group(2))
+    current_lines = [line for line in content.splitlines()
+                     if not re.search(r"历史|旧规则|废止|已取消|曾经", line)]
+    current_content = "\n".join(current_lines)
+    for label, key in (("单只股票仓位上限", "max_single_pct"),
+                       ("单一行业集中度", "max_sector_pct")):
+        m = re.search(rf"{label}[:：]\s*`?<=?\s*(\d+(?:\.\d+)?)%", current_content)
+        if not m:
+            raise ValueError(f"USER.md 缺少或无法解析组合约束：{label}")
+        value = float(m.group(1))
+        if not 0 < value <= 100:
+            raise ValueError(f"USER.md 组合约束超出范围：{label}")
+        constraints[key] = value
+    # 仅取当前现金规则；废止/历史说明不得恢复旧门槛。
+    cash_lines = [line for line in current_lines if "现金" in line]
+    record_only = any(re.search(r"现金[^\n]*(?:只记账|仅记账|不作(?:买卖)?否决|不作为买卖门禁)", line)
+                      for line in cash_lines)
+    if not record_only:
+        for line in cash_lines:
+            m = re.search(r"现金[^\n]*?>=\s*(\d+(?:\.\d+)?)%", line)
+            if m:
+                constraints["min_cash_pct"] = float(m.group(1))
+            # 必须限定在现金规则所在行，避免把“年化收益 15-20%”误判为现金目标。
+            m = re.search(r"现金[^\n]*?(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)%", line)
+            if m:
+                constraints["cash_target_low"] = float(m.group(1))
+                constraints["cash_target_high"] = float(m.group(2))
+    constraints["cash_record_only"] = record_only or not any(
+        re.search(r"现金[^\n]*?>=\s*\d|现金[^\n]*?\d+\s*-\s*\d+%", line)
+        for line in cash_lines
+    )
     return constraints
 
 
@@ -461,7 +472,9 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
             notes,
         ])
 
-    if calc["cash_pct"] < constraints["min_cash_pct"]:
+    if constraints.get("cash_record_only", False):
+        cash_note = "仅记账"
+    elif calc["cash_pct"] < constraints["min_cash_pct"]:
         cash_note = "⚠️ 现金水位不足"
     elif calc["cash_pct"] < constraints["cash_target_low"]:
         cash_note = "⚠️ 低于建议区间"
@@ -485,9 +498,14 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
         "[ 纪律检查 ]",
         f"- 单只上限 (<= {constraints['max_single_pct']:.0f}%): "
         f"{max_pos['name']} 占比 {max_pos['position_pct']}% ({'达标' if single_ok else '超限'})",
-        f"- 现金比例 (>= {constraints['min_cash_pct']:.0f}%): "
-        f"当前 {calc['cash_pct']}% ({'达标' if cash_min_ok else '未达标，现金偏低'})",
     ]
+    if constraints.get("cash_record_only", False):
+        lines.append(f"- 现金：仅记账，当前 {calc['cash_pct']}%，不作为买卖否决项")
+    else:
+        lines.append(
+            f"- 现金比例 (>= {constraints['min_cash_pct']:.0f}%): "
+            f"当前 {calc['cash_pct']}% ({'达标' if cash_min_ok else '未达标，现金偏低'})"
+        )
     for sector_name, pct in calc["sectors"].items():
         status = "达标" if pct <= constraints["max_sector_pct"] else "超限，不可再加仓"
         lines.append(
@@ -496,7 +514,9 @@ def build_report(calc: dict, portfolio: dict, constraints: dict = None) -> str:
 
     # ---- 关键关注 ----
     watch = []
-    if not cash_min_ok:
+    if constraints.get("cash_record_only", False):
+        watch.append(f"- 现金水位: 现金占比 {calc['cash_pct']}%，仅记账；应与可核对余额比对")
+    elif not cash_min_ok:
         watch.append(
             f"- 现金水位: 现金占比 {calc['cash_pct']}% 低于 {constraints['min_cash_pct']:.0f}% 下限，"
             f"优先补充现金至 {constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% 区间"
@@ -534,8 +554,10 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
     lines.append(f"  - 港币现金：**{int(hkd_cash):,} HKD**（约 **{hkd_cny_val:.2f}万 CNY**）")
     lines.append(f"  - 人民币现金：**{portfolio['cash_cny'] / 10000:.2f}万 CNY**")
     lines.append(f"  - 美元现金：**{int(portfolio['cash_usd'])}**")
-    if constraints["cash_target_low"] == 0 and constraints["cash_target_high"] == 100:
-        lines.append("- **现金规则**：不强制最低比例；现金不得透支\n")
+    if constraints.get("cash_record_only", False):
+        lines.append("- **现金规则**：现金只记账，不作买卖否决；余额须核对\n")
+    elif constraints["cash_target_low"] == 0 and constraints["cash_target_high"] == 100:
+        lines.append(f"- **现金规则**：现金最低比例 {constraints['min_cash_pct']:.0f}%\n")
     else:
         lines.append(f"- **现金建议区间**：{constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}% {'✅ 合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️ 需调整'}\n")
 
@@ -585,10 +607,15 @@ def generate_portfolio_md(calc: dict, portfolio: dict, constraints=None) -> str:
 
     # 现金行
     cash_pct_str = f"**{calc['cash_pct']}%**"
+    if constraints.get("cash_record_only", False):
+        cash_note = "仅记账"
+    elif constraints["cash_target_low"] <= calc["cash_pct"] <= constraints["cash_target_high"]:
+        cash_note = f"✅{constraints['cash_target_low']:.0f}-{constraints['cash_target_high']:.0f}%合理区间"
+    else:
+        cash_note = "⚠️需调整"
     lines.append(
         f"| 现金 | — | — | — | — | — | CNY | "
-        f"**{calc['cash_value']}** | {cash_pct_str} | — | — | — | "
-        f"{'✅' + format(constraints['cash_target_low'], '.0f') + '-' + format(constraints['cash_target_high'], '.0f') + '%合理区间' if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️需调整'} |"
+        f"**{calc['cash_value']}** | {cash_pct_str} | — | — | — | {cash_note} |"
     )
 
     return "\n".join(lines)
@@ -673,7 +700,10 @@ def main():
             disc_lines = ["## 纪律检查\n"]
             max_pos = max(calc["holdings"], key=lambda x: x["position_pct"])
             disc_lines.append(f"- 单只上限 `<= {constraints['max_single_pct']:.0f}%`：{max_pos['name']} {max_pos['position_pct']}% {'✅' if max_pos['position_pct'] <= constraints['max_single_pct'] else '❌超限'}")
-            disc_lines.append(f"- 现金 `>= {constraints['min_cash_pct']:.0f}%`：**当前 {calc['cash_pct']}%，{'%s-%s%%合理区间' % (constraints['cash_target_low'], constraints['cash_target_high']) if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️需调整'}** {'✅' if calc['cash_pct'] >= constraints['min_cash_pct'] else '❌不足'}")
+            if constraints.get("cash_record_only", False):
+                disc_lines.append(f"- 现金：仅记账，当前 {calc['cash_pct']}%，不作为买卖否决项；余额须核对")
+            else:
+                disc_lines.append(f"- 现金 `>= {constraints['min_cash_pct']:.0f}%`：**当前 {calc['cash_pct']}%，{'%s-%s%%合理区间' % (constraints['cash_target_low'], constraints['cash_target_high']) if constraints['cash_target_low'] <= calc['cash_pct'] <= constraints['cash_target_high'] else '⚠️需调整'}** {'✅' if calc['cash_pct'] >= constraints['min_cash_pct'] else '❌不足'}")
             disc_lines.append(f"- 行业集中度 `<= {constraints['max_sector_pct']:.0f}%`：")
             for sector_name, pct in calc["sectors"].items():
                 disc_lines.append(f"  - {sector_name}：**{pct}%** {'✅' if pct <= constraints['max_sector_pct'] else '❌超限'}")
@@ -729,7 +759,10 @@ def main():
         print("\n## 纪律检查")
         max_pos = max(calc["holdings"], key=lambda x: x["position_pct"])
         print(f"- 单只上限 <={constraints['max_single_pct']:.0f}%：{max_pos['name']} {max_pos['position_pct']}% {'✅' if max_pos['position_pct'] <= constraints['max_single_pct'] else '⚠️超限'}")
-        print(f"- 现金 >={constraints['min_cash_pct']:.0f}%：{calc['cash_pct']}% {'✅' if calc['cash_pct'] >= constraints['min_cash_pct'] else '⚠️不足'}")
+        if constraints.get("cash_record_only", False):
+            print(f"- 现金：仅记账，当前 {calc['cash_pct']}%，不作为买卖否决项")
+        else:
+            print(f"- 现金 >={constraints['min_cash_pct']:.0f}%：{calc['cash_pct']}% {'✅' if calc['cash_pct'] >= constraints['min_cash_pct'] else '⚠️不足'}")
         for sector_name, pct in calc["sectors"].items():
             print(f"- {sector_name} <={constraints['max_sector_pct']:.0f}%：{pct}% {'✅' if pct <= constraints['max_sector_pct'] else '⚠️超限'}")
 

@@ -13,6 +13,37 @@ CREATE TABLE records(kind TEXT NOT NULL,id TEXT NOT NULL,version INTEGER NOT NUL
 CREATE TABLE events(key TEXT PRIMARY KEY,payload TEXT NOT NULL,created TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 PRAGMA user_version=1;
 '''
+READINESS_ROLES = {'original', 'independent', 'contrarian', 'valuation', 'portfolio_comparison'}
+EVIDENCE_TYPES = {'original', 'supporting', 'contrarian', 'valuation', 'portfolio_comparison'}
+INVALID_BASES = {'earningsGrowth', 'price_position', '52w_position'}
+
+def research_ready(r, same):
+    """Structural gate only: source independence and economic claims need human review."""
+    evidence = {x['id']:x for x in same if x['kind']=='evidence'}
+    events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
+    ids = r.get('evidence_ids')
+    if not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids) or len(ids) != len(set(ids)):
+        return False
+    def valid(i):
+        e = evidence.get(i, {})
+        return (e.get('status')=='verified' and e.get('basis') not in INVALID_BASES
+                and not e.get('anomalous', False) and e.get('excerpt') and e.get('locator')
+                and (not events or (e.get('date') or '') >= max(events)))
+    if not all(valid(i) for i in ids):
+        return False
+    checks = r.get('readiness')
+    if r.get('protocol_version') != 2 or not isinstance(checks, dict) or set(checks) != READINESS_ROLES:
+        return False
+    for role, members in checks.items():
+        if (not isinstance(members, list) or not members or len(members) != len(set(members))
+                or any(not isinstance(i, str) or i not in ids or not valid(i) for i in members)):
+            return False
+        expected = 'supporting' if role == 'independent' else role
+        if any(evidence[i].get('evidence_type') != expected or not evidence[i].get('source_group') for i in members):
+            return False
+    originals = {evidence[i]['source_group'] for i in checks['original']}
+    independent = {evidence[i]['source_group'] for i in checks['independent']}
+    return bool(independent - originals)
 
 def latest(db):
     return [json.loads(r[0]) for r in db.execute('SELECT a.payload FROM records a WHERE version=(SELECT max(version) FROM records b WHERE a.kind=b.kind AND a.id=b.id) ORDER BY symbol,kind,id')]
@@ -20,7 +51,9 @@ def latest(db):
 def validate(db, r):
     from datetime import date
     kind = r['kind']
-    for field in ('id', 'symbol', 'source', 'basis', 'metric', 'impact', 'next_action', 'text', 'confirmation_source', 'execution_source', 'excerpt', 'locator'):
+    if r.get('protocol_version', 1) not in (1, 2) or type(r.get('protocol_version', 1)) is not int:
+        raise ValueError('unsupported record protocol version')
+    for field in ('id', 'symbol', 'source', 'basis', 'metric', 'impact', 'next_action', 'text', 'confirmation_source', 'execution_source', 'excerpt', 'locator', 'owner', 'next_event', 'source_group', 'evidence_type', 'research_id'):
         if field in r and (not isinstance(r[field], str) or not r[field].strip()):
             raise ValueError('nonblank string required: '+field)
     for field in ('evidence_ids', 'closure_evidence_ids'):
@@ -37,7 +70,7 @@ def validate(db, r):
         raise ValueError('record symbol is immutable')
     if kind == 'research' and any(x['kind']=='research' and x['symbol']==r['symbol'] and x['id']!=r['id'] for x in latest(db)):
         raise ValueError('one research identity per symbol')
-    for field in ('date', 'reviewed_through', 'last_research_date', 'next_report_date'):
+    for field in ('date', 'reviewed_through', 'last_research_date', 'next_report_date', 'due'):
         if r.get(field) is not None and date.fromisoformat(r[field]).isoformat()!=r[field]:
             raise ValueError('invalid date')
     if any(k in r for k in ('shares','cash','quantity','holdings')):
@@ -59,6 +92,10 @@ def validate(db, r):
         if not r.get('source') or not r.get('status',kind=='event'):
             raise ValueError('source/status required')
     if kind=='evidence':
+        if r.get('protocol_version') == 2 and (r.get('evidence_type') not in EVIDENCE_TYPES or not r.get('source_group')):
+            raise ValueError('v2 evidence requires source_group and recognized evidence_type')
+        if 'evidence_type' in r and r['evidence_type'] not in EVIDENCE_TYPES:
+            raise ValueError('invalid evidence_type')
         if not r.get('basis') or r.get('status') not in {'verified','historical','unknown','anomalous','upstream_failed','invalidated'}:
             raise ValueError('evidence basis/status required')
         if r['status']=='verified' and (not r.get('date') or r.get('anomalous') or r['basis'] in {'earningsGrowth','price_position','52w_position'}):
@@ -80,6 +117,8 @@ def validate(db, r):
         if r.get('status') not in {'unknown','partial','needs_review','decision_ready'}:
             raise ValueError('invalid research status')
         if r['status']=='decision_ready':
+            if not research_ready(r, same):
+                raise ValueError('decision_ready requires v2 research readiness and verified role evidence')
             closed = [x for x in same if x['kind']=='issue' and x.get('status')=='closed']
             if any(r.get('reviewed_issues', {}).get(x['id']) != x['version'] for x in closed) or (closed and not r.get('review_source')):
                 raise ValueError('closed issue impact requires explicit versioned conclusion review')
@@ -93,9 +132,16 @@ def validate(db, r):
     if kind=='issue':
         if not r.get('impact') or not r.get('next_action') or r.get('status') not in {'open','closed'}:
             raise ValueError('issue requires impact/next action/status')
+        if r['status']=='open' and (not r.get('owner') or not r.get('due') or not r.get('next_event')):
+            raise ValueError('v2 open issue requires owner/due/next_event')
         if r['status']=='closed' and not verified(r.get('closure_evidence_ids')):
             raise ValueError('issue closure requires verified evidence')
     if kind=='decision':
+        if r.get('stage') != 'executed' or 'research_id' in r or 'research_version' in r:
+            research = next((x for x in same if x['kind']=='research' and x['id']==r.get('research_id')), None)
+            if (not research or type(r.get('research_version')) is not int
+                    or research['version'] != r['research_version']):
+                raise ValueError('v2 decision requires current research identity and version')
         if r.get('stage') not in {'suggestion','user_confirmed','executed'}:
             raise ValueError('invalid decision stage')
         if r['stage']!='suggestion' and not r.get('confirmation_source'):
@@ -148,15 +194,12 @@ def audit(db):
         same=[x for x in records if x['symbol']==r['symbol']]
         events=[x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
         closed=[x for x in same if x['kind']=='issue' and x.get('status')=='closed' and x.get('impact')]
-        r['gaps']=[{'id':x['id'],'impact':x['impact'],'next_action':x['next_action']} for x in same if x['kind']=='issue' and x.get('status')=='open']
+        r['gaps']=[{k:x[k] for k in ('id','impact','next_action','owner','due','next_event') if k in x} for x in same if x['kind']=='issue' and x.get('status')=='open']
         pending_closed = any(r.get('reviewed_issues', {}).get(x['id']) != x['version'] for x in closed) or (closed and not r.get('review_source'))
         if (events and (r.get('reviewed_through') or '')<max(events)) or pending_closed or r['gaps']:
             r['status']='needs_review'
         if r['status']=='decision_ready':
-            evidence = {x['id']:x for x in same if x['kind']=='evidence'}
-            ids = r.get('evidence_ids')
-            if (not isinstance(ids, list) or not ids or
-                    any(i not in evidence or evidence[i].get('status')!='verified' or evidence[i].get('anomalous') or evidence[i].get('basis') in {'earningsGrowth','price_position','52w_position'} or not evidence[i].get('excerpt') or not evidence[i].get('locator') or (events and (evidence[i].get('date') or '')<max(events)) for i in ids) or
+            if (not research_ready(r, same) or
                     any(c['symbol']==r['symbol'] and c['status']=='suspended' for c in conditions)):
                 r['status']='needs_review'
         r['quote_refresh_is_research']=False

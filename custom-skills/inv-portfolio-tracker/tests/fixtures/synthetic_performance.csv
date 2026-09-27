@@ -1,0 +1,7 @@
+date,type,symbol,quantity,price,currency,fee,fee_currency,cash_delta,cash_currency,fx_rate,nav_cny,external_flow_cny,reference
+2026-01-01,OPEN_POSITION,AAA,2,10,USD,0,USD,0,USD,7,0,0,SYNTHETIC-opening
+2026-01-01,OPEN_CASH,,0,0,USD,0,USD,100,USD,7,0,0,SYNTHETIC-opening
+2026-01-02,BUY,AAA,1,12,USD,1,USD,-13,USD,7,0,0,SYNTHETIC-trade
+2026-01-03,DIVIDEND,AAA,0,0,USD,0,USD,2,USD,7,0,0,SYNTHETIC-dividend
+2026-01-04,CLOSE_POSITION,AAA,3,15,USD,0,USD,0,USD,7,0,0,SYNTHETIC-closing
+2026-01-04,CLOSE_CASH,,0,0,USD,0,USD,89,USD,7,0,0,SYNTHETIC-closing

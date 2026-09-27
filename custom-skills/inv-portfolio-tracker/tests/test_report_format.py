@@ -47,9 +47,10 @@ def _fixture():
     constraints = {
         "max_single_pct": 40,
         "max_sector_pct": 55,
-        "min_cash_pct": 2,
-        "cash_target_low": 5,
-        "cash_target_high": 10,
+        "min_cash_pct": 0,
+        "cash_target_low": 0,
+        "cash_target_high": 100,
+        "cash_record_only": True,
     }
     return portfolio, calc, constraints
 
@@ -98,19 +99,19 @@ class ReportFormatContractTest(unittest.TestCase):
         self.assertEqual(q.char_width("MSFT"), 4)
         self.assertEqual(q.char_width("腾讯控股 | MSFT"), 15)
 
-    def test_cash_warning_when_below_min(self):
+    def test_cash_is_record_only_at_low_balance(self):
         joined = "\n".join(self.lines)
-        # cash_pct=1.6 低于 2% 下限，现金行应带水位警示
-        self.assertIn("⚠️ 现金水位不足", joined)
-        # 纪律检查应标未达标
-        self.assertIn("未达标", joined)
+        self.assertIn("现金：仅记账", joined)
+        self.assertNotIn("现金水位不足", joined)
+        self.assertNotIn("低于建议区间", joined)
 
-    def test_cash_warning_between_min_and_target(self):
+    def test_cash_is_record_only_at_another_balance(self):
         portfolio, calc, constraints = _fixture()
         calc = {**calc, "cash_pct": 3.3}
         report = q.build_report(calc, portfolio, constraints)
-        self.assertIn("⚠️ 低于建议区间", report)
-        self.assertIn("(达标)", report)
+        self.assertIn("现金：仅记账", report)
+        self.assertNotIn("现金水位不足", report)
+        self.assertNotIn("低于建议区间", report)
 
     def test_no_watch_when_all_compliant(self):
         portfolio, calc, constraints = _fixture()
@@ -118,7 +119,9 @@ class ReportFormatContractTest(unittest.TestCase):
         for h in calc["holdings"]:
             h["pos_52w"] = 30
         report = q.build_report(calc, portfolio, constraints)
-        self.assertIn("暂无触发项", report)
+        self.assertIn("仅记账", report)
+        self.assertNotIn("现金水位不足", report)
+        self.assertNotIn("超限", report)
 
 
 if __name__ == "__main__":

@@ -121,6 +121,23 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 
 推送回执成功后，再比较本地 HEAD 与实际目标远程分支的提交值，并等待全部写入子任务结束才给最终完成结论。
 
+## 研究平台截图 → 入库缺口核对（主会话流程）
+
+当用户提供研究平台截图（如 LSEG Workspace / Investext 的研报列表）并问"哪些不在我的知识库里"时，按以下步骤执行：
+
+1. **逐行提取截图字段**：日期、公司名、Ticker、标题、页数、Retail Value、Contributor、Analyst。`+N` 徽标表示多公司覆盖，须记录。
+2. **建立对账清单**：`日期 | 公司 | Ticker | 标题 | Contributor | 页数 | 在库状态 | 身份结论`。
+3. **判定优先级**：结合用户持仓（PORTFOLIO.md）、主题覆盖缺口、分析师重要性、报告深度（页数/价格），将报告分为 必下 / 可下 / 不下。
+4. **平台界面特征注意**：
+   - 标题可能被截断，与 PDF 首页正式标题存在差异；判定是否重复必须以 PDF 首页正式标题 + 机构 + 日期 + 哈希为准。
+   - 同一份报告可能因覆盖公司列表不同而显示多行（如 +N 徽标变化），哈希相同视为同一报告。
+5. **执行下载 → 归档 → 入库**：
+   - 归档：`km_import.py res --file {绝对路径} --target {归属}`（逐份串行）
+   - 条目：单份/少量直接 `write_file` 写完整 OKF 条目（推荐，避免 shell 转义），再 `km_lint.py --fix --skip-url-check`
+6. **验证与汇报**：lint 返回 errors=0、no_cross_refs=0、pdf_no_entry=0、git_push.success=true 后，分别报告 PDF 归档数、条目落盘数、废纸篓移动数。
+
+> 完整身份判定与去重规则见 `references/report-identity-dedup.md`。
+
 ## 选重点报告的标准
 
 不是所有 PDF 都需要独立条目。优先级：
@@ -134,6 +151,18 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 ## 下载目录清理与版本保留
 
 用户要求"研报入库、重复的直接移动到废纸篓"时，只处理明确匹配的研究文件，不动账单、发票、简历等私人 PDF。只将确认重复且无独有内容的下载件送入废纸篓（`~/.Trash`），**不永久删除、不直接 `rm`**，确保可追溯。英文完整版与中文节译版默认保留为不同资源，可合用一条知识记录，但不能视为两份独立证据。完成汇报分别给出 PDF 数、知识记录数和实际废纸篓移动数，不混淆"移动归档"与"删除重复"。清理源文件须在入库与验证完全闭环（lint 通过、git push 成功）之后。
+
+## 单份/少量 PDF 手动导入（无 subagent）
+
+当下载目录只有 1-4 份 PDF 且用户未要求批量并行时，主会话直接串行处理，不派发 subagent：
+
+1. **查重**：`search_files` 按日期+机构+标题关键词在 `res/` 和 `entries/` 检索，确认是否已有同一份（哈希相同视为重复，直接移废纸篓）。
+2. **归档**：`km_import.py res --file {绝对路径} --target {归属}` 逐份串行执行。该命令自动移动 PDF 到 `res/{target}/`、更新 `res/index.md`、提取首页和末页文本到 stdout。**注意捕获输出只留成功摘要，禁止把提取文本灌进主会话上下文**。
+3. **写条目**：`write_file` 直写 `~/.inv-knowledge/entries/{slug}.md`，含完整 OKF frontmatter（type/title/description/timestamp/resource/source_type/tags）和正文（摘要/关键要点/关联/引用）。`description` 必须含具体数字和结论。
+4. **重建**：`km_lint.py --fix --skip-url-check` 统一重建索引、标签、图谱并 git push。
+5. **验证**：lint 返回 errors=0、pdf_no_entry=0、dead_links=0 后，检查下载目录已清空（PDF 被 `km_import.py res` 移走），汇报归档数、条目数、废纸篓移动数。
+
+**关键 pitfall**：`km_import.py res` 的 stdout 会输出提取的 PDF 文本（首页+末页），批量调用时必须用 `terminal` 的 `timeout` 限制并只读结果摘要，避免 100KB+ 文本灌入上下文。
 
 ## 连续月报/周报的增量导入
 
