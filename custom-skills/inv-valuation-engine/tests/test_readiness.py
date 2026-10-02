@@ -60,9 +60,9 @@ class ReadinessTest(unittest.TestCase):
         self.assertEqual(report.valuation_status, "insufficient_for_valuation")
         self.assertIsNone(report.conclusion)
         self.assertIsNone(report.action_reference)
-        self.assertTrue(any(item["code"] == "valuation_missing_core_anchor" for item in report.data_gaps))
+        self.assertTrue(any(item["code"] == "valuation_missing_verified_primary" for item in report.data_gaps))
 
-    def test_partial_can_conclude_but_cannot_recommend_action(self):
+    def test_partial_metrics_without_primary_remain_diagnostic(self):
         metrics = {
             "trailing_pe": 12.0,
             "forward_pe": 11.0,
@@ -71,11 +71,11 @@ class ReadinessTest(unittest.TestCase):
             "price_percentile_5y_proxy": 25.0,
         }
         report = generate_report_from_snapshot(snapshot(metrics, upstream="partial", gaps=[gap()]), "auto")
-        self.assertEqual(report.valuation_status, "partial")
-        self.assertIsNotNone(report.conclusion)
+        self.assertEqual(report.valuation_status, "insufficient_for_valuation")
+        self.assertIsNone(report.conclusion)
         self.assertIsNone(report.action_reference)
 
-    def test_complete_data_can_produce_action(self):
+    def test_complete_metrics_without_primary_cannot_produce_action(self):
         metrics = {
             "trailing_pe": 12.0,
             "forward_pe": 11.0,
@@ -84,9 +84,10 @@ class ReadinessTest(unittest.TestCase):
             "price_percentile_5y_proxy": 25.0,
         }
         report = generate_report_from_snapshot(snapshot(metrics), "auto")
-        self.assertEqual(report.valuation_status, "ok")
-        self.assertIsNotNone(report.conclusion)
-        self.assertIsNotNone(report.action_reference)
+        self.assertEqual(report.valuation_status, "insufficient_for_valuation")
+        self.assertIsNone(report.conclusion)
+        self.assertIsNone(report.action_reference)
+        self.assertTrue(all(item['rating'] is None and item['role'] == 'diagnostic' for item in report.metrics_used))
 
     def test_unrateable_rendering_discloses_gaps_without_trade_action(self):
         report = generate_report_from_snapshot(snapshot({"current_price": 10.0}), "auto")

@@ -13,17 +13,17 @@
 3. 用户要比较几家公司：优先运行 `{valuationDir}/scripts/valuation_compare.py`
 4. **脚本超时降级**：若 `uv run` 因依赖下载超时，降级为 inv-stock-data `financials` 子命令获取财务三表数据，再按估值框架手动计算。不得因脚本超时而放弃数据获取
 5. 脚本返回后，先检查 `data_gaps`，明确缺口和置信度影响
-6. 定量判断按 `inv-valuation-engine` 的 `references/scoring-rules.md` 人类说明执行；脚本阈值以该技能的 `scripts/scoring_rules.json` 为机器来源，两者必须同步。定性解释按估值引擎的公司经济类型口径、现金流质量与竞争证据校验
+6. 估值计算按 `inv-valuation-engine` 的当前口径执行；脚本五档仅作摘要，不转换买卖。选一个主方法与一个独立辅助校验，保守/基准/乐观假设须有来源；判断以行业经济机制、现金资本需求、情景回报和证伪为准
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点
 
 ## 美股/港股 data_gaps 降级
 
-当 `valuation_snapshot.py` 对美股/港股返回超过5项 data_gaps 时，按 `inv-valuation-engine` 的 `references/us-hk-data-workaround.md` 执行手动补全，含 inv-stock-data financials 子命令、`valuation_manual_compute.py` 两条补全链路。
+当 `valuation_snapshot.py` 对美股/港股返回超过5项 data_gaps 时，按 `inv-valuation-engine` 的 `inv-valuation-engine/references/us-hk-data-workaround.md` 执行手动补全，含 inv-stock-data financials 子命令、`valuation_manual_compute.py` 两条补全链路。
 
 **港股 snapshot 全空降级**（实测 0700.HK 返回 41 项 data_gaps，所有字段 null）：当 snapshot 对港股返回全部 null 时，跳过 snapshot 降级流程，直接用 inv-stock-data `financials` 子命令获取财务三表数据：
 1. `inv-stock-data financials 0700.HK --output json` 获取利润表/资产负债表/现金流量表
 2. 结合 `inv-stock-data snapshot 0700.HK` 中可用的估值指标（若 info 端点部分可用）
-3. 按 `inv-valuation-engine` 的 `references/us-hk-data-workaround.md` 中的字段映射表补全
+3. 按 `inv-valuation-engine` 的 `inv-valuation-engine/references/us-hk-data-workaround.md` 中的字段映射表补全
 
 ## 搜索与增量信息策略
 

@@ -88,12 +88,10 @@ def build_row(report: Any, snapshot_metrics: dict[str, Any]) -> CompareRow:
 
 
 def sort_rows(rows: list[CompareRow]) -> list[CompareRow]:
-    def key_fn(row: CompareRow) -> tuple[float, float, float, float]:
+    def key_fn(row: CompareRow) -> tuple[float, float]:
         rateable = 0.0 if row.valuation_status in {"ok", "partial"} else 1.0
         rating_score = float(RATING_SCORE.get(row.conclusion, 99))
-        percentile = row.percentile_proxy if row.percentile_proxy is not None else float("inf")
-        peg = row.peg if row.peg is not None else float("inf")
-        return (rateable, rating_score, percentile, peg)
+        return (rateable, rating_score)
 
     return sorted(rows, key=key_fn)
 
@@ -117,10 +115,6 @@ def build_summary(rows: list[CompareRow]) -> list[str]:
         best_pe = min(pe_rows, key=lambda x: x.pe or 9999)
         summary.append(f"PE 锚最低的是 {best_pe.symbol}，PE={best_pe.pe}。")
 
-    peg_rows = [r for r in rows if r.peg is not None]
-    if peg_rows:
-        best_peg = min(peg_rows, key=lambda x: x.peg or 9999)
-        summary.append(f"PEG 最优的是 {best_peg.symbol}，PEG={best_peg.peg}。")
     return summary[:4]
 
 

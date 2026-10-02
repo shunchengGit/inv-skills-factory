@@ -1,0 +1,28 @@
+{
+  "symbol": "TEST",
+  "normalized_symbol": "TEST",
+  "company_name": "Offline illustrative fixture",
+  "currency": "USD",
+  "market": "US",
+  "data_time": "2026-10-03",
+  "data_sources": [
+    {
+      "name": "offline example NOT market data",
+      "status": "ok",
+      "fallback": false
+    }
+  ],
+  "metrics": {
+    "current_price": 100,
+    "trailing_pe": 12,
+    "earnings_growth_pct": 10,
+    "price_percentile_5y_proxy": 20
+  },
+  "data_gaps": [],
+  "notes": [
+    "Illustrative offline input, not a real stock"
+  ],
+  "upstream_status": "ok",
+  "history_window": {},
+  "used_fallback": false
+}

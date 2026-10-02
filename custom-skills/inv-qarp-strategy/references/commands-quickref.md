@@ -14,7 +14,7 @@ uv run {valuationDir}/scripts/valuation_snapshot.py AAPL
 uv run {valuationDir}/scripts/valuation_snapshot.py 600519 --output json
 uv run {valuationDir}/scripts/valuation_snapshot.py 0700.HK --output json
 
-# 3) 直接输出五档估值报告
+# 3) 估值摘要报告（五档不映射交易，先检查数据门禁）
 uv run {valuationDir}/scripts/valuation_report.py 600660
 
 # 4) 指定公司类型
@@ -33,5 +33,7 @@ uv run {valuationDir}/scripts/valuation_manual_compute.py \
   --equity 4133.85 --equity-prev 3133.13 \
   --revenue 4318.46 --gross-profit 2430.44 --op-income 931.02 \
   --fcf 1057.94 --cash 1089 --investments 3134 --debt 54 \
-  --scenario-profit "悲观,1127,8|基准,1300,10|乐观,1500,12"
+  --scenario-profit "保守,1127,8|基准,1300,10|乐观,1500,12"
 ```
+
+上述手工参数仅演示 CLI 输入格式，不是可用于投资判断的已核验数据；实际三情景须逐项提供来源、预测期与保守依据，不将样例回报写成用户目标。

@@ -63,16 +63,18 @@ uv run custom-skills/inv-valuation-engine/scripts/valuation_snapshot.py AAPL --o
 DEPLOY_SKILLS_DIR=inv-skills
 ```
 
+sync.py 带 PEP 723 内联依赖（python-dotenv），用 `uv run` 启动；不要用 `python3` 直跑，本机环境未装 dotenv 会直接报错：
+
 ```bash
-# 仅显示目标，不修改部署目录
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
+# 预览完整的创建/删除计划，不修改部署目录
+uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 
 # 部署一个或全部目标
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
+uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes
+uv run .claude/skills/skill-deployer/scripts/sync.py --agent all
 ```
 
-修改既有技能内容后通常无需重新部署，只需 lint。首次部署、新增/删除技能、修复链接或变更目标配置后才需 sync。sync 会增删目标目录中的链接；`--force` 还可能替换非空真实目录，使用前先检查目标。即使是 `--list`，缺少 `DEPLOY_SKILLS_DIR` 时也会交互询问并写入 `.env`。
+修改既有技能内容后通常无需重新部署，只需 lint。首次部署、新增/删除技能、修复链接或变更目标配置后才需 sync。sync 会增删目标目录中的链接；`--force` 还可能替换非空真实目录，使用前先检查目标。目标目录中不在源码里的真实目录（非软链接）只会被警告，不会自动删除。即使是 `--list`，缺少 `DEPLOY_SKILLS_DIR` 时也会交互询问并写入 `.env`。
 
 ## 高层架构
 
@@ -90,17 +92,17 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
 ```text
 inv-stock-data（唯一行情/财务数据层）
   ├─ inv-valuation-engine（估值计算与评分规则）
-  │    └─ inv-qarp-strategy（操作决策）
-  └─ inv-portfolio-tracker（持仓主数据与决策台账）
+  │    └─ inv-qarp-strategy（QARP 四问与资本配置，唯一决策入口）
+  ├─ inv-portfolio-tracker（持仓主数据与决策台账）
+  └─ inv-trade-reconciliation（截图/流水真实成交与盈亏核验，不独立记账）
 
 inv-knowledge-curator（知识库唯一写入边界，下游只读）
   ├─ inv-valuation-engine
-  ├─ inv-qarp-strategy
-  └─ inv-position-addition
+  └─ inv-qarp-strategy
 
-决策与专题层（挂在 QARP / 估值链之下，不自行取数）
-  ├─ inv-position-addition（加仓决策）
-  ├─ inv-position-reduction（减仓决策）
+决策与专题层（QARP 资本配置的薄入口，不自行取数、不另立规则）
+  ├─ inv-position-addition（加仓测算）
+  ├─ inv-position-reduction（减仓/换仓测算）
   └─ inv-etf-comparison（主题 ETF 与持仓对比）
 ```
 
@@ -108,8 +110,10 @@ inv-knowledge-curator（知识库唯一写入边界，下游只读）
 
 - `inv-stock-data` 是行情和财务数据的统一入口。上层投资技能不得绕过它直接新增 AkShare / yfinance 调用。
 - `inv-valuation-engine/scripts/scoring_rules.json` 是估值阈值与映射的唯一机器可读来源，`scoring_rules.py` 只负责加载；修改规则时必须同步更新面向人的 `references/scoring-rules.md`。QARP 调用估值引擎，不复制评分规则。
-- `inv-portfolio-tracker` 持有组合流程和持仓主数据，但价格仍来自 `inv-stock-data`。
-- `inv-position-addition` 与 `inv-position-reduction` 是组合操作决策层，依赖 QARP 闸门与 `PORTFOLIO.md` 现状，不复制估值阈值。
+- `inv-portfolio-tracker` 持有组合流程和持仓主数据（`PORTFOLIO.md` 是持仓/现金/成交权威），但价格仍来自 `inv-stock-data`。
+- 个人组合约束（仓位上限、行业约束、分批节奏）的唯一来源是 `~/.hermes/memories/USER.md`；各技能直接读取，不复制限额。
+- `inv-position-addition` 与 `inv-position-reduction` 是 QARP 资本配置的薄入口，只补交易数量与执行测算；不维护独立的加减仓哲学、现金闸门或估值规则。
+- `inv-trade-reconciliation` 是事实核验工具：从券商截图/流水重建真实成交并核算盈亏，不输出买卖建议、不独立记账；成交归 `inv-portfolio-tracker`，行情归 `inv-stock-data`。
 - 决策台账为 `~/.hermes/memories/investment-decisions/ledger.sqlite3`，研究、证据、假设、条件与决策统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入，不直接改数据库；详见 `inv-portfolio-tracker/references/decision-ledger.md`。
 - 定时任务（如 portfolio-tracker 的持仓晨报）摘要一律经 cron 投递到微信；技能内不手动调用 message/send。
 

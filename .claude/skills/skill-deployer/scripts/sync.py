@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["python-dotenv"]
+# ///
 """
 Skills 同步脚本（软链接模式）。
 
@@ -57,7 +61,7 @@ def load_config() -> dict:
         return json.load(f)
 
 
-def _resolve_conflict(target: Path, source: Path, label: str, force: bool = False) -> bool:
+def _resolve_conflict(target: Path, source: Path, label: str, force: bool = False, dry_run: bool = False) -> bool:
     """处理目标路径冲突，返回 True 表示可以继续创建链接"""
     if not target.exists() and not target.is_symlink():
         return True
@@ -72,20 +76,29 @@ def _resolve_conflict(target: Path, source: Path, label: str, force: bool = Fals
                 return False  # 已正确链接
         except OSError:
             pass
-        print(f"  替换软链接: {label} (原指向 {os.readlink(target)})")
-        target.unlink()
+        if dry_run:
+            print(f"  [dry-run] 替换软链接: {label} (原指向 {os.readlink(target)})")
+        else:
+            print(f"  替换软链接: {label} (原指向 {os.readlink(target)})")
+            target.unlink()
         return True
 
     # 是真实目录
     if target.is_dir():
         if force:
-            print(f"  强制替换目录: {label} → {target}")
-            shutil.rmtree(target)
+            if dry_run:
+                print(f"  [dry-run] 强制替换目录: {label} → {target}")
+            else:
+                print(f"  强制替换目录: {label} → {target}")
+                shutil.rmtree(target)
             return True
         # 空目录直接删除
         if not any(target.iterdir()):
-            print(f"  替换空目录: {label}")
-            shutil.rmtree(target)
+            if dry_run:
+                print(f"  [dry-run] 替换空目录: {label}")
+            else:
+                print(f"  替换空目录: {label}")
+                shutil.rmtree(target)
             return True
         # 非空目录，危险操作
         print(f"  ⚠ 跳过: {label} — 目标是非空目录 {target}")
@@ -93,25 +106,29 @@ def _resolve_conflict(target: Path, source: Path, label: str, force: bool = Fals
         return False
 
     # 是普通文件
-    if force:
-        print(f"  强制替换文件: {label}")
+    if dry_run:
+        print(f"  [dry-run] {'强制替换' if force else '替换'}文件: {label}")
     else:
-        print(f"  替换文件: {label}")
-    target.unlink()
+        print(f"  {'强制替换' if force else '替换'}文件: {label}")
+        target.unlink()
     return True
 
 
-def _create_symlink(source: Path, target: Path, label: str = "", force: bool = False) -> bool:
+def _create_symlink(source: Path, target: Path, label: str = "", force: bool = False, dry_run: bool = False) -> bool:
     """创建软链接，处理各种异常"""
     if not source.exists():
         print(f"  ⚠ 跳过: {label} — 源不存在 {source}")
         return False
 
+    if not _resolve_conflict(target, source, label, force, dry_run):
+        return False  # 已正确或跳过
+
+    if dry_run:
+        print(f"  [dry-run] 创建链接: {label} → {source}")
+        return True
+
     # 确保目标父目录存在
     target.parent.mkdir(parents=True, exist_ok=True)
-
-    if not _resolve_conflict(target, source, label, force):
-        return False  # 已正确或跳过
 
     try:
         target.symlink_to(source)
@@ -185,7 +202,8 @@ def _remove_stale_links(dest_root: Path, expected: set[str], dry_run: bool = Fal
 def sync_skills(skills_dir: str, force: bool = False, dry_run: bool = False) -> tuple[int, int, int, int]:
     """同步技能（软链接）。返回 (created, skipped, failed, removed)"""
     dest_root = Path(skills_dir).expanduser()
-    dest_root.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        dest_root.mkdir(parents=True, exist_ok=True)
 
     created, skipped, failed = 0, 0, 0
 
@@ -198,7 +216,7 @@ def sync_skills(skills_dir: str, force: bool = False, dry_run: bool = False) -> 
     if shared_dir.is_dir():
         label = "_shared"
         target = dest_root / "_shared"
-        result = _create_symlink(shared_dir, target, label, force)
+        result = _create_symlink(shared_dir, target, label, force, dry_run)
         if result:
             created += 1
         else:
@@ -210,7 +228,7 @@ def sync_skills(skills_dir: str, force: bool = False, dry_run: bool = False) -> 
 
         label = item.name
         target = dest_root / item.name
-        result = _create_symlink(item, target, label, force)
+        result = _create_symlink(item, target, label, force, dry_run)
 
         if result:
             created += 1
@@ -283,15 +301,13 @@ def main():
     for agent_name, skills_dir in agent_names:
         print(f"\n=== {agent_name} ===")
 
-        if args.dry_run:
-            print(f"  [dry-run] skills: → {skills_dir}")
-        else:
-            c, s, f, r = sync_skills(skills_dir, force=args.force, dry_run=args.dry_run)
-            total_created += c
-            total_skipped += s
-            total_failed += f
-            total_removed += r
-            print(f"  skills: {c} created, {s} skipped, {f} failed, {r} removed → {skills_dir}")
+        c, s, f, r = sync_skills(skills_dir, force=args.force, dry_run=args.dry_run)
+        total_created += c
+        total_skipped += s
+        total_failed += f
+        total_removed += r
+        prefix = "[dry-run] " if args.dry_run else ""
+        print(f"  {prefix}skills: {c} created, {s} skipped, {f} failed, {r} removed → {skills_dir}")
 
     print(f"\nDone. total: {total_created} created, {total_skipped} skipped, {total_failed} failed, {total_removed} removed")
 

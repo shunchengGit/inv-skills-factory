@@ -1,4 +1,17 @@
 {
+  "policy": {
+    "metric_voting": false,
+    "automatic_action": false,
+    "diagnostic_only_without_verified_primary": true,
+    "primary_methods": 1,
+    "auxiliary_methods": 1,
+    "background_only": ["peg", "percentile", "analyst_upside"],
+    "safety_margin": "scenario_review",
+    "fixed_cyclical_discount": null,
+    "mandatory_peak_multiplier": null,
+    "rating_source": "explicit_reviewed_conclusion",
+    "scenario_names": ["conservative", "base", "optimistic"]
+  },
   "ranges": {
     "peg": [[null, 0.6, "低估"], [0.6, 0.8, "合理偏低"], [0.8, 1.2, "合理"], [1.2, 1.5, "合理偏高"], [1.5, null, "高估"]],
     "percentile": [[null, 20, "低估"], [20, 30, "合理偏低"], [30, 70, "合理"], [70, 90, "合理偏高"], [90, null, "高估"]],

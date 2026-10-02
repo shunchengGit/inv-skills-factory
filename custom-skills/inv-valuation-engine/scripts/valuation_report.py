@@ -19,27 +19,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import statistics
+import math
+import sys
 from dataclasses import asdict, dataclass
 from typing import Any
 
 from valuation_snapshot import Snapshot, build_snapshot
 
-from scoring_rules import (
-    ANALYST_UPSIDE_RANGES,
-    DIVIDEND_YIELD_HIGH,
-    DIVIDEND_YIELD_MEDIUM,
-    EARNINGS_GROWTH_HIGH,
-    EARNINGS_GROWTH_LOW,
-    EARNINGS_YIELD_RANGES,
-    FORWARD_PE_IMPLIED_GROWTH_LIMIT,
-    PB_ROE_THRESHOLD,
-    PE_RANGES_BY_TYPE,
-    PEG_RANGES,
-    PERCENTILE_RANGES,
-    PS_RANGES,
-)
+from scoring_rules import EARNINGS_GROWTH_HIGH, EARNINGS_GROWTH_LOW
 
 
 RATINGS = ["低估", "合理偏低", "合理", "合理偏高", "高估"]
@@ -52,6 +39,7 @@ class MetricView:
     value: float | None
     rating: str | None
     comment: str
+    role: str = "diagnostic"
 
 
 @dataclass
@@ -73,6 +61,7 @@ class ValuationReport:
     risks: list[str]
     action_reference: str | None
     notes: list[str]
+    primary_valuation: dict[str, Any] | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,30 +74,9 @@ def parse_args() -> argparse.Namespace:
         help="可选公司类型覆盖",
     )
     parser.add_argument("--output", default="text", choices=["text", "json", "markdown"], help="输出格式")
+    parser.add_argument("--snapshot-input", help="离线 Snapshot JSON，保留上游状态")
+    parser.add_argument("--primary-input", help="核验的一主一辅与三情景 JSON")
     return parser.parse_args()
-
-
-def score_to_rating(score: float) -> str:
-    if score < 0.5:
-        return "低估"
-    if score < 1.5:
-        return "合理偏低"
-    if score < 2.5:
-        return "合理"
-    if score < 3.5:
-        return "合理偏高"
-    return "高估"
-
-
-def metric_rating_by_ranges(value: float | None, ranges: list[tuple[float | None, float | None, str]]) -> str | None:
-    if value is None:
-        return None
-    for lower, upper, rating in ranges:
-        lower_ok = lower is None or value >= lower
-        upper_ok = upper is None or value < upper
-        if lower_ok and upper_ok:
-            return rating
-    return None
 
 
 def infer_company_type(metrics: dict[str, Any], override: str) -> str:
@@ -126,132 +94,17 @@ def infer_company_type(metrics: dict[str, Any], override: str) -> str:
 
 
 def build_metric_views(metrics: dict[str, Any], company_type: str) -> tuple[list[MetricView], list[str]]:
-    views: list[MetricView] = []
-    notes_for_report: list[str] = []
-
-    trailing_pe = metrics.get("trailing_pe")
-    forward_pe = metrics.get("forward_pe")
-    pb = metrics.get("pb")
-    ps_ttm = metrics.get("ps_ttm")
-    percentile = metrics.get("price_percentile_5y_proxy")
-    earnings_growth = metrics.get("earnings_growth_pct")
-    dividend_yield = metrics.get("dividend_yield_pct")
-    roe = metrics.get("roe_pct")
-    fcf = metrics.get("free_cash_flow")
-    analyst_upside = metrics.get("analyst_upside_pct")
-    earnings_yield = metrics.get("earnings_yield_pct")
-    event_score = None  # removed: LLM interprets raw announcements
-
-    peg = None
-    if trailing_pe and earnings_growth and earnings_growth > 0:
-        peg = round(trailing_pe / earnings_growth, 2)
-        views.append(
-            MetricView(
-                name="PEG",
-                value=peg,
-                rating=metric_rating_by_ranges(peg, PEG_RANGES),
-                comment="来自 `PE / 利润增速`，适合成长型公司。",
-            )
-        )
-
-    if percentile is not None:
-        views.append(
-            MetricView(
-                name="历史分位代理",
-                value=percentile,
-                rating=metric_rating_by_ranges(percentile, PERCENTILE_RANGES),
-                comment="当前仅为价格分位代理，保守使用。",
-            )
-        )
-
-    if analyst_upside is not None:
-        analyst_rating = metric_rating_by_ranges(analyst_upside, ANALYST_UPSIDE_RANGES)
-        views.append(
-            MetricView(
-                name="目标价上行空间",
-                value=analyst_upside,
-                rating=analyst_rating,
-                comment="基于分析师目标价的辅助判断。",
-            )
-        )
-
-    if company_type in {"半导体/科技制造", "互联网/软件"} and ps_ttm is not None:
-        views.append(
-            MetricView(
-                name="PS(TTM)",
-                value=ps_ttm,
-                rating=metric_rating_by_ranges(ps_ttm, PS_RANGES),
-                comment="成长股辅助估值指标。",
-            )
-        )
-
-    if company_type == "金融/地产" and pb is not None and roe is not None:
-        pb_roe_ratio = round(pb / roe * 100, 2) if roe else None
-        views.append(
-            MetricView(
-                name="PB-ROE代理",
-                value=pb_roe_ratio,
-                rating=score_to_rating(2.0 if pb_roe_ratio is not None and pb_roe_ratio < PB_ROE_THRESHOLD else 3.0)
-                if pb_roe_ratio is not None
-                else None,
-                comment="仅作 PB-ROE 代理，非严格行业比较。",
-            )
-        )
-
-    if company_type in {"消费/医疗", "金融/地产"} and dividend_yield is not None:
-        dividend_rating = "合理偏低" if dividend_yield >= DIVIDEND_YIELD_HIGH else "合理" if dividend_yield >= DIVIDEND_YIELD_MEDIUM else "合理偏高"
-        views.append(
-            MetricView(
-                name="股息率",
-                value=dividend_yield,
-                rating=dividend_rating,
-                comment="成熟型公司可用作估值补充。",
-            )
-        )
-
-    pe_anchor = first_non_null(forward_pe, trailing_pe)
-    # Forward PE 合理性校验：若 Forward PE 暗含的盈利增速与 trailing PE 差距过大（>30%），
-    # 大概率是 Yahoo earningsGrowth 失真（常见于港股互联网/平台公司），降级使用 trailing_pe
-    pe_anchor_source = "forward_pe" if forward_pe is not None else "trailing_pe"
-    if forward_pe is not None and trailing_pe is not None and trailing_pe > 0:
-        implied_growth = (trailing_pe / forward_pe - 1) * 100
-        if implied_growth > FORWARD_PE_IMPLIED_GROWTH_LIMIT:
-            pe_anchor = trailing_pe
-            pe_anchor_source = "trailing_pe(fwd_pe_implied_{:.0f}pct_growth_suspect)".format(implied_growth)
-            notes_for_report.append(
-                "Forward PE({:.2f})暗含{:.0f}%盈利增速，疑似Yahoo earningsGrowth失真，已降级使用trailing_pe({:.2f})".format(
-                    forward_pe, implied_growth, trailing_pe
-                )
-            )
-    if pe_anchor is not None:
-        pe_comment = "行业 PE 参考锚（{}）。".format(pe_anchor_source)
-        pe_ranges = PE_RANGES_BY_TYPE.get(company_type, PE_RANGES_BY_TYPE["default"])
-        pe_rating = metric_rating_by_ranges(pe_anchor, pe_ranges)
-        views.append(MetricView(name="PE锚", value=pe_anchor, rating=pe_rating, comment=pe_comment))
-
-    if fcf is not None:
-        views.append(
-            MetricView(
-                name="自由现金流质量",
-                value=fcf,
-                rating="合理" if fcf > 0 else "合理偏高",
-                comment="FCF 为负时下调结论置信度。",
-            )
-        )
-
-    if earnings_yield is not None:
-        views.append(
-            MetricView(
-                name="盈利收益率",
-                value=earnings_yield,
-                rating=metric_rating_by_ranges(earnings_yield, EARNINGS_YIELD_RANGES),
-                comment="PE 的倒数，便于和债券/股息收益率对照。",
-            )
-        )
-
-    # event_score 已移除，LLM 根据原始公告/调研数据判断
-
-    return views, notes_for_report
+    """Raw metrics are diagnostics, not independent valuation ballots."""
+    fields = [("PE锚", "trailing_pe"), ("Forward PE", "forward_pe"), ("PB", "pb"),
+              ("PS(TTM)", "ps_ttm"), ("历史分位代理", "price_percentile_5y_proxy"),
+              ("目标价上行空间", "analyst_upside_pct"), ("股息率", "dividend_yield_pct"),
+              ("自由现金流质量", "free_cash_flow"), ("盈利收益率", "earnings_yield_pct")]
+    views = [MetricView(name, metrics[key], None, "仅 diagnostic / 背景；不参与整体估值或交易映射。")
+             for name, key in fields if metrics.get(key) is not None]
+    growth, pe = metrics.get("earnings_growth_pct"), metrics.get("trailing_pe")
+    if growth and growth > 0 and pe:
+        views.append(MetricView("PEG", round(pe / growth, 2), None, "仅历史背景，不能决定安全边际。"))
+    return views, []
 
 
 def first_non_null(*values: Any) -> Any:
@@ -259,29 +112,6 @@ def first_non_null(*values: Any) -> Any:
         if v is not None:
             return v
     return None
-
-
-def choose_conclusion(views: list[MetricView]) -> str:
-    usable = [v for v in views if v.rating]
-    if not usable:
-        return "合理"
-
-    scores = sorted(RATING_SCORE[v.rating] for v in usable)
-    average = sum(scores) / len(scores)
-    median_score = statistics.median(scores)
-    baseline = score_to_rating(median_score)
-
-    # 仅当集中度很高且不存在明显冲突时，才直接采用重复档位
-    for score in sorted(set(scores)):
-        count = scores.count(score)
-        if count >= 3 and max(scores) - min(scores) <= 1:
-            return RATINGS[score]
-
-    # 若存在低估与高估同时出现，优先回到中间并偏保守
-    if max(scores) - min(scores) >= 3:
-        return score_to_rating(min(4, average + 0.5))
-
-    return baseline
 
 
 def confidence_level(snapshot_gaps: list[dict[str, Any]], views: list[MetricView]) -> str:
@@ -311,27 +141,11 @@ def determine_readiness(snapshot: Snapshot, views: list[MetricView]) -> tuple[st
         })
         return "upstream_failed", gaps
 
-    rated_count = sum(view.rating is not None for view in views)
-    has_anchor = any(snapshot.metrics.get(key) is not None for key in ("trailing_pe", "forward_pe", "pb"))
-    if rated_count < 2:
-        gaps.append({
-            "code": "valuation_insufficient_rated_metrics",
-            "field": "valuation.metrics",
-            "reason": "可评级指标少于两个",
-            "retryable": False,
-        })
-    if not has_anchor:
-        gaps.append({
-            "code": "valuation_missing_core_anchor",
-            "field": "valuation.anchor",
-            "reason": "缺少 PE、Forward PE 或 PB 核心估值锚",
-            "retryable": False,
-        })
-    if rated_count < 2 or not has_anchor:
-        return "insufficient_for_valuation", gaps
-    if snapshot.upstream_status == "partial" or snapshot.used_fallback or snapshot.data_gaps:
-        return "partial", gaps
-    return "ok", gaps
+    gaps.append({
+        "code": "valuation_missing_verified_primary", "field": "valuation.primary",
+        "reason": "缺少核验主估值与保守/基准/乐观情景；指标仅 diagnostic", "retryable": False,
+    })
+    return "insufficient_for_valuation", gaps
 
 
 def framework_views(metrics: dict[str, Any], company_type: str, conclusion: str | None) -> dict[str, str]:
@@ -363,8 +177,6 @@ def build_key_reasons(metrics: dict[str, Any], conclusion: str | None, views: li
 
     if metrics.get("free_cash_flow") is not None and metrics["free_cash_flow"] < 0:
         reasons.append("自由现金流为负，说明估值不能只看利润口径。")
-    if metrics.get("roe_pct") is not None and metrics["roe_pct"] >= 15:
-        reasons.append("ROE 处于较好水平，对估值中枢有支撑。")
     if not reasons:
         reasons.append("当前数据不足，无法形成可靠估值结论。" if conclusion is None else f"当前数据有限，结论暂偏向“{conclusion}”。")
     return reasons[:3]
@@ -387,7 +199,7 @@ def build_assumptions(metrics: dict[str, Any]) -> list[str]:
                 "请确认是否为 Non-GAAP 口径，勿直接采信此值。"
             )
         else:
-            assumptions.append(f"未来 2-3 年利润增速大致维持在 {earnings_growth}% 附近，不明显下修。")
+            assumptions.append(f"观测利润增速为 {earnings_growth}%；仅历史背景，不作为未来假设。")
     if metrics.get("gross_margin_pct") is not None:
         assumptions.append("毛利率与净利率不发生结构性恶化。")
     if metrics.get("next_earnings_date") is not None:
@@ -410,23 +222,67 @@ def build_risks(metrics: dict[str, Any]) -> list[str]:
     return risks[:4]
 
 
-def action_reference(conclusion: str) -> str:
-    mapping = {
-        "低估": "逢低加仓",
-        "合理偏低": "持有 / 逢低加仓",
-        "合理": "持有 / 观望",
-        "合理偏高": "观望 / 分批减仓",
-        "高估": "回避 / 分批减仓",
-    }
-    return mapping[conclusion]
+def evaluate_primary(snapshot: Snapshot, primary: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Read explicit, reviewed assumptions; never select a method or fit returns."""
+    if not primary:
+        return None
+    price = snapshot.metrics.get("current_price")
+    if not isinstance(price, (int, float)) or isinstance(price, bool) or not math.isfinite(price) or price <= 0:
+        return None
+    if primary.get("verified") is not True:
+        return None
+    if any(not isinstance(primary.get(key), str) or not primary[key].strip()
+           for key in ("method", "source", "as_of", "rationale", "currency")):
+        return None
+    if primary["method"].lower() in {"peg", "historical percentile", "analyst target price", "历史分位", "卖方目标价"}:
+        return None
+    if primary["currency"] != snapshot.currency:
+        return None
+    auxiliary = primary.get("auxiliary", {})
+    if not isinstance(auxiliary, dict) or auxiliary.get("verified") is not True:
+        return None
+    if any(not isinstance(auxiliary.get(key), str) or not auxiliary[key].strip()
+           for key in ("method", "source", "rationale", "assessment")):
+        return None
+    if auxiliary["assessment"] != "consistent" or auxiliary["method"] == primary["method"]:
+        return None
+    if auxiliary["method"].lower() in {"peg", "historical percentile", "analyst target price"}:
+        return None
+    years = primary.get("years")
+    if not isinstance(years, (int, float)) or isinstance(years, bool) or not math.isfinite(years) or years <= 0:
+        return None
+    if primary.get("conclusion") not in RATINGS:
+        return None
+    scenarios = primary.get("scenarios", {})
+    if not isinstance(scenarios, dict):
+        return None
+    output = {}
+    for name in ("conservative", "base", "optimistic"):
+        item = scenarios.get(name, {})
+        if not isinstance(item, dict) or not isinstance(item.get("assumptions"), str) or not item["assumptions"].strip():
+            return None
+        value, cash = item.get("value_per_share"), item.get("cash_distributions")
+        if any(not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v) or v < 0 for v in (value, cash)) or value <= 0:
+            return None
+        output[name] = dict(item, total_return_pct=((value + cash) / price - 1) * 100,
+                            annualized_return_pct=(((value + cash) / price) ** (1 / years) - 1) * 100,
+                            margin_of_safety_pct=(1 - price / value) * 100)
+    if not output["conservative"]["value_per_share"] <= output["base"]["value_per_share"] <= output["optimistic"]["value_per_share"]:
+        return None
+    return dict(primary, scenarios=output)
 
 
-def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str) -> ValuationReport:
+def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str,
+                                  primary: dict[str, Any] | None = None) -> ValuationReport:
     company_type = infer_company_type(snapshot.metrics, company_type_override)
     views, report_notes = build_metric_views(snapshot.metrics, company_type)
     valuation_status, data_gaps = determine_readiness(snapshot, views)
-    conclusion = choose_conclusion(views) if valuation_status in {"ok", "partial"} else None
-    action = action_reference(conclusion) if valuation_status == "ok" and conclusion is not None else None
+    reviewed = evaluate_primary(snapshot, primary) if valuation_status != "upstream_failed" else None
+    if reviewed:
+        data_gaps = [gap for gap in data_gaps if gap["code"] != "valuation_missing_verified_primary"]
+        valuation_status = "partial" if snapshot.upstream_status != "ok" or snapshot.used_fallback or snapshot.data_gaps else "ok"
+    conclusion = reviewed["conclusion"] if reviewed else None
+    action = None  # Capital allocation is separate; no valuation-to-trade mapping.
     confidence = confidence_level(data_gaps, views)
 
     return ValuationReport(
@@ -447,6 +303,7 @@ def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str
         risks=build_risks(snapshot.metrics),
         action_reference=action,
         notes=snapshot.notes + report_notes,
+        primary_valuation=reviewed,
     )
 
 
@@ -465,6 +322,22 @@ def _source_labels(sources: list[dict[str, Any]]) -> str:
 
 def _gap_lines(gaps: list[dict[str, Any]]) -> list[str]:
     return [f"- {gap.get('field')}：{gap.get('reason')}（{gap.get('code')}）" for gap in gaps]
+
+
+def render_primary(report: ValuationReport) -> list[str]:
+    primary = report.primary_valuation
+    if not primary:
+        return ["## 主估值与情景", "- 未提供可核验的一主一辅及三情景；指标仅 diagnostic。"]
+    lines = ["## 主估值与情景", f"- 主方法：{primary['method']}；辅助：{primary['auxiliary']['method']}",
+             f"- 来源/时点：{primary['source']} / {primary['as_of']}",
+             f"- 依据：{primary['rationale']}；期限：{primary['years']} 年；币种：{primary['currency']}"]
+    for key, label in (("conservative", "保守"), ("base", "基准"), ("optimistic", "乐观")):
+        item = primary["scenarios"][key]
+        lines.append(f"- {label}：每股终值={item['value_per_share']}；累计现金分配={item['cash_distributions']}；"
+                     f"总回报={item['total_return_pct']:.2f}%；年化={item['annualized_return_pct']:.2f}%；"
+                     f"终值折让={item['margin_of_safety_pct']:.2f}%；假设={item['assumptions']}")
+    lines.append("- 终值折让不是折现内在价值安全边际；须结合期限、下行情景与假设脆弱性人工判断。")
+    return lines
 
 
 def render_text(report: ValuationReport) -> str:
@@ -497,6 +370,7 @@ def render_text(report: ValuationReport) -> str:
             "## 风险与失效条件",
             *[f"- {x}" for x in report.risks],
             "",
+            *render_primary(report),
             "## 操作参考",
             f"- {action}",
         ]
@@ -539,6 +413,7 @@ def render_markdown(report: ValuationReport) -> str:
             "## 风险与失效条件",
             *[f"- {x}" for x in report.risks],
             "",
+            *render_primary(report),
             "## 操作参考",
             f"- {report.action_reference or '无（估值闸门未通过）'}",
         ]
@@ -549,7 +424,22 @@ def render_markdown(report: ValuationReport) -> str:
 def main() -> int:
     args = parse_args()
 
-    report = generate_report(args.symbol, args.company_type)
+    try:
+        if args.snapshot_input:
+            with open(args.snapshot_input, encoding="utf-8") as stream:
+                snapshot = Snapshot(**json.load(stream))
+            if snapshot.symbol != args.symbol:
+                raise ValueError("snapshot symbol does not match requested symbol")
+        else:
+            snapshot = build_snapshot(args.symbol)
+        primary = None
+        if args.primary_input:
+            with open(args.primary_input, encoding="utf-8") as stream:
+                primary = json.load(stream)
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"输入错误：{exc}", file=sys.stderr)
+        return 2
+    report = generate_report_from_snapshot(snapshot, args.company_type, primary)
     if args.output == "json":
         print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
     elif args.output == "markdown":

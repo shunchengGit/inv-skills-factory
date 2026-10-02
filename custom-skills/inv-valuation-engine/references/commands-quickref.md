@@ -24,8 +24,11 @@ uv run {baseDir}/scripts/valuation_snapshot.py AAPL
 uv run {baseDir}/scripts/valuation_snapshot.py 600519 --output json
 uv run {baseDir}/scripts/valuation_snapshot.py 0700.HK --output json
 
-# 3) 直接输出五档估值报告
+# 3) 输出诊断报告；没有核验主估值时不自动评级
 uv run {baseDir}/scripts/valuation_report.py 600660
+
+# 离线演示（仅测试数据，不是市场事实）
+uv run {baseDir}/scripts/valuation_report.py TEST --snapshot-input {baseDir}/examples/offline-snapshot.json --primary-input {baseDir}/examples/reviewed-primary.json --output json
 
 # 4) 指定公司类型，避免自动识别偏差
 uv run {baseDir}/scripts/valuation_report.py 002475 --company-type tech
