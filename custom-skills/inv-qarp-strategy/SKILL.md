@@ -20,8 +20,8 @@ commands:
 
 ## 使用与依赖
 
-- `/qarp`：首次覆盖，完整知识库 L2+、四问、估值情景、资本配置比较与判断记录。
-- `/qarp_screen`：L1+ 初筛四问，证据冲突升级 L2；未做完整估值时第三问标“待测算”，只输出值得深入/继续研究/不研究，不授权买卖。
+- `/qarp`：首次覆盖，按重要未知驱动的完整研究、四问、估值情景、资本配置比较与判断记录。
+- `/qarp_screen`：初筛四问，重要未知或证据冲突时深化研究；未做完整估值时第三问标“待测算”，只输出值得深入/继续研究/不研究，不授权买卖。
 - `/qarp_check`：先接续最近判断和台账，再按事件影响增量复核；无基准或变化广泛才重建完整分析。
 - 行情与财务统一用 `inv-stock-data`；估值工具用 `inv-valuation-engine`，命令见 `references/commands-quickref.md`，补数见 `references/data-fallback.md`。
 
@@ -38,31 +38,33 @@ commands:
 
 ## 证据纪律（不可降级）
 
-首次研究执行 `references/knowledge-deep-search.md`：至少六个检索篮子、去重与机构独立性、核心关联链、至少两个标签、反向回链、时间线、反方搜索和证据矩阵。不得用 index 与几篇摘要冒充 L2+。
+首次研究执行 `references/knowledge-deep-search.md`，先识别会改变四问、估值或配置结论的重要未知，再按命题类型选择检索与核验。检索篮子、标签、关联链深度、原文份数和双来源数量都不是投资判断硬配额；不得用 index 与摘要冒充实际核验。
 
-- 关键数字（TAM、EPS、增速、利润率、资本开支等）进入模型前回溯 `res/` 原文，记录口径、预测期、来源路径与可得定位；摘要级证据不得伪称已核验。
-- 影响决策的定性命题至少两个独立来源；同机构重复、共享终端共识不算独立。单来源为待验证假设。来源冲突定位分歧变量，不平均。详见 `references/research-cross-validation.md`。
-- 首次 `/qarp` 原文至少两份（核心与反方/分歧）；持仓复核至少一份，涉及调仓至少两份。增量时可计入此前实际核验、未受事件影响且台账仍有效的原文证据，列复用路径、核验记录与未受影响理由；受影响部分必须重新核验。资源不足明确覆盖缺口。
-- `knowledge_status=ok|partial|insufficient`：核心原文/反证/独立性或覆盖缺失为 insufficient，仅继续研究/观察，不买入加仓；非核心缺口 partial，降低置信度及仓位上限，不用复用掩盖缺口。
-- 保留知识库检索、原文、独立性、反证、知识图谱与 curator 维护；这里仅简化决策框架，不减少知识库维护。
+- 关键数字进入模型前回溯原始财报、公告或研报，记录日期、币种、单位、会计口径、预测期、来源路径/URL与可得定位；摘要级证据不得伪称已核验。
+- 官方原始事实允许单源加内部口径校验；预测与因果解释检验反证、不同解释及敏感性，不靠来源数量认证。重大存疑事实按需独立验证；同源转载不算独立。来源冲突定位分歧变量，不平均。详见 `references/research-cross-validation.md`。
+- 主动检验最强反对理由；反方可以是模型敏感性、相反经济机制或外部证据，不强求外部看空研报。复用须此前真实核验、未受事件影响且台账仍有效，列核验定位与理由；受影响部分重新核验。
+- `knowledge_status=ok|partial|insufficient`：重要未知尚未核验、关键事实存疑或未认真检验反证为 insufficient，仅继续研究/观察，不买入加仓；非核心缺口 partial，说明置信度及配置影响。数量齐全不等于就绪，官方单源本身不构成缺口。
+- 保留知识库检索、真实回溯、图谱关联/标签/反链与 curator 维护；维护协议不改也不减少，但不作为投资判断的硬配额依赖。
 
 ## 工作流程与门禁
 
-1. 读最新 USER.md、PORTFOLIO、最近 JUDGMENTS 与台账 audit；价值判断和组合适配分别输出。已有标的先复述上次结论/关键假设/失效条件。
+1. 读最新 USER.md、PORTFOLIO、当前台账简洁卡与 audit、相关研究文件；JUDGMENTS 仅按需作历史参考，不是现行判断权威；价值判断和组合适配分别输出。已有标的先复述上次结论/关键假设/失效条件。
 2. 获取估值快照，检查 `valuation_status`、`upstream_status`、`data_gaps`、`data_time` 与 sources。`upstream_failed`/`insufficient_for_valuation` 补数或显式手工情景，禁止自动五档及买卖动作；`partial` 显著降置信度，脚本 action 必须为空。手工路径也须过证据及台账门禁，不能用五档绕行。
-3. 首次完成 L2+；已有基准按“事件→受影响假设→证据→估值/配置变化”复核，列本次新增/重新核验/复用/历史/未知证据。无实质变化沿用判断，不每次全量重搜；重大变化、无有效基准或核心缺口升级完整研究。
+3. 首次按重要未知与命题类型完成完整研究；已有基准按“事件→受影响假设→证据→估值/配置变化”复核，列本次新增/重新核验/复用/历史/未知证据。无实质变化沿用判断，不每次全量重搜；重大变化、无有效基准或核心缺口升级完整研究。
 4. 四问与情景估值后，统一比较新增/加仓/继续持有/减仓/换仓/暂缓，考虑机会成本、下行、交易税费、币种资金、共同风险及 USER 约束；不由价格涨跌或档位驱动。细则见 `references/trade-execution-rules.md`。
-5. 按 `references/output-template.md` 输出，按 `references/judgment-journal.md` 追加判断及受控台账，读回核验才称完成；被授权/超时拦截停止，不改道绕行。
+5. 按 `references/output-template.md` 输出，按 `references/judgment-journal.md` 在唯一源台账简洁卡记录实质判断，不手工追加 JUDGMENTS 或双写，读回核验才称完成；被授权/超时拦截停止，不改道绕行。
 
 宏观新闻先问“哪个持仓的哪个假设受影响”：能定位则专项复核，只有情绪传导则说明机制与观察信号，不做全组合重估；无直接路径则说明无需动作。独立突发风险可启动复核，不限预写条件。
 
 ## 台账与记录责任
 
-研究/证据/假设/条件/decision/issue 仅通过 `inv-portfolio-tracker/scripts/decision_ledger.py`；遵照`inv-portfolio-tracker/references/decision-ledger.md` 现 schema 与 readiness 协议，不增加或虚设状态。PORTFOLIO 是持仓/现金/成交权威，CURRENT 生成只读，JUDGMENTS 只追加，历史事实与旧判断保留可回溯。
+当前投资判断唯一源是受控台账简洁卡，分析先读当前卡、audit 与研究文件；JUDGMENTS 仅历史参考，不再手工追加，不双写。同一问题只记录一次；无实质变化沿用卡，报价、目录、摘要及一般讨论不写新判断。详细研究保留来源文件，卡只引用而不复制全文。
+
+新台账协议为 v3 并兼容旧记录；具体字段、真实 CLI 和迁移方式以 `inv-portfolio-tracker/references/decision-ledger.md` 完成后的协议为准，本技能不猜命令或虚设状态。旧记录兼容不代表当前有效或自动就绪。PORTFOLIO 是持仓/现金/成交权威，CURRENT 生成只读，历史事实与旧判断保留可回溯。
 
 新财报按现 schema 的 financial_report 事件与 audit 有效状态复核：不能凭“经济上未受影响”把已 invalidated 的旧证据当 verified。按受影响证据逐项核验；事件覆盖的旧证据即使历史事实仍正确，也须依协议追加有真实依据的新版本，才能参与当前就绪认证。未覆盖且仍有效的已核验证据才可直接复用。`reviewed_through` 仅填真实覆盖的事件；未知财报日期不编造，不用机械天数认证 fresh。
 
-缺原文、异常 PEG、冲突条件和未解决问题不得 decision_ready。issue 关闭须证据，影响结论仍复核；v2 readiness 的原文、独立、反方、估值、组合比较要求不降级。同批次引用遵照台账规则，脚本仅验证结构，不证明经济判断。报价不更新研究。建议/用户确认/实际执行分离；讨论不改持仓，真实成交无卡也记账。
+重要未知、未核验关键事实、异常 PEG、冲突条件和影响结论的未解决问题不得伪称 decision_ready。issue 关闭须证据，影响结论仍复核；不再把 v2 的原文、独立、反方、估值、组合比较五类 evidence 认证作为 QARP 硬要求，仍须完成实际四问、情景与资本配置判断。同批次引用遵照台账规则，脚本仅验证结构，不证明经济判断。报价不更新研究。建议/用户确认/实际执行分离；讨论不改持仓，真实成交无卡也记账。
 
 ## 验证与参考
 
@@ -72,5 +74,5 @@ commands:
 - `references/research-cross-validation.md`：独立性与冲突裁决。
 - `references/trade-execution-rules.md`：资本配置与执行。
 - `references/output-template.md`：首次与增量输出。
-- `references/judgment-journal.md`：追加记录与读回责任。
+- `references/judgment-journal.md`：台账唯一源、实质判断记录与读回责任。
 - `references/common-pitfalls.md`、`references/data-fallback.md`、`references/web-search-supplement.md`：防错与补数。

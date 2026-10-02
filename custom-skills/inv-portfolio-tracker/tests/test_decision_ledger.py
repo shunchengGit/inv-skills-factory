@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from typing import Any
 
 CLI = Path(__file__).resolve().parents[1] / 'scripts/decision_ledger.py'
 
@@ -24,6 +25,108 @@ class LedgerTest(unittest.TestCase):
             return json.loads(p.stdout)
         except ValueError:
             self.fail('CLI did not return JSON: ' + p.stdout + p.stderr)
+
+    def card(self, **changes) -> dict[str, Any]:
+        data = self.record('research', protocol_version=3, status='decision_ready',
+            reviewed_through='2026-09-25', owner='responsible analyst',
+            card=dict(sources=[dict(source='/tmp/report.md#sources', date='2026-09-25',
+                locator='annual report p.4', excerpt='Revenue 100 million USD',
+                units='million USD', status='verified', basis='annual report')],
+                facts='Revenue 100 million USD in FY2025', assumptions='Growth may slow',
+                opposition='Test slower growth; value remains above price',
+                valuation_basis='Normalized earnings with stated multiple', conclusion='hold',
+                review_conditions='Review on results or governance risk', important_unknowns=[]))
+        data.update(changes)
+        return data
+
+    def test_v3_single_card_file_writes_reads_audits_renders_without_role_quota(self):
+        self.cli('init')
+        payload = Path(self.tmp.name) / 'card.json'
+        payload.write_text(json.dumps({'key':'card', 'records':[self.card()]}))
+        p = subprocess.run([sys.executable, '-B', str(CLI), '--db', str(self.db),
+                            'apply', '--file', str(payload)], text=True, capture_output=True)
+        self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
+        report = self.cli('audit')
+        self.assertEqual(report['rows'][0]['status'], 'decision_ready')
+        self.assertEqual(len(report['records']), 1)
+        before = self.db.read_bytes()
+        rendered = subprocess.run([sys.executable, '-B', str(CLI), '--db', str(self.db),
+                                   'render'], text=True, capture_output=True)
+        self.assertEqual(rendered.returncode, 0, rendered.stderr)
+        self.assertIn('hold', rendered.stdout)
+        self.assertEqual(before, self.db.read_bytes())
+
+    def test_v3_ready_rejects_unknowns_missing_provenance_and_invalid_sources(self):
+        import copy
+        self.cli('init')
+        bad_cards = []
+        for field in ('facts', 'assumptions', 'opposition', 'valuation_basis', 'conclusion', 'review_conditions'):
+            card = copy.deepcopy(self.card())
+            card['card'][field] = ' '
+            bad_cards.append(card)
+        for field, value in [('important_unknowns', ['Cash conversion unverified']),
+                             ('important_unknowns', 'none'), ('sources', [])]:
+            card = copy.deepcopy(self.card())
+            card['card'][field] = value
+            bad_cards.append(card)
+        for field, value in [('status', 'invalidated'), ('status', 'anomalous'),
+                             ('anomalous', True), ('basis', 'price_position'),
+                             ('basis', 'earningsGrowth'), ('units', ''), ('date', 'bad'),
+                             ('locator', ''), ('excerpt', ''), ('source', '')]:
+            card = copy.deepcopy(self.card())
+            card['card']['sources'][0][field] = value
+            bad_cards.append(card)
+        bad_cards.append(self.card(owner=None))
+        before = self.db.read_bytes()
+        for index, card in enumerate(bad_cards):
+            with self.subTest(index=index):
+                self.put('bad-'+str(index), card, ok=False)
+                self.assertEqual(before, self.db.read_bytes())
+        partial = self.card(status='partial')
+        partial['card']['important_unknowns'] = ['Cash conversion unverified']
+        self.put('partial-with-unknown', partial)
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'partial')
+
+    def test_v3_cannot_bypass_old_invalid_evidence(self):
+        self.cli('init')
+        self.put('old', self.record('evidence', id='old', source='fixture',
+            date='2026-09-25', basis='original', status='invalidated'))
+        self.put('bypass', self.card(), ok=False)
+        self.put('resolve', self.record('evidence', id='old', version=2, source='fixture',
+            date='2026-09-25', basis='original', status='verified'))
+        self.put('ready', self.card())
+        self.put('downgrade', self.record('evidence', id='old', version=3, source='fixture',
+            date='2026-09-25', basis='original', status='anomalous'))
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'needs_review')
+
+    def test_v3_financial_event_and_suspended_conditions_remain_blockers(self):
+        self.cli('init')
+        self.put('ready', self.card())
+        self.put('financial', self.record('event', source='fixture',
+            date='2026-09-26', event_type='financial_report'))
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'needs_review')
+        self.put('stale', self.card(version=2, reviewed_through='2026-09-26'), ok=False)
+        refreshed = self.card(version=2, reviewed_through='2026-09-26')
+        refreshed['card']['sources'][0]['date'] = '2026-09-26'
+        self.put('review', refreshed)
+        self.put('paused', self.record('condition', status='suspended', purpose='reminder',
+            metric='price', source='fixture', line='10'))
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'needs_review')
+        self.put('skip-paused', dict(refreshed, version=3), ok=False)
+
+    def test_v3_suggestion_confirmation_execution_stay_separate(self):
+        self.cli('init')
+        self.put('ready', self.card())
+        suggestion = self.record('decision', id='d', protocol_version=3, stage='suggestion',
+            text='hold', research_id='x', research_version=1)
+        self.put('suggest', suggestion)
+        self.put('no-confirmation', dict(suggestion, version=2, stage='user_confirmed'), ok=False)
+        confirmed = dict(suggestion, version=2, stage='user_confirmed', confirmation_source='user message')
+        self.put('confirm', confirmed)
+        self.put('no-fill', dict(confirmed, version=3, stage='executed'), ok=False)
+        self.put('fill', dict(confirmed, version=3, stage='executed', execution_source='broker report'))
+        self.put('holdings', self.card(version=2, shares=100), ok=False)
+        self.assertEqual(next(r for r in self.cli('audit')['records'] if r['kind']=='decision')['stage'], 'executed')
 
     def test_atomic_idempotent_append_and_readonly_audit(self):
         self.cli('init')
@@ -223,7 +326,8 @@ class LedgerTest(unittest.TestCase):
         self.cli('init')
         self.put('evidence', self.record('evidence', source='fixture', date='2026-09-25', basis='original', status='verified'))
         import sqlite3
-        with sqlite3.connect(self.db) as db:
+        from contextlib import closing
+        with closing(sqlite3.connect(self.db)) as db, db:
             old = self.record('research', status='decision_ready', evidence_ids=['x'])
             db.execute('INSERT INTO records VALUES(?,?,?,?,?)',
                        ('research','x',1,'TSM',json.dumps(old)))

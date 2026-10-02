@@ -19,6 +19,39 @@ INVALID_BASES = {'earningsGrowth', 'price_position', '52w_position'}
 
 def research_ready(r, same):
     """Structural gate only: source independence and economic claims need human review."""
+    if r.get('protocol_version') == 3:
+        from datetime import date
+        card = r.get('card')
+        nonblank = lambda x: isinstance(x, str) and bool(x.strip())
+        if (not isinstance(card, dict) or not nonblank(r.get('owner'))
+                or any(not nonblank(card.get(k)) for k in ('facts', 'assumptions', 'opposition',
+                    'valuation_basis', 'conclusion', 'review_conditions'))
+                or card.get('important_unknowns') != []):
+            return False
+        sources = card.get('sources')
+        if not isinstance(sources, list) or not sources:
+            return False
+        events = [x['date'] for x in same if x['kind']=='event'
+                  and x.get('event_type') in {'financial_report', 'material_risk'}]
+        if any(x['kind']=='evidence' and (x.get('status') in {'invalidated', 'anomalous', 'upstream_failed', 'unknown'}
+                or x.get('anomalous', False) or x.get('basis') in INVALID_BASES
+                or (events and (x.get('date') or '') < max(events))) for x in same):
+            return False
+        for source in sources:
+            if (not isinstance(source, dict) or source.get('status') != 'verified'
+                    or source.get('anomalous', False) is not False
+                    or source.get('basis') in INVALID_BASES
+                    or any(not nonblank(source.get(k)) for k in
+                           ('source', 'date', 'locator', 'excerpt', 'units', 'basis'))):
+                return False
+            try:
+                if date.fromisoformat(source['date']).isoformat() != source['date']:
+                    return False
+            except (ValueError, TypeError):
+                return False
+            if events and source['date'] < max(events):
+                return False
+        return True
     evidence = {x['id']:x for x in same if x['kind']=='evidence'}
     events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
     ids = r.get('evidence_ids')
@@ -51,7 +84,7 @@ def latest(db):
 def validate(db, r):
     from datetime import date
     kind = r['kind']
-    if r.get('protocol_version', 1) not in (1, 2) or type(r.get('protocol_version', 1)) is not int:
+    if r.get('protocol_version', 1) not in (1, 2, 3) or type(r.get('protocol_version', 1)) is not int:
         raise ValueError('unsupported record protocol version')
     for field in ('id', 'symbol', 'source', 'basis', 'metric', 'impact', 'next_action', 'text', 'confirmation_source', 'execution_source', 'excerpt', 'locator', 'owner', 'next_event', 'source_group', 'evidence_type', 'research_id'):
         if field in r and (not isinstance(r[field], str) or not r[field].strip()):
@@ -118,14 +151,14 @@ def validate(db, r):
             raise ValueError('invalid research status')
         if r['status']=='decision_ready':
             if not research_ready(r, same):
-                raise ValueError('decision_ready requires v2 research readiness and verified role evidence')
+                raise ValueError('decision_ready requires valid research protocol, provenance and no important unresolved unknowns')
             closed = [x for x in same if x['kind']=='issue' and x.get('status')=='closed']
             if any(r.get('reviewed_issues', {}).get(x['id']) != x['version'] for x in closed) or (closed and not r.get('review_source')):
                 raise ValueError('closed issue impact requires explicit versioned conclusion review')
             events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
             if events and (r.get('reviewed_through') or '') < max(events):
                 raise ValueError('financial or material risk event requires explicit research review')
-            if not verified(r.get('evidence_ids')) or any(x['kind']=='issue' and x.get('status')!='closed' for x in same):
+            if (r.get('protocol_version') != 3 and not verified(r.get('evidence_ids'))) or any(x['kind']=='issue' and x.get('status')!='closed' for x in same):
                 raise ValueError('missing verified evidence/open issues')
             if any(x['status']=='suspended' for x in audit(db)['conditions'] if x['symbol']==r['symbol']):
                 raise ValueError('conflicting or suspended conditions')
@@ -215,7 +248,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--db', default=str(Path.home()/'.hermes/memories/investment-decisions/ledger.sqlite3'))
     parser.add_argument('command', choices=['init','apply','audit','render'])
-    parser.add_argument('--json')
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument('--json')
+    inputs.add_argument('--file', help='UTF-8 JSON batch file; one research card is sufficient')
     args = parser.parse_args()
     try:
         path = Path(args.db).expanduser().resolve()
@@ -233,7 +268,7 @@ def main():
             if args.command=='init':
                 result={'schema_version':1}
             elif args.command=='apply':
-                result=apply(db,json.loads(args.json))
+                result=apply(db,json.loads(Path(args.file).read_text(encoding='utf-8') if args.file else args.json))
             else:
                 db.execute('BEGIN')
                 result=audit(db)

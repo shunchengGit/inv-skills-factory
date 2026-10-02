@@ -18,17 +18,21 @@ context: |
   - 可执行脚本优先使用 PEP 723 内联依赖，通过 `uv run` 启动。
   - 修改业务技能后运行 `python3 .claude/skills/skill-linter/scripts/lint_skills.py`。
   - unittest 分布在 inv-knowledge-curator、inv-stock-data、inv-valuation-engine、
-    inv-porter-five-forces 与 inv-portfolio-tracker；按测试导入显式补齐依赖。
+    inv-portfolio-tracker；按测试导入显式补齐依赖。
 
   ## 投资技能边界
   - inv-stock-data：A 股 / ETF / 港股 / 美股行情与财务数据的唯一入口。
-  - inv-valuation-engine：估值计算与评分；`scripts/scoring_rules.json` 是规则的唯一机器可读来源，
+  - inv-valuation-engine：主估值、情景回报与诊断指标，不投票或自动映射买卖；`scripts/scoring_rules.json` 是规则的唯一机器可读来源，
     `references/scoring-rules.md` 是同步维护的人类说明。
   - inv-qarp-strategy：依赖 inv-stock-data 与 inv-valuation-engine 形成操作决策，不复制估值阈值。
-  - inv-porter-five-forces：依赖 inv-stock-data 获取结构化事实。
-  - inv-portfolio-tracker：持有组合流程和持仓主数据，价格来自 inv-stock-data；可使用 inv-topic-researcher。
-  - inv-topic-researcher：多源信息采集框架。
-  - inv-hk-ipo-analysis：相对独立的港股 IPO 分析流程。
+  - inv-portfolio-tracker：持仓/现金/真实成交权威与决策台账，价格来自 inv-stock-data。
+  - inv-position-addition、inv-position-reduction：QARP薄入口，只补执行测算。
+  - inv-etf-comparison：按需比较ETF工具与组合适配。
+  - inv-trade-reconciliation：真实成交截图/流水及盈亏核验，不独立记账。
+  - 新判断通过台账v3简洁卡一次写入；JUDGMENTS历史只读，CURRENT生成，不双写。
+  - 原SQLite schema和v1/v2兼容；不迁移或自动认证旧研究。
+  - 重要未知驱动检索，不设来源或检索动作数量配额；真实性、反证与关键缺口仍须核验。
+  - 保留持仓晨报与知识库维护，不恢复已撤销的自动选股或固定投资生活日志。
 
   ## 知识库边界
   inv-knowledge-curator 是外部知识库（默认 `~/.inv-knowledge`）的唯一写入者。

@@ -91,7 +91,7 @@ uv run .claude/skills/skill-deployer/scripts/sync.py --agent all
 
 ```text
 inv-stock-data（唯一行情/财务数据层）
-  ├─ inv-valuation-engine（估值计算与评分规则）
+  ├─ inv-valuation-engine（主估值、情景与诊断指标，不自动交易）
   │    └─ inv-qarp-strategy（QARP 四问与资本配置，唯一决策入口）
   ├─ inv-portfolio-tracker（持仓主数据与决策台账）
   └─ inv-trade-reconciliation（截图/流水真实成交与盈亏核验，不独立记账）
@@ -109,12 +109,13 @@ inv-knowledge-curator（知识库唯一写入边界，下游只读）
 关键边界：
 
 - `inv-stock-data` 是行情和财务数据的统一入口。上层投资技能不得绕过它直接新增 AkShare / yfinance 调用。
-- `inv-valuation-engine/scripts/scoring_rules.json` 是估值阈值与映射的唯一机器可读来源，`scoring_rules.py` 只负责加载；修改规则时必须同步更新面向人的 `references/scoring-rules.md`。QARP 调用估值引擎，不复制评分规则。
+- `inv-valuation-engine/scripts/scoring_rules.json` 是估值机器策略与诊断区间的唯一机器可读来源，`scoring_rules.py` 只负责加载；修改规则时必须同步更新面向人的 `references/scoring-rules.md`。QARP 调用估值引擎，不复制评分规则。
 - `inv-portfolio-tracker` 持有组合流程和持仓主数据（`PORTFOLIO.md` 是持仓/现金/成交权威），但价格仍来自 `inv-stock-data`。
 - 个人组合约束（仓位上限、行业约束、分批节奏）的唯一来源是 `~/.hermes/memories/USER.md`；各技能直接读取，不复制限额。
 - `inv-position-addition` 与 `inv-position-reduction` 是 QARP 资本配置的薄入口，只补交易数量与执行测算；不维护独立的加减仓哲学、现金闸门或估值规则。
 - `inv-trade-reconciliation` 是事实核验工具：从券商截图/流水重建真实成交并核算盈亏，不输出买卖建议、不独立记账；成交归 `inv-portfolio-tracker`，行情归 `inv-stock-data`。
-- 决策台账为 `~/.hermes/memories/investment-decisions/ledger.sqlite3`，研究、证据、假设、条件与决策统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入，不直接改数据库；详见 `inv-portfolio-tracker/references/decision-ledger.md`。
+- 当前判断唯一源为 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；新判断用v3简洁研究卡，通过 `decision_ledger.py apply --file <批次JSON绝对路径>` 单次追加，字段与门禁见 `inv-portfolio-tracker/references/decision-ledger.md`。不直接改数据库，不拆段凑证据分类。JUDGMENTS仅历史只读，不手工双写；CURRENT由render生成。旧v1/v2保留兼容，不自动认证旧研究。
+- 研究以可能改变决策的重要未知为完成标准，不设检索、标签、原文或机构数量配额。官方事实核原文与口径，预测/因果检验反证，重大疑点按需独立核验。重要未知、异常、失效及暂停仍阻止就绪；程序通过不证明经济判断正确。知识库及图谱维护规则不受影响。
 - 定时任务（如 portfolio-tracker 的持仓晨报）摘要一律经 cron 投递到微信；技能内不手动调用 message/send。
 
 ### 知识库单写入者模型

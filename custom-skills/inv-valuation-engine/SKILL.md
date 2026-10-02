@@ -41,7 +41,7 @@ commands:
 5. 若脚本超时或字段缺失，按 `inv-stock-data` 的数据层策略降级，先检查 `data_gaps`，必要时再用 `financials` + `valuation_manual_compute.py` 补全。
 6. 定量判断按 `references/scoring-rules.md` 的人类说明执行；脚本阈值以 `scripts/scoring_rules.json` 为机器来源，两者必须同步。定性解释按下文公司经济类型、现金流质量与竞争证据校验。
 7. 如果用户已给高质量最新数据，可跳过抓取直评估，但需标注数据时点。
-8. **查阅知识库**（`inv-knowledge-curator`）：估值分析默认最低 L2，按 `inv-knowledge-curator/references/deep-mining-protocol.md` 执行。保留本技能特有约束：Reference 类条目优先作为数据锚点；条目摘要不足时，可用 `km_import read --file <res/...pdf> --pages edges` 回溯原始 PDF。定量结论仍按 `scoring-rules.md` 的说明判断。
+8. **按重要未知检索知识库**：优先原始事实锚点，关键参数回溯PDF具体页；检索深度由可能改变决策的缺口决定，不以L2动作、原文份数或机构数量认证完成。知识库与图谱维护原样保留。
 
 ## 数据源说明（新增）
 - 所有数据统一通过 `inv-stock-data` CLI 获取，不直接调用 yfinance/AkShare。
@@ -110,7 +110,7 @@ commands:
 
 ## 执行流程
 1. 确认标的类型和适用估值口径。
-2. **查阅知识库（L2 深度探索）**：按 `inv-knowledge-curator/references/deep-mining-protocol.md` 的 L2 标准执行。**必须先完成深度搜索，不可跳过或与下一步并行。** 本技能只保留两条特有约束：Reference 类条目优先读取（作为数据锚点），Analysis/Synthesis 次之（定性校验）；若知识库无记录，按协议输出结构化知识缺口。
+2. 按决策的重要未知查阅知识库，原文事实和口径优先；官方披露可单源并核内部一致性，预测/因果核推理和反证，重大存疑事实按需独立验证。无覆盖明确缺口，不按动作或来源数量淘汰。
 3. 用 `cs_stock_all` 获取三个核心组件，再显式请求 `daily --period 5y`；A 股按需请求 announcements/relations。标注每个响应的状态、时点、来源与实际历史窗口。
 4. 先执行估值就绪门禁：上游失败或可评级指标/核心锚不足时输出不可评级；partial 只允许受限结论、不输出操作参考。
 5. 按公司类型选择框架，不强行套用全部方法。
@@ -125,7 +125,7 @@ commands:
 | 层级 | 回答的问题 | 数据来源 | 作用 |
 |------|------------|---------|------|
 | **数据层** | 事实是什么 | 实时行情（Yahoo Finance/inv-stock-data）+ 财务快照 | 锚定事实，确定估值锚点 |
-| **知识层** | 已有资料怎么说 | inv-knowledge-curator（按 `deep-mining-protocol.md` 执行 L2；Reference 优先、必要时回溯原始 PDF） | 校验假设，发现共识与分歧；输出知识覆盖度矩阵 |
+| **知识层** | 已有资料怎么说 | inv-knowledge-curator（重要未知驱动检索，Reference优先、关键参数回溯原文） | 校验假设，发现共识与分歧；输出知识覆盖度矩阵 |
 | **竞争层** | 护城河有多深 | 财报、行业数据与研报中的定价权、替代风险、客户粘性证据 | 验证长期竞争优势是否结构性 |
 | **操作层** | 具体怎么做 | 前三层结论 + QARP 估值纪律与组合约束 | 落到价格区间、仓位、打脸条件 |
 

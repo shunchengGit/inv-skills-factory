@@ -221,7 +221,9 @@ auto = sum(auto holdings mv)
 
 ## 受控决策闭环（当前协议）
 
-研究、证据、假设、条件、决策与issues统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入默认profile的 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；详见 `inv-portfolio-tracker/references/decision-ledger.md`。PORTFOLIO仅持仓/现金/成交权威；CURRENT.md生成只读，不与档案/观察表双写。
+研究、证据、假设、条件、决策与issues统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入默认profile的 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；详见 `inv-portfolio-tracker/references/decision-ledger.md`。PORTFOLIO仅持仓/现金/成交权威；CURRENT.md生成只读，不与档案/观察表双写。JUDGMENTS停止手写且历史保留，台账为新判断唯一源；render只生成新视图，不覆盖历史JUDGMENTS。
+
+新研究采用v3简洁卡，通过 `apply --file <JSON绝对路径>` 一次追加来源链接（或报告路径来源列表）、事实与关键假设、最强反对理由或检验结果、估值依据、结论、复核条件和重要未知，并明确人工责任人。不强制外部反方、双来源/来源类型数量配额或五分类readiness，不必每段拆evidence实体。重要未解决经济未知阻止decision_ready，先写partial/needs_review；填满字段不等于事实已核验。单位、日期、原文位置与真实性保留人工核验责任。旧v1/v2只兼容读取/合法续写，不自动升级或全绿；旧异常/失效证据、问题及暂停条件不能切协议绕过。台账不执行交易或重复持仓记账。
 
 报价更新不更新研究；历史摘要仅historical/partial/needs_review。缺原文证据、异常PEG、冲突条件不得decision_ready；价格位置不代表估值。新财报事件使旧证据失效并待复核，未知财报日期不编造，不再采用90/120天机械fresh。issue关闭需证据，影响结论仍须复核。建议、用户确认、实际执行分离；用户讨论不改持仓，成交无论有无卡都真实记账。独立突发风险可启动研究，不限预先写死触发。USER.md为唯一组合约束，不恢复现金最低/月一次旧规则。脚本仅验证结构，不能证明经济判断正确。
 
