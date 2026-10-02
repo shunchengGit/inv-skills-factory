@@ -23,9 +23,7 @@ linter 检查 frontmatter、目录命名、文档长度、引用深度、路径�
 - `inv-knowledge-curator`
 - `inv-stock-data`
 - `inv-valuation-engine`
-- `inv-porter-five-forces`
 - `inv-portfolio-tracker`
-- `inv-opportunity-explorer`
 
 仓库没有统一测试环境；测试会直接导入各技能脚本。运行全部测试时显式补齐当前所需依赖（尤其是 curator 源码使用但 `requirements.txt` 未声明的 PyYAML）：
 
@@ -34,9 +32,7 @@ for skill in \
   inv-knowledge-curator \
   inv-stock-data \
   inv-valuation-engine \
-  inv-porter-five-forces \
-  inv-portfolio-tracker \
-  inv-opportunity-explorer
+  inv-portfolio-tracker
 do
   uv run --with pyyaml --with pymupdf --with requests --with pandas \
     python -m unittest discover -s "custom-skills/$skill/tests" -v || exit 1
@@ -95,30 +91,17 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
 inv-stock-data（唯一行情/财务数据层）
   ├─ inv-valuation-engine（估值计算与评分规则）
   │    └─ inv-qarp-strategy（操作决策）
-  ├─ inv-porter-five-forces（行业分析）
-  └─ inv-portfolio-tracker（持仓管理）
+  └─ inv-portfolio-tracker（持仓主数据与决策台账）
 
-inv-knowledge-curator（知识库唯一写入边界）
+inv-knowledge-curator（知识库唯一写入边界，下游只读）
   ├─ inv-valuation-engine
   ├─ inv-qarp-strategy
-  ├─ inv-topic-researcher
-  └─ inv-porter-five-forces
-
-inv-topic-researcher（信息采集框架）
-  └─ inv-portfolio-tracker
-
-inv-opportunity-explorer（新标的发现：日筛 / 周研，cron 驱动）
-  ├─ inv-qarp-strategy
-  ├─ inv-stock-data
-  ├─ inv-valuation-engine
-  └─ inv-knowledge-curator
+  └─ inv-position-addition
 
 决策与专题层（挂在 QARP / 估值链之下，不自行取数）
   ├─ inv-position-addition（加仓决策）
   ├─ inv-position-reduction（减仓决策）
-  ├─ inv-etf-comparison（主题 ETF 与持仓对比）
-  ├─ inv-technical-analysis（短线量价择时）
-  └─ inv-ai-industry-economics（AI 产业成本曲线与利润池）
+  └─ inv-etf-comparison（主题 ETF 与持仓对比）
 ```
 
 关键边界：
@@ -126,11 +109,9 @@ inv-opportunity-explorer（新标的发现：日筛 / 周研，cron 驱动）
 - `inv-stock-data` 是行情和财务数据的统一入口。上层投资技能不得绕过它直接新增 AkShare / yfinance 调用。
 - `inv-valuation-engine/scripts/scoring_rules.json` 是估值阈值与映射的唯一机器可读来源，`scoring_rules.py` 只负责加载；修改规则时必须同步更新面向人的 `references/scoring-rules.md`。QARP 调用估值引擎，不复制评分规则。
 - `inv-portfolio-tracker` 持有组合流程和持仓主数据，但价格仍来自 `inv-stock-data`。
-- `inv-hk-ipo-analysis` 是相对独立的港股 IPO 分析流程，不进入上述个股估值链。
 - `inv-position-addition` 与 `inv-position-reduction` 是组合操作决策层，依赖 QARP 闸门与 `PORTFOLIO.md` 现状，不复制估值阈值。
-- `inv-technical-analysis` 仅在用户显式要求短线／趋势／技术分析时适用；该场景下 QARP 估值纪律不适用，两套结论不得混用。
-- `inv-opportunity-explorer` 由 cron 驱动（日筛 + 周研），台账为 `~/.hermes/memories/opportunity-explorer/ledger.sqlite3`，只经 `scripts/ledger.py` 写入，不直接改数据库。
-- 定时任务摘要一律经 cron 投递到微信；技能内不手动调用 message/send。
+- 决策台账为 `~/.hermes/memories/investment-decisions/ledger.sqlite3`，研究、证据、假设、条件与决策统一经 `inv-portfolio-tracker/scripts/decision_ledger.py` 写入，不直接改数据库；详见 `inv-portfolio-tracker/references/decision-ledger.md`。
+- 定时任务（如 portfolio-tracker 的持仓晨报）摘要一律经 cron 投递到微信；技能内不手动调用 message/send。
 
 ### 知识库单写入者模型
 

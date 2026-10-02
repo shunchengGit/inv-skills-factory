@@ -131,10 +131,17 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 4. **平台界面特征注意**：
    - 标题可能被截断，与 PDF 首页正式标题存在差异；判定是否重复必须以 PDF 首页正式标题 + 机构 + 日期 + 哈希为准。
    - 同一份报告可能因覆盖公司列表不同而显示多行（如 +N 徽标变化），哈希相同视为同一报告。
+   - 同一报告可能同时出现英文版、中文版、A股版/H股版等多个变体，内容一致时视为同一份报告的不同版本。
 5. **执行下载 → 归档 → 入库**：
    - 归档：`km_import.py res --file {绝对路径} --target {归属}`（逐份串行）
    - 条目：单份/少量直接 `write_file` 写完整 OKF 条目（推荐，避免 shell 转义），再 `km_lint.py --fix --skip-url-check`
 6. **验证与汇报**：lint 返回 errors=0、no_cross_refs=0、pdf_no_entry=0、git_push.success=true 后，分别报告 PDF 归档数、条目落盘数、废纸篓移动数。
+
+**截图比对时的搜索策略**：
+- 先在 `res/{target}/` 用 `ls | grep -i "关键词"` 检查是否已有同主题文件
+- 再在 `entries/` 用 `search_files` 按标题关键词检索
+- 注意：截图中的日期是平台 Available 日期，PDF 首页发布日期可能不同；以 PDF 首页日期为准
+- 同机构同日出品的多份报告（如 First Read + 快评）可能是同一事件的不同产品，需读 PDF 首页确认是否独立
 
 > 完整身份判定与去重规则见 `references/report-identity-dedup.md`。
 

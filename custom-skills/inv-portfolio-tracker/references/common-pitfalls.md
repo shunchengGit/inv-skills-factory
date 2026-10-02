@@ -76,9 +76,9 @@ When Yahoo triggers `YFRateLimitError` even for single snapshot calls, switch to
 
 `hermes_tools.read_file` 返回的内容可能带有行号前缀，直接用 `patch` 工具匹配会失败。Workaround: 使用 Python 原生 `open()` 读写文件。
 
-## 定时任务（T1-T4）在大目录下运行的避坑规则
+## 持仓晨报在大目录下运行的避坑规则
 
-**症状**：定时任务（如 T1 持仓晨报、T2 日常回顾）未限定工作目录和绝对路径时，可能默认在 `~` 下运行，并触发大批量 `search_files` 去寻找 `cs_stock_info.py`、`PORTFOLIO.md` 等文件，引发 macOS `Operation not permitted`，最终因重试过多在 Turn 上限内未完成而报错。
+**症状**：定时任务（如 T1 持仓晨报）未限定工作目录和绝对路径时，可能默认在 `~` 下运行，并触发大批量 `search_files` 去寻找 `cs_stock_info.py`、`PORTFOLIO.md` 等文件，引发 macOS `Operation not permitted`，最终因重试过多在 Turn 上限内未完成而报错。
 
 **规则**：
 
@@ -87,5 +87,5 @@ When Yahoo triggers `YFRateLimitError` even for single snapshot calls, switch to
    ```bash
    python3 ~/.hermes/skills/inv-skills/inv-portfolio-tracker/scripts/qq_update_portfolio.py --write
    ```
-3. **定向探测而非全目录检索**：T2 每日回顾检测当天有无新会话时，直接 `read_file` 探测 `~/.hermes/memories/YYYY-MM-DD.md`，或用脚本计算当日会话情况；若无则立即走安静日极速返回。
+3. **只读取晨报所需来源**：使用绝对路径读取持仓与台账，不检索每日投资会话，不恢复已撤销的生活日志任务。
 4. **绑定模型**：定时任务显式锁定稳定推理模型，避免轮询到弱模型时代码能力退化。

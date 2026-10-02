@@ -1,6 +1,6 @@
 ---
 name: inv-portfolio-tracker
-description: 管理投资组合持仓主数据，更新持仓/现金，支持 T1-T4 自动化日报/周报流程。用于跟踪持仓变化、生成投资组合报告时
+description: 管理投资组合持仓主数据，更新持仓/现金，支持持仓晨报与按需组合检查。用于跟踪持仓变化、生成投资组合报告时
 category: invest
 tags: [portfolio, holdings, tracking, daily-report, cron]
 version: 1.3.0
@@ -16,7 +16,7 @@ trigger:
 
 ## 用途
 
-管理用户投资组合持仓主数据，理解自动化日报/周报流程。
+管理用户投资组合持仓主数据，支持自动晨报与按需分析。
 
 ## 何时加载本技能
 
@@ -98,20 +98,15 @@ cd /tmp && uv run --with requests python {baseDir}/scripts/qq_update_portfolio.p
 - 现金水位: 现金占比 1.6%，仅记账；应与可核对余额比对
 ```
 
-## 自动化报告流程（T1–T4）
+## 自动化持仓晨报（仅 T1）
 
-定义在 `~/.hermes/memories/CRONTASK.md`：
+定义在 `~/.hermes/memories/CRONTASK.md`：工作日08:30，cron `30 8 * * 1-5`，当日晨报记录+微信；交易日历与数据口径门禁保持不变。
 
-| Task | 时间 | Cron | 输出 |
-|------|------|------|--------|
-| T1 持仓晨报 | 工作日 08:30 | `30 8 * * 1-5` | 当日 `YYYY-MM-DD.md` + 微信 |
-| T2 日常回顾 | 每日 22:30 | `30 22 * * *` | 当日 `YYYY-MM-DD.md` + 微信 |
-| T3 周中回顾 | 周三 21:00 | `0 21 * * 3` | 当日主记录 + 微信 |
-| T4 周复盘 | 周日 21:00 | `0 21 * * 0` | `YYYY-MM-DD-weekly-review.md` + 微信 |
-
-- **使用技能**：`inv-stock-data`（snapshot/price/PE）+ `inv-portfolio-tracker`（组合结构与流程）
-- **关键规则**：所有 `inv-stock-data snapshot` 调用必须用 `&` 并行 + `wait`
-- **投递**：经 cron 投递到微信；不要手动调 message/send
+- **使用技能**：`inv-stock-data` + 本技能；snapshot调用用`&`和`wait`并行。
+- **投递**：仅经cron，不手动message/send。
+- 日常回顾、周中回顾、固定周复盘及自动新机会日筛/周研已撤销，不重新注册。
+- 真实决策发生时记录台账，实际成交记PORTFOLIO；绩效核验按需，不维护对话条数/分析次数生活日志。
+- 知识库、图谱及自动维护保持不变。
 
 ## 行情刷新流程（无调仓）
 
@@ -230,6 +225,6 @@ auto = sum(auto holdings mv)
 
 报价更新不更新研究；历史摘要仅historical/partial/needs_review。缺原文证据、异常PEG、冲突条件不得decision_ready；价格位置不代表估值。新财报事件使旧证据失效并待复核，未知财报日期不编造，不再采用90/120天机械fresh。issue关闭需证据，影响结论仍须复核。建议、用户确认、实际执行分离；用户讨论不改持仓，成交无论有无卡都真实记账。独立突发风险可启动研究，不限预先写死触发。USER.md为唯一组合约束，不恢复现金最低/月一次旧规则。脚本仅验证结构，不能证明经济判断正确。
 
-## 周度规则漂移门禁（只读）
+## 按需报告规则检查（只读）
 
-生成本周复盘草稿后运行 `python3 -B {baseDir}/scripts/weekly_guard.py --review <周报绝对路径>`，读取其JSON的`checks`/`blockers`/`unresolved`。它核对实时USER.md、PORTFOLIO.md及受控台账audit：旧现金禁买线/触价直接加仓/不匹配单股与行业上限要拦截；研究非decision_ready须列待核，不能把结构覆盖当研究通过。该门禁不联网，不证明证据真实性、周任务完整运行或微信投递成功；禁止用历史价格估算当券商成交归因。详见 `~/.hermes/memories/CRONTASK.md` T4。
+用户明确要求组合报告时可运行 `python3 -B {baseDir}/scripts/weekly_guard.py --review <周报绝对路径>`，读取其JSON的`checks`/`blockers`/`unresolved`。它核对实时USER.md、PORTFOLIO.md及受控台账audit：旧现金禁买线/触价直接加仓/不匹配单股与行业上限要拦截；研究非decision_ready须列待核，不能把结构覆盖当研究通过。该门禁不联网，不证明证据真实性、周任务完整运行或微信投递成功；禁止用历史价格估算当券商成交归因。固定周复盘已撤销，此脚本仅用于按需报告，不注册定时任务。

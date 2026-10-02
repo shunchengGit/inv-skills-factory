@@ -55,7 +55,9 @@ commands:
 | 龙头白马/宽护城河 | ≥20% | 内在价值的80% | 质量溢价可接受较小安全边际 |
 | 成长股/中型公司 | ≥30% | 内在价值的70% | 增长不确定性需要更大保护 |
 | 高波动科技股 | ≥40% | 内在价值的60% | 波动本身是风险来源 |
-| 周期股/困境反转 | ≥50% | 内在价值的50% | 高不确定性需要极端安全边际 |
+| 周期股 | ≥50% | 内在价值的50% | 高不确定性需要极端安全边际 |
+
+市场恐慌使好公司变便宜仍按 QARP 的质量闸门与估值纪律判断，不另设反转策略；经营修复或清算价值不作为独立选股入口。
 
 ### 1.2 PEG 使用规则
 
@@ -73,7 +75,7 @@ commands:
 | 维度 | 要求 | 判断方法 |
 |------|------|----------|
 | 行业空间 | TAM 足够大，或渗透率仍在提升 | 行业增速 CAGR，≥2 份不同券商交叉验证，关键数字回溯原文（检索与回溯协议见 `knowledge-deep-search.md`） |
-| 竞争结构 | 集中度提升中，或龙头护城河清晰 | CR3/CR5 趋势 + Porter 五力速判 + 知识库卖方格局判断 |
+| 竞争结构 | 集中度提升中，或龙头护城河清晰 | CR3/CR5 趋势 + 定价权、替代风险与客户粘性证据 + 知识库卖方格局判断 |
 | 商业模式 | 能说清"谁付钱、为什么付、凭什么持续付" | 用三句话测试，说不清则不通过 |
 | 周期属性 | 明确标的属于成长/消费/周期/金融哪类 | 决定后续估值口径和持有逻辑 |
 
@@ -185,7 +187,7 @@ commands:
 ### 判断记录（强制，见 `references/judgment-journal.md`）
 
 - **分析前**：对已有标的先 grep `~/.hermes/memories/JUDGMENTS.md` 找最近一次记录；有记录先复述"上次结论/关键假设/失效条件"，未触发失效条件且证据无实质新增时沿用旧结论，不重做完整分析；触发则重新估值并写新记录替代（旧记录不删不改）。
-- **收尾时**：`/qarp`、`/qarp_check` 给出最终结论后必须向 JUDGMENTS.md 追加一条记录（格式与豁免见该文件）；缺这条记录不算完成。
+- **收尾时**：`/qarp`、`/qarp_check` 或“今天研报有哪些新增判断”形成现有持仓假设/操作增量后，按 `references/judgment-journal.md` 的研报增量收尾检查更新 JUDGMENTS.md 与受控台账，读回核验后才能称完成；纯摘要不算投资判断。写入被审批超时拦截时不得改道重试或宣称全闭环。
 - 价格区间结论必须绑定关键假设；假设变了旧价格区间作废。
 
 ### 结论输出收尾（每次必带）
@@ -229,11 +231,10 @@ commands:
 ## 与其他技能配合
 
 - **`inv-stock-data`**：数据层，所有行情与财务数据统一入口
-- **`inv-valuation-engine`**：估值引擎，提供脚本 + 定量评分框架 + 大师框架
+- **`inv-valuation-engine`**：估值引擎，提供脚本 + 定量评分框架 + 公司经济类型估值口径
 - **`inv-knowledge-curator`**：本地券商研报 PDF，提供卖方叙事、一致预期、盈利预测区间、风险与隐含假设。其结构化输出流入三道闸门、估值纪律、买入必答和机会成本比较。详见 `references/research-cross-validation.md`
-- **`inv-porter-five-forces`**：五力竞争格局，用于第一道闸门的竞争结构判断
 
 ## 参考文件
 
-- `inv-valuation-engine/references/`：`scoring-rules.md`（定量阈值与五档映射）、`master-frameworks.md`、`internet-platform-valuation.md`（GAAP 失真与 SOTP）、`us-hk-data-workaround.md`（data_gaps 补全）；脚本 `valuation_snapshot.py` / `valuation_report.py` / `valuation_compare.py` / `valuation_manual_compute.py`
+- `inv-valuation-engine/references/`：`scoring-rules.md`（定量阈值与五档映射）、`internet-platform-valuation.md`（GAAP 失真与 SOTP）、`us-hk-data-workaround.md`（data_gaps 补全）；脚本 `valuation_snapshot.py` / `valuation_report.py` / `valuation_compare.py` / `valuation_manual_compute.py`
 - 本技能 `references/`：`output-template.md`（输出模板）、`common-pitfalls.md`（常见陷阱）、`data-fallback.md`（数据源降级）、`research-cross-validation.md`（研报交叉验证方法论）、`knowledge-deep-search.md`（L2+/L3 深挖、原文回溯配额、证据矩阵与覆盖门禁）

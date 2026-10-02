@@ -81,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--company-type",
         default="auto",
-        choices=["auto", "consumer", "internet", "tech", "cyclical", "financial", "distressed"],
+        choices=["auto", "consumer", "internet", "tech", "cyclical", "financial"],
         help="可选公司类型覆盖",
     )
     parser.add_argument("--output", default="text", choices=["text", "json", "markdown"], help="输出格式")
@@ -119,7 +119,6 @@ def infer_company_type(metrics: dict[str, Any], override: str) -> str:
             "tech": "半导体/科技制造",
             "cyclical": "周期行业",
             "financial": "金融/地产",
-            "distressed": "困境反转",
         }
         return mapping[override]
     # auto 模式：由 LLM 根据 sector/industry 判断
@@ -342,16 +341,18 @@ def framework_views(metrics: dict[str, Any], company_type: str, conclusion: str 
         if growth:
             peg = round(metrics["trailing_pe"] / growth, 2)
 
-    buffett = "默认主框架。ROE与现金流决定是否应享有溢价；当前结论为 `{}`。".format(conclusion)
-    duan = "适用。若商业模式稳定且长期年化回报仍在 10% 左右，可支持至少“合理”。" if company_type in {"消费/医疗", "互联网/软件", "半导体/科技制造"} else "非优先框架。"
-    lynch = "PEG={0}，适合作为成长股辅助锚。".format(peg) if peg is not None and company_type != "周期行业" else "暂不适用或参考价值有限。"
-    templeton = "仅在周期底部或困境反转中启用；当前不作为主结论依据。"
-    return {
-        "巴菲特/芒格": buffett,
-        "段永平": duan,
-        "彼得·林奇": lynch,
-        "邓普顿": templeton,
+    views = {
+        "公司经济类型": company_type,
+        "质量与现金流": "ROE与现金流用于校验溢价或折价；当前定量结论为 `{}`。".format(conclusion),
     }
+    if company_type == "周期行业":
+        views["适用估值口径"] = "先核验周期位置与正常化盈利，不以单一年份利润或 PEG 为核心依据。"
+    elif company_type == "金融/地产":
+        views["适用估值口径"] = "优先核验 PB-ROE、股息率、NAV 与资产负债质量。"
+    else:
+        views["适用估值口径"] = "按现金流稳定性选择 DCF、PE、股息率或适用的成长指标。"
+        views["增长辅助锚"] = "PEG={0}，仅在盈利稳定、增速可估时作辅助参考。".format(peg) if peg is not None else "增长数据不足或不适用，不能强行使用 PEG。"
+    return views
 
 
 def build_key_reasons(metrics: dict[str, Any], conclusion: str | None, views: list[MetricView]) -> list[str]:

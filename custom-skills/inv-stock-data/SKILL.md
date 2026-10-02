@@ -173,7 +173,7 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 
 ## 与其他技能配合
 
-- **数据层统一**：本技能是所有投资相关技能的**唯一数据层**。`inv-valuation-engine`、`inv-qarp-strategy`、`inv-porter-five-forces` 通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。
+- **数据层统一**：本技能是所有投资相关技能的**唯一数据层**。`inv-valuation-engine`、`inv-qarp-strategy` 通过 CLI 子进程调用本技能获取数据，不直接调用 AkShare / yfinance。
 - **价值投资估值**：本技能只提供事实数据；五档估值结论请走 `inv-valuation-engine`。
 - **Yahoo 子命令大全**（期权、评级、search 等）：可用 Python `yfinance` 直接调用，详见 `references/yfinance-advanced-usage.md`。
 - **Yahoo Finance Web 降级方案**：当所有 yfinance API 端点均失败时，用 Agent WebFetch 抓取 Yahoo Finance 网页获取价格/PE/52周范围等数据，详见 `references/yahoo-browser-fallback.md`。

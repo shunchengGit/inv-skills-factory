@@ -56,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--company-type",
         default="auto",
-        choices=["auto", "consumer", "internet", "tech", "cyclical", "financial", "distressed"],
+        choices=["auto", "consumer", "internet", "tech", "cyclical", "financial"],
         help="可选公司类型覆盖",
     )
     parser.add_argument("--output", default="text", choices=["text", "json", "markdown"], help="输出格式")
