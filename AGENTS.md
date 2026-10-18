@@ -16,7 +16,7 @@ This file provides guidance to coding agents working with code in this repositor
 python3 .claude/skills/skill-linter/scripts/lint_skills.py
 ```
 
-linter 检查 frontmatter、目录命名、文档长度、引用深度、路径、软链接兼容性以及已部署入口脚本的 `--help`；它不是业务测试套件。入口运行检查依赖 `~/.hermes/skills/inv-skills/` 中已有部署，未部署时会跳过部分检查。
+linter 检查 frontmatter、目录命名、文档长度、引用深度、路径、软链接兼容性以及已部署入口脚本的 `--help`；它不是业务测试套件。入口运行检查依赖 `~/.hermes/skills/inv-skills/` 中已有部署，未部署时会跳过部分检查。有对应 unittest 的业务技能修改还必须运行相关确定性测试。
 
 确定性单元测试使用标准库 `unittest`，分布在以下技能：
 
@@ -83,7 +83,6 @@ uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes
 - `custom-skills/<skill-name>/`：可部署的业务技能，保持扁平一级结构；目录必须包含 `SKILL.md`。
 - `custom-skills/_shared/`：跨技能复用的 dotenv、代理、git、数值解析等基础工具，不放投资业务逻辑。
 - `.claude/skills/` 与 `.claude/commands/`：Claude Code harness 能力，不作为业务技能部署。
-- `openspec/`：变更规格、当前能力规格与归档记录；项目上下文以 `openspec/config.yaml` 为准。
 
 新增技能目录名使用 `{前缀}-{语义名}` 的 kebab-case 格式，例如 `inv-example`。脚本经软链接执行，因此凡由 `__file__` 推导路径的代码必须先使用 `Path(__file__).resolve()`（或等价的 `abspath`）。
 
@@ -119,6 +118,7 @@ inv-knowledge-curator（知识库唯一写入边界，下游只读）
 - 当前判断唯一源为 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；新判断用v3简洁研究卡，通过 `decision_ledger.py apply --file <批次JSON绝对路径>` 单次追加，字段与门禁见 `inv-portfolio-tracker/references/decision-ledger.md`。不直接改数据库，不拆段凑证据分类。JUDGMENTS仅历史只读，不手工双写；CURRENT由render生成。旧v1/v2保留兼容，不自动认证旧研究。
 - 研究以可能改变决策的重要未知为完成标准，不设检索、标签、原文或机构数量配额。官方事实核原文与口径，预测/因果检验反证，重大疑点按需独立核验。重要未知、异常、失效及暂停仍阻止就绪；程序通过不证明经济判断正确。知识库及图谱维护规则不受影响。
 - 定时任务（如 portfolio-tracker 的持仓晨报）摘要一律经 cron 投递到微信；技能内不手动调用 message/send。
+- 保留持仓晨报与知识库维护，不恢复已撤销的自动选股或固定投资生活日志。
 
 ### 知识库单写入者模型
 
