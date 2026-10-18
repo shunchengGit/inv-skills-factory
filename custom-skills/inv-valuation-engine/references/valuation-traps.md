@@ -61,5 +61,5 @@
 
 ## 极端降级场景
 
-- **美股/港股 inv-stock-data snapshot 大量 data_gaps 时手动补全**：当 `valuation_snapshot.py` 对美股/港股返回 `data_gaps` 列表超过5项（尤其是 `high_52w`、`low_52w`、`analyst_target_price`、`freeCashflow`、`enterpriseValue` 等关键字段缺失），不要直接输出结论。降级补全流程见 `references/us-hk-data-workaround.md`，含 inv-stock-data financials 子命令、手动计算脚本两条补全链路。
-- **全端点 blackout（极端情况）**：当 yfinance 所有端点（info/financials/balance_sheet/cash_flow）均因 SSL/RateLimit/Consent 循环失败，且 Playwright 也无法抓取时，要尽可能利用 `inv-stock-data snapshot` 剩余基础字段，然后降级到 **本地研报 PDF 提取 + 手动估值**。具体步骤见 `references/us-hk-data-workaround.md` 「D. 全端点 blackout」章节。关键原则：利润口径必须统一为 Non-GAAP，与 Yahoo GAAP PE 做差异标注；手动计算后必须与 snapshot 中的 `trailing_pe` 做口径校验。
+- **美股/港股 inv-stock-data snapshot 大量 data_gaps 时手动补全**：当 `valuation_snapshot.py` 对美股/港股返回较多 core 缺口（尤其是 `high_52w`、`low_52w`、`analyst_target_price`、`freeCashflow`、`enterpriseValue` 等关键字段缺失），不要直接输出结论。降级补全流程见 `references/us-hk-data-workaround.md`：financials → daily → QQ Finance → 重试 info，全部经 inv-stock-data。
+- **全端点 blackout（极端情况）**：当 inv-stock-data 的 info 与 financials 等 Yahoo 端点均因 SSL/限流失败、QQ Finance 也不足以补齐时，要尽可能利用 `inv-stock-data snapshot` 剩余基础字段，然后降级到 **本地研报 PDF 提取 + 手动估值**。具体步骤见 `references/us-hk-data-workaround.md` 「E. 全端点失败」章节；研报只用 `km_import read` 只读，三情景按主估值协议构建，不用固定倍数。关键原则：利润口径必须统一为 Non-GAAP，与 Yahoo GAAP PE 做差异标注；手动计算后必须与 snapshot 中的 `trailing_pe` 做口径校验。

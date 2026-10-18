@@ -18,7 +18,7 @@
 
 ## 美股/港股 data_gaps 降级
 
-当 `valuation_snapshot.py` 对美股/港股返回超过5项 data_gaps 时，按 `inv-valuation-engine` 的 `inv-valuation-engine/references/us-hk-data-workaround.md` 执行手动补全，含 inv-stock-data financials 子命令、`valuation_manual_compute.py` 两条补全链路。
+当 `valuation_snapshot.py` 对美股/港股返回较多 core 缺口时，按 `inv-valuation-engine/references/us-hk-data-workaround.md` 降级补全：inv-stock-data financials/daily/QQ Finance，全失败再用研报原文与 `valuation_manual_compute.py`。
 
 **港股 snapshot 全空降级**（实测 0700.HK 返回 41 项 data_gaps，所有字段 null）：当 snapshot 对港股返回全部 null 时，跳过 snapshot 降级流程，直接用 inv-stock-data `financials` 子命令获取财务三表数据：
 1. `inv-stock-data financials 0700.HK --output json` 获取利润表/资产负债表/现金流量表

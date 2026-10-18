@@ -18,7 +18,7 @@
 
 **根因**：Yahoo 不同 API 端点限流的反向表现。
 
-**降级**：snapshot 的 `fundamentals` 字段已含大部分估值指标（PE/PB/ROE/毛利率/利润率/营收增速），通常足够支撑快速分析。需更完整财报时降级到 `yfinance` 直调 `ticker.income_stmt`/`balance_sheet`/`cash_flow`，或走 inv-valuation-engine 的全端点 blackout 兜底链路。
+**降级**：snapshot 的 `fundamentals` 字段已含大部分估值指标（PE/PB/ROE/毛利率/利润率/营收增速），通常足够支撑快速分析。需更完整财报时用本技能 `financials` 子命令（三表走独立端点，常在 info 失败时仍可用），仍失败再走 inv-valuation-engine `references/us-hk-data-workaround.md` 的「E. 全端点失败」链路；上层不直调 yfinance。
 
 ### yfinance info 端点 SSL 失败但 financials 可用
 

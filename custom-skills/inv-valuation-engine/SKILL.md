@@ -191,7 +191,7 @@ commands:
 ## 参考文件
 - `references/scoring-rules.md`：主估值协议、诊断兼容区间与三情景回报边界
 - `references/internet-platform-valuation.md`：互联网平台公司（阿里/腾讯/美团等）估值注意事项——GAAP 净利润失真问题、Normalized 利润计算、SOTP 分部估值方法
-- `references/us-hk-data-workaround.md`：美股/港股 `inv-stock-data snapshot` 返回大量 data_gaps 时的 inv-stock-data financials 补全流程、关键字段映射表、一致性校验清单
+- `references/us-hk-data-workaround.md`：美股/港股 snapshot 缺口较多时经 inv-stock-data 的降级链路（financials/daily/QQ Finance/研报原文）、字段映射与口径校验
 - `references/valuation-traps.md`：常见陷阱（数据层/估值层/脚本输出），含运行后必做检查清单
 - `references/report-formatting-guide.md`：公众号/可发表格式报告输出规范
 - `references/cdmo-industry-valuation.md`：CDMO/CRDMO 行业 QARP 估值指南——管线驱动收入、FCF 随产能周期波动、CapEx 质量判断、可比公司数据获取限制
