@@ -7,7 +7,8 @@ version: 1.3.0
 trigger:
   - 持仓管理
   - 投资组合
-  - 调仓
+  - 调仓记录
+  - 记录成交
   - 持仓日报
   - portfolio
 ---
@@ -125,7 +126,7 @@ cd /tmp && uv run --with requests python {baseDir}/scripts/qq_update_portfolio.p
 
 ## 调仓更新流程（有买卖/现金变动）
 
-用户报告 trade（买/卖）或现金变动时（含多笔同时变更）：
+用户报告已发生的 trade（买/卖）或现金变动时（含多笔同时变更）。只记账；“该不该调仓/加减仓/换仓”等判断交 `inv-position-addition` / `inv-position-reduction`（经 QARP），本流程不评估：
 
 1. **加载 `inv-stock-data`** 获取现价（涉及价格时）
 2. **读 `PORTFOLIO.md`** 先于一切
