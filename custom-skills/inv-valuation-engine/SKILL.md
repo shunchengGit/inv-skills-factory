@@ -196,4 +196,3 @@ commands:
 - `references/report-formatting-guide.md`：公众号/可发表格式报告输出规范
 - `references/cdmo-industry-valuation.md`：CDMO/CRDMO 行业 QARP 估值指南——管线驱动收入、FCF 随产能周期波动、CapEx 质量判断、可比公司数据获取限制
 - `references/cyclical-peak-valuation.md`：极端周期股峰值盈利估值纪律——峰值三检验、正常化盈利估值替代 PE 分位、修正方向一阶导、反方覆盖强制要求、杠杆工具禁用
-- `references/sk-hynix-2026-memory-supercycle.md`：存储超级周期完整实战案例（数据、时间线、正常化测算、触发条件），可作为周期股纪律的填充模板
