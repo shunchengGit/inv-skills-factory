@@ -30,7 +30,6 @@ from scoring_rules import EARNINGS_GROWTH_HIGH, EARNINGS_GROWTH_LOW
 
 
 RATINGS = ["低估", "合理偏低", "合理", "合理偏高", "高估"]
-RATING_SCORE = {name: idx for idx, name in enumerate(RATINGS)}
 
 
 @dataclass
@@ -112,21 +111,6 @@ def first_non_null(*values: Any) -> Any:
         if v is not None:
             return v
     return None
-
-
-def confidence_level(snapshot_gaps: list[dict[str, Any]], views: list[MetricView]) -> str:
-    usable = [v for v in views if v.rating]
-    critical_fields = {
-        "metrics.trailing_pe", "metrics.forward_pe", "metrics.pb",
-        "metrics.revenue_growth_pct", "metrics.earnings_growth_pct",
-        "metrics.price_percentile_5y_proxy", "window",
-    }
-    missing_count = len([gap for gap in snapshot_gaps if gap.get("field") in critical_fields])
-    if len(usable) >= 3 and missing_count == 0:
-        return "高"
-    if len(usable) >= 2 and missing_count <= 2:
-        return "中"
-    return "低"
 
 
 def determine_readiness(snapshot: Snapshot, views: list[MetricView]) -> tuple[str, list[dict[str, Any]]]:
@@ -215,7 +199,7 @@ def build_risks(metrics: dict[str, Any]) -> list[str]:
         risks.append("历史位置已偏高，若业绩不及预期，估值回撤压力会放大。")
     if metrics.get("free_cash_flow") is not None and metrics["free_cash_flow"] < 0:
         risks.append("自由现金流为负，若持续时间拉长，估值中枢可能下移。")
-    if metrics.get("debt_to_equity") is not None and metrics["debt_to_equity"] >= 1:
+    if metrics.get("debt_to_equity") is not None and metrics["debt_to_equity"] >= 100:
         risks.append("杠杆不低，若景气走弱或利率环境变化，会压制估值。")
     # event_bias removed — LLM interprets raw announcements
     risks.append("当前历史分位仍是价格代理值，不是严格 PE/PB 分位，需降低确定性表达。")
@@ -244,14 +228,18 @@ def evaluate_primary(snapshot: Snapshot, primary: dict[str, Any] | None) -> dict
     if any(not isinstance(auxiliary.get(key), str) or not auxiliary[key].strip()
            for key in ("method", "source", "rationale", "assessment")):
         return None
-    if auxiliary["assessment"] != "consistent" or auxiliary["method"] == primary["method"]:
+    if auxiliary["method"] == primary["method"]:
+        return None
+    if auxiliary["assessment"] != "consistent" and (
+        not isinstance(auxiliary.get("explanation"), str) or not auxiliary["explanation"].strip()
+    ):
         return None
     if auxiliary["method"].lower() in {"peg", "historical percentile", "analyst target price"}:
         return None
     years = primary.get("years")
     if not isinstance(years, (int, float)) or isinstance(years, bool) or not math.isfinite(years) or years <= 0:
         return None
-    if primary.get("conclusion") not in RATINGS:
+    if primary.get("conclusion") is not None and primary["conclusion"] not in RATINGS:
         return None
     scenarios = primary.get("scenarios", {})
     if not isinstance(scenarios, dict):
@@ -266,7 +254,7 @@ def evaluate_primary(snapshot: Snapshot, primary: dict[str, Any] | None) -> dict
             return None
         output[name] = dict(item, total_return_pct=((value + cash) / price - 1) * 100,
                             annualized_return_pct=(((value + cash) / price) ** (1 / years) - 1) * 100,
-                            margin_of_safety_pct=(1 - price / value) * 100)
+                            terminal_value_discount_pct=(1 - price / value) * 100)
     if not output["conservative"]["value_per_share"] <= output["base"]["value_per_share"] <= output["optimistic"]["value_per_share"]:
         return None
     return dict(primary, scenarios=output)
@@ -280,10 +268,10 @@ def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str
     reviewed = evaluate_primary(snapshot, primary) if valuation_status != "upstream_failed" else None
     if reviewed:
         data_gaps = [gap for gap in data_gaps if gap["code"] != "valuation_missing_verified_primary"]
-        valuation_status = "partial" if snapshot.upstream_status != "ok" or snapshot.used_fallback or snapshot.data_gaps else "ok"
-    conclusion = reviewed["conclusion"] if reviewed else None
+        valuation_status = "partial" if snapshot.upstream_status != "ok" or snapshot.used_fallback or any(gap.get("scope") != "background" for gap in snapshot.data_gaps) else "ok"
+    conclusion = reviewed.get("conclusion") if reviewed else None
     action = None  # Capital allocation is separate; no valuation-to-trade mapping.
-    confidence = confidence_level(data_gaps, views)
+    confidence = "未评定（程序不认证研究置信度）"
 
     return ValuationReport(
         symbol=snapshot.symbol,
@@ -296,7 +284,8 @@ def generate_report_from_snapshot(snapshot: Snapshot, company_type_override: str
         data_time=snapshot.data_time,
         data_sources=snapshot.data_sources,
         data_gaps=data_gaps,
-        key_reasons=build_key_reasons(snapshot.metrics, conclusion, views),
+        key_reasons=(["已核验主估值与三情景；未提供五档展示标签，不代表数据不足。"]
+                     if reviewed and conclusion is None else build_key_reasons(snapshot.metrics, conclusion, views)),
         framework_views=framework_views(snapshot.metrics, company_type, conclusion),
         metrics_used=[asdict(v) for v in views],
         core_assumptions=build_assumptions(snapshot.metrics),
@@ -321,7 +310,7 @@ def _source_labels(sources: list[dict[str, Any]]) -> str:
 
 
 def _gap_lines(gaps: list[dict[str, Any]]) -> list[str]:
-    return [f"- {gap.get('field')}：{gap.get('reason')}（{gap.get('code')}）" for gap in gaps]
+    return [f"- [{gap.get('scope', 'core')}] {gap.get('field')}：{gap.get('reason')}（{gap.get('code')}）" for gap in gaps]
 
 
 def render_primary(report: ValuationReport) -> list[str]:
@@ -331,19 +320,20 @@ def render_primary(report: ValuationReport) -> list[str]:
     lines = ["## 主估值与情景", f"- 主方法：{primary['method']}；辅助：{primary['auxiliary']['method']}",
              f"- 来源/时点：{primary['source']} / {primary['as_of']}",
              f"- 依据：{primary['rationale']}；期限：{primary['years']} 年；币种：{primary['currency']}"]
+    lines.append(f"- 辅助核验：{primary['auxiliary']['assessment']}；{primary['auxiliary'].get('explanation', primary['auxiliary']['rationale'])}")
     for key, label in (("conservative", "保守"), ("base", "基准"), ("optimistic", "乐观")):
         item = primary["scenarios"][key]
         lines.append(f"- {label}：每股终值={item['value_per_share']}；累计现金分配={item['cash_distributions']}；"
                      f"总回报={item['total_return_pct']:.2f}%；年化={item['annualized_return_pct']:.2f}%；"
-                     f"终值折让={item['margin_of_safety_pct']:.2f}%；假设={item['assumptions']}")
+                     f"终值折让={item.get('terminal_value_discount_pct', item.get('margin_of_safety_pct')):.2f}%；假设={item['assumptions']}")
     lines.append("- 终值折让不是折现内在价值安全边际；须结合期限、下行情景与假设脆弱性人工判断。")
     return lines
 
 
 def render_text(report: ValuationReport) -> str:
     metric_lines = [f"- {item['name']}: {item['value']} -> {item['rating']}（{item['comment']}）" for item in report.metrics_used]
-    conclusion = report.conclusion or "数据不足，无法评级"
-    action = report.action_reference or "无（估值闸门未通过）"
+    conclusion = report.conclusion or ("已核验主估值（未提供展示标签）" if report.primary_valuation else "数据不足，无法评级")
+    action = report.action_reference or "无（估值不映射交易；资本配置交由QARP）"
     return "\n".join(
         [
             "## 核心结论",
@@ -382,7 +372,7 @@ def render_markdown(report: ValuationReport) -> str:
         "## 核心结论",
         f"- 估值状态：{report.valuation_status}",
         f"- 上游状态：{report.upstream_status}",
-        f"- 估值结论：{report.conclusion or '数据不足，无法评级'}",
+        f"- 估值结论：{report.conclusion or ('已核验主估值（未提供展示标签）' if report.primary_valuation else '数据不足，无法评级')}",
         f"- 结论置信度：{report.confidence}",
         f"- 公司类型：{report.company_type}",
         "",
@@ -415,7 +405,7 @@ def render_markdown(report: ValuationReport) -> str:
             "",
             *render_primary(report),
             "## 操作参考",
-            f"- {report.action_reference or '无（估值闸门未通过）'}",
+            f"- {report.action_reference or '无（估值不映射交易；资本配置交由QARP）'}",
         ]
     )
     return "\n".join(lines)

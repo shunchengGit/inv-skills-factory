@@ -195,11 +195,11 @@ def first_not_none(*values: Any) -> Any:
     return None
 
 
-def build_snapshot(symbol: str) -> Snapshot:
+def build_snapshot(symbol: str, *, history_period: str | None = None, include_announcements: bool = False, include_relations: bool = False) -> Snapshot:
     normalized = normalize_symbol(symbol)
     if is_a_share_code(normalized):
-        return _build_a_share_snapshot_v1(symbol, normalized)
-    return _build_yahoo_snapshot_v1(symbol, normalized)
+        return _build_a_share_snapshot_v1(symbol, normalized, history_period=history_period, include_announcements=include_announcements, include_relations=include_relations)
+    return _build_yahoo_snapshot_v1(symbol, normalized, history_period=history_period)
 
 
 def _history_metrics(daily: Envelope) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -207,7 +207,7 @@ def _history_metrics(daily: Envelope) -> tuple[dict[str, Any], list[dict[str, An
     hist = _bars_to_df(bars)
     window = daily.window or {"observations": len(bars)}
     eligibility = historical_eligibility(window)
-    gaps = historical_gaps(window)
+    gaps = [dict(gap, scope="background", component="daily") for gap in historical_gaps(window)] if daily.window is not None else []
 
     latest_close = None
     return_20d = None
@@ -239,16 +239,24 @@ def _history_metrics(daily: Envelope) -> tuple[dict[str, Any], list[dict[str, An
     }, gaps
 
 
+def _optional_background(command, symbol, requested):
+    if requested:
+        envelope = parse_v1_envelope(_call_cs_stock(command, symbol, **({"period": requested} if command == "daily" else {})), expected_command=command)
+        envelope.gaps[:] = [dict(gap, scope="background", component=command) for gap in envelope.gaps]
+        return envelope
+    return Envelope(command, "ok", {}, None, [], [], [], {})
+
+
 def _component_gaps(component: dict[str, Any]) -> list[dict[str, Any]]:
     return [dict(item) for item in component.get("gaps") or []]
 
 
-def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
+def _build_a_share_snapshot_v1(symbol: str, normalized: str, *, history_period=None, include_announcements=False, include_relations=False) -> Snapshot:
     plain = to_a_share_plain_code(normalized)
     all_envelope, components = parse_all_components(_call_cs_stock("all", plain))
-    daily = parse_v1_envelope(_call_cs_stock("daily", plain, period="5y"), expected_command="daily")
-    announcements = parse_v1_envelope(_call_cs_stock("announcements", plain), expected_command="announcements")
-    relations = parse_v1_envelope(_call_cs_stock("relations", plain), expected_command="relations")
+    daily = _optional_background("daily", plain, history_period)
+    announcements = _optional_background("announcements", plain, include_announcements)
+    relations = _optional_background("relations", plain, include_relations)
 
     snap = component_data(components["snapshot"])
     financial_component = component_data(components["financial"])
@@ -266,7 +274,7 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
     roe = first_not_none(sina_num("净资产收益率"), fin_num("净资产收益率"))
     gross_margin = first_not_none(sina_num("销售毛利率"), fin_num("销售毛利率"))
     net_margin = first_not_none(sina_num("销售净利率"), fin_num("销售净利率"))
-    debt_to_asset = first_not_none(sina_num("资产负债率"), fin_num("资产负债率"))
+    debt_to_asset = number((snap.get("fundamentals") or {}).get("debt_to_asset_pct"))
     pe_ttm = number(valuation.get("pe_ttm"))
     pe_ttm_fallback = False
     # 如果 PE TTM 缺失，降级使用静态 PE（口径不同，需记录 gap）
@@ -298,7 +306,7 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
         "roe_pct": safe_round(roe, 2),
         "gross_margin_pct": safe_round(gross_margin, 2),
         "net_margin_pct": safe_round(net_margin, 2),
-        "debt_to_equity": safe_round(debt_to_asset, 2),
+        "debt_to_asset_pct": safe_round(debt_to_asset, 2),
         "sina_eps": safe_round(sina_num("基本每股收益"), 2),
         "sina_bvps": safe_round(sina_num("每股净资产"), 2),
         "recent_announcements": raw_titles,
@@ -307,7 +315,7 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
         **history,
     }
     computed_gaps = [
-        make_gap("field_unavailable", f"metrics.{key}", "估值指标不可用", retryable=False)
+        dict(make_gap("field_unavailable", f"metrics.{key}", "诊断指标不可用", retryable=False), scope="background")
         for key in ("trailing_pe", "pb", "roe_pct", "gross_margin_pct")
         if metrics.get(key) is None
     ]
@@ -328,7 +336,7 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
         computed_gaps,
     )
     sources = all_envelope.sources + daily.sources + announcements.sources + relations.sources
-    status = "failed" if components["snapshot"]["status"] == "failed" else "partial" if gaps or all_envelope.status == "partial" else "ok"
+    status = "failed" if components["snapshot"]["status"] == "failed" else "partial" if any(gap.get("scope") != "background" for gap in gaps) or all_envelope.status == "partial" else "ok"
     return Snapshot(
         symbol=symbol,
         normalized_symbol=normalized,
@@ -346,9 +354,9 @@ def _build_a_share_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
     )
 
 
-def _build_yahoo_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
+def _build_yahoo_snapshot_v1(symbol: str, normalized: str, *, history_period=None) -> Snapshot:
     all_envelope, components = parse_all_components(_call_cs_stock("all", normalized))
-    daily = parse_v1_envelope(_call_cs_stock("daily", normalized, period="5y"), expected_command="daily")
+    daily = _optional_background("daily", normalized, history_period)
     snap = component_data(components["snapshot"])
     financial = component_data(components["financial"])
     fund = snap.get("fundamentals") or {}
@@ -400,7 +408,7 @@ def _build_yahoo_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
     target = metrics["analyst_target_price"]
     metrics["analyst_upside_pct"] = safe_round((target / current_price - 1) * 100, 2) if target and current_price else None
     computed_gaps = [
-        make_gap("field_unavailable", f"metrics.{key}", "估值指标不可用", retryable=False)
+        dict(make_gap("field_unavailable", f"metrics.{key}", "诊断指标不可用", retryable=False), scope="background")
         for key in ("trailing_pe", "forward_pe", "pb", "revenue_growth_pct", "earnings_growth_pct")
         if metrics.get(key) is None
     ]
@@ -414,7 +422,7 @@ def _build_yahoo_snapshot_v1(symbol: str, normalized: str) -> Snapshot:
         computed_gaps,
     )
     sources = all_envelope.sources + daily.sources
-    status = "failed" if components["snapshot"]["status"] == "failed" else "partial" if gaps or all_envelope.status == "partial" else "ok"
+    status = "failed" if components["snapshot"]["status"] == "failed" else "partial" if any(gap.get("scope") != "background" for gap in gaps) or all_envelope.status == "partial" else "ok"
     return Snapshot(
         symbol=symbol,
         normalized_symbol=normalized,
@@ -502,13 +510,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="价值投资估值数据快照")
     parser.add_argument("symbol", help="股票代码，如 AAPL / 600519 / 0700.HK")
     parser.add_argument("--output", default="text", choices=["text", "json", "markdown"], help="输出格式")
+    parser.add_argument("--history-period", help="显式请求历史日线，如 1y / 5y；默认不请求")
+    parser.add_argument("--include-announcements", action="store_true", help="按需获取A股公告")
+    parser.add_argument("--include-relations", action="store_true", help="按需获取A股调研")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        snapshot = build_snapshot(args.symbol)
+        snapshot = build_snapshot(args.symbol, history_period=args.history_period, include_announcements=args.include_announcements, include_relations=args.include_relations)
     except Exception as exc:
         print(f"抓取失败: {exc}", file=sys.stderr)
         return 1

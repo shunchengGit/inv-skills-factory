@@ -93,7 +93,7 @@ class ReadinessTest(unittest.TestCase):
         report = generate_report_from_snapshot(snapshot({"current_price": 10.0}), "auto")
         for rendered in (render_text(report), render_markdown(report)):
             self.assertIn("数据不足，无法评级", rendered)
-            self.assertIn("估值闸门未通过", rendered)
+            self.assertIn("资本配置交由QARP", rendered)
             for forbidden in ("逢低加仓", "分批减仓", "持有 / 观望"):
                 self.assertNotIn(forbidden, rendered)
 

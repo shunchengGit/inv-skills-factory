@@ -24,6 +24,11 @@ uv run {baseDir}/scripts/valuation_snapshot.py AAPL
 uv run {baseDir}/scripts/valuation_snapshot.py 600519 --output json
 uv run {baseDir}/scripts/valuation_snapshot.py 0700.HK --output json
 
+# 可选背景仅 snapshot CLI 支持，默认均不抓取；实际覆盖仍需检查 window
+# report/compare 使用这些背景时，先保存 snapshot --output json，再离线读取
+uv run {baseDir}/scripts/valuation_snapshot.py AAPL --history-period 5y --output json
+uv run {baseDir}/scripts/valuation_snapshot.py 600519 --include-announcements --include-relations --output json
+
 # 3) 输出诊断报告；没有核验主估值时不自动评级
 uv run {baseDir}/scripts/valuation_report.py 600660
 
@@ -33,7 +38,15 @@ uv run {baseDir}/scripts/valuation_report.py TEST --snapshot-input {baseDir}/exa
 # 4) 指定公司类型，避免自动识别偏差
 uv run {baseDir}/scripts/valuation_report.py 002475 --company-type tech
 
-# 5) 同行相对估值比较
+# 5) 同行诊断并列，不按五档/PE自动排序
+# 核验主估值比较：--input bundle.json；snapshots 与 primary_inputs 均以原始代码为键
+# bundle = {"snapshots": {"TEST": <Snapshot对象>}, "primary_inputs": {"TEST": <核验主估值对象>}}
+# 省略 snapshots 可在线取核心数据；离线须提供所有请求代码的完整 Snapshot（不是数据层 v1 envelope）
+# 键及 Snapshot.symbol 必须与命令原始代码完全一致；缺键/不匹配返回2，不会偷偷联网补齐
+# primary_inputs 可缺省；缺主估值则该行仅诊断，conclusion 可省略/null，不排序、不输出动作
+uv run {baseDir}/scripts/valuation_compare.py TEST --input bundle.json --output markdown
+
+# 默认只展示诊断
 uv run {baseDir}/scripts/valuation_compare.py 002475 601138 002241 --company-type tech
 
 # 6) 输出 Markdown 表格版，便于直接阅读

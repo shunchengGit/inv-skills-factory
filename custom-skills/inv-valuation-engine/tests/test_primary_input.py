@@ -38,7 +38,7 @@ class PrimaryInputTest(unittest.TestCase):
         data = asdict(report)['primary_valuation']
         self.assertEqual(data['scenarios']['base']['total_return_pct'], 26)
         self.assertAlmostEqual(data['scenarios']['base']['annualized_return_pct'], ((1.26 ** (1 / 3)) - 1) * 100)
-        self.assertAlmostEqual(data['scenarios']['conservative']['margin_of_safety_pct'], -25)
+        self.assertAlmostEqual(data['scenarios']['conservative']['terminal_value_discount_pct'], -25)
 
     def test_invalid_primary_and_failure_never_rate(self):
         cases = []

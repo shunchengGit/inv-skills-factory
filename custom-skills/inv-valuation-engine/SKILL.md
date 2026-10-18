@@ -16,25 +16,31 @@ trigger:
 commands:
   - /valuation - 价值估值判断（先抓数据再结论）
   - /valuation_data - 仅抓取估值数据快照
-  - /valuation_report - 直接输出五档估值报告
+  - /valuation_report - 输出主估值与情景报告（五档可选）
   - /valuation_compare - 多股票相对估值比较
 ---
 
 # 价值投资估值判断
 
 ## 核心目标
-一主一辅核验企业价值，保守/基准/乐观情景表达回报与损失；五档只作展示，不投票，不自动映射动作。未提供核验主估值时仅输出诊断。
+一主一辅核验企业价值，保守/基准/乐观情景表达回报与损失；五档可选、只作展示，不投票，不自动映射动作。未提供核验主估值时仅输出诊断。
 
 ## 核验主估值输入
 
-脚本支持 `--snapshot-input <JSON>` 离线快照及 `--primary-input <JSON>` 已核验主估值。格式见examples/offline-snapshot.json和examples/reviewed-primary.json；示例为测试数据不是市场事实。主输入包括method/source/as_of/currency/years、auxiliary核验与三情景；verified只声明研究者已核验，程序不证明真实性。未来退出价值和今天价值必须区分。
+脚本支持 `--snapshot-input <JSON>` 离线快照及 `--primary-input <JSON>` 已核验主估值。格式见examples/offline-snapshot.json和examples/reviewed-primary.json；示例为测试数据不是市场事实。主输入包括method/source/as_of/currency/years、auxiliary核验与三情景；verified只声明研究者已核验，程序不证明真实性。未来退出价值和今天价值必须区分。`conclusion` 可缺省/null；提供时须为五档之一。辅助核验不必一致：非 consistent 的 assessment 必须附非空 explanation，保留冲突及采用理由，不能伪造共识。原文核验、三情景、来源/日期/币种/单位和真实证据要求不变。
+
+置信度不按诊断指标或评级数量计算；兼容字段 confidence 输出未评定，研究者须解释证据质量与假设脆弱性。`terminal_value_discount_pct` 是终值折让，不是今天内在价值安全边际；渲染兼容旧 `margin_of_safety_pct`，新计算不输出旧名。`data_gaps.scope=background` 明示背景缺口，不自动阻止已核验主估值；未标 scope 的上游缺口保守视为 core，核心失败不因背景齐全而放行。上游组件状态及原始缺口仍保留。核心快照 failed 禁止主估值；其他上游 partial、fallback 或 core 缺口仍可给受限 partial 主估值，并非所有组件失败一律清空结论。
+
+三情景脚本采用期末归集简化：总回报=((每股终值+累计每股现金分配)/当前价-1)，年化=((每股终值+累计分配)/当前价)^(1/years)-1。现金分配不按实际日期折现、不再投资，不是现金流IRR；税费、汇率和稀释不自动计算，须在输入及假设中明确净额口径。终值折让=1-当前价/未来每股终值，与现金分配无关。
+
+杠杆只消费数据层标准字段：A股 `fundamentals.debt_to_asset_pct`（资产负债率百分数），美港股 `fundamentals.debt_to_equity`（Yahoo百分数口径，100表示1倍），不可互换、不可按数值大小猜单位，也不从资产负债率推算债务权益比。缺标准字段保持空值。
 
 ## 快速命令
 
 路径中 `{baseDir}` = 本技能目录。详见 `references/commands-quickref.md`。
 
 ## 脚本优先级（新增）
-1. **首选 `cs_stock_all` 获取三个核心组件**：v1 `all.data.components` 固定为 snapshot + financial + financials，各有独立状态；不含 daily/announcements/relations。估值脚本会另行显式请求 `daily(period=5y)`，A 股再请求公告与关联数据。
+1. **首选 `cs_stock_all` 获取三个核心组件**：v1 `all.data.components` 固定为 snapshot + financial + financials，各有独立状态；不含 daily/announcements/relations。估值脚本默认只请求 all；以下背景参数仅 valuation_snapshot.py 支持，report/compare 需要先生成快照再离线读取：历史通过 `--history-period`，公告/调研通过 `--include-announcements` / `--include-relations` 显式按需请求。
 2. 用户给了代码但没给完整数据：先运行 `scripts/valuation_snapshot.py`。
 3. 用户要直接结论：优先运行 `scripts/valuation_report.py`。
 4. 用户要比较几家公司谁更便宜/更贵：优先运行 `scripts/valuation_compare.py`。
@@ -111,8 +117,8 @@ commands:
 ## 执行流程
 1. 确认标的类型和适用估值口径。
 2. 按决策的重要未知查阅知识库，原文事实和口径优先；官方披露可单源并核内部一致性，预测/因果核推理和反证，重大存疑事实按需独立验证。无覆盖明确缺口，不按动作或来源数量淘汰。
-3. 用 `cs_stock_all` 获取三个核心组件，再显式请求 `daily --period 5y`；A 股按需请求 announcements/relations。标注每个响应的状态、时点、来源与实际历史窗口。
-4. 先执行估值就绪门禁：上游失败或可评级指标/核心锚不足时输出不可评级；partial 只允许受限结论、不输出操作参考。
+3. 用 `cs_stock_all` 获取三个核心组件；只有历史背景改变研究问题时才请求日线，A 股公告/调研同样显式按需。标注每个响应的状态、时点、来源与实际历史窗口。
+4. 先执行估值就绪门禁：上游失败或核验主估值/价格/币种不足时只输出诊断；partial 只允许受限结论、不输出操作参考。
 5. 按公司类型选择框架，不强行套用全部方法。
 6. 核验一个主估值和一个辅助校验，记录三情景来源；指标诊断不参与投票。
 7. 按公司经济类型、现金流质量、管理层资本配置与竞争证据做定性校验，解释应享有溢价或折价的原因；**与知识库中已有分析交叉验证**：逐一对照评分结论与知识库条目中的判断，标注共识/分歧。特别注意：若知识库中多份研报的盈利预测/估值假设与自建假设差异 >5pp，必须分析根源并说明采用理由。
@@ -152,7 +158,7 @@ commands:
 
 ## 极端周期股（峰值盈利）
 
-对存储/面板/航运/化工/锂/钢铁等商品化制造标的，**在跑五档结论之前**先套用 `references/cyclical-peak-valuation.md`。触发信号：forward PE 掉到 2-5x 而 trailing PE 仍有 20-30x、现货价同比 +200%、卖方模型 2 年内营收增长 3 倍、当期 OPM 处历史最高——命中任意 2 条即适用。
+对存储/面板/航运/化工/锂/钢铁等商品化制造标的，**在核验主估值之前**先套用 `references/cyclical-peak-valuation.md`。触发信号：forward PE 掉到 2-5x 而 trailing PE 仍有 20-30x、现货价同比 +200%、卖方模型 2 年内营收增长 3 倍、当期 OPM 处历史最高——命中任意 2 条即适用。
 
 核心规则：峰值低PE不等于便宜；正常化盈利参数须由自身周期、供需和资本需求推导，用三情景检验，不使用强制峰值乘数或固定折扣。
 
@@ -183,7 +189,7 @@ commands:
 - **可比公司数据限制**：三星生物(207940.KS) yfinance 返回空需 web_search；Catalent 已退市
 
 ## 参考文件
-- `references/scoring-rules.md`：定量阈值、行业口径、五档结论映射
+- `references/scoring-rules.md`：主估值协议、诊断兼容区间与三情景回报边界
 - `references/internet-platform-valuation.md`：互联网平台公司（阿里/腾讯/美团等）估值注意事项——GAAP 净利润失真问题、Normalized 利润计算、SOTP 分部估值方法
 - `references/us-hk-data-workaround.md`：美股/港股 `inv-stock-data snapshot` 返回大量 data_gaps 时的 inv-stock-data financials 补全流程、关键字段映射表、一致性校验清单
 - `references/valuation-traps.md`：常见陷阱（数据层/估值层/脚本输出），含运行后必做检查清单
