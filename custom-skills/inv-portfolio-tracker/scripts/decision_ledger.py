@@ -17,6 +17,28 @@ READINESS_ROLES = {'original', 'independent', 'contrarian', 'valuation', 'portfo
 EVIDENCE_TYPES = {'original', 'supporting', 'contrarian', 'valuation', 'portfolio_comparison'}
 INVALID_BASES = {'earningsGrowth', 'price_position', '52w_position'}
 
+def stale_after_event(item, same):
+    """Missing scope is conservative; publication date is never rewritten."""
+    for event in same:
+        if event['kind'] != 'event' or event.get('event_type') not in {'financial_report', 'material_risk'}:
+            continue
+        ids = event.get('affected_evidence_ids', [])
+        propositions = event.get('affected_propositions', [])
+        if not ids and not propositions:
+            affected = True
+        else:
+            evidence_id = item.get('id') if item.get('kind') == 'evidence' else item.get('evidence_id')
+            affected = evidence_id in ids
+            if propositions:
+                tags = item.get('proposition_ids')
+                affected = affected or not tags or bool(set(tags) & set(propositions))
+            if ids and not evidence_id:
+                affected = True
+        if affected and (item.get('verified_on') or item.get('date') or '') < event['date']:
+            return True
+    return False
+
+
 def research_ready(r, same):
     """Structural gate only: source independence and economic claims need human review."""
     if r.get('protocol_version') == 3:
@@ -31,11 +53,10 @@ def research_ready(r, same):
         sources = card.get('sources')
         if not isinstance(sources, list) or not sources:
             return False
-        events = [x['date'] for x in same if x['kind']=='event'
-                  and x.get('event_type') in {'financial_report', 'material_risk'}]
+
         if any(x['kind']=='evidence' and (x.get('status') in {'invalidated', 'anomalous', 'upstream_failed', 'unknown'}
                 or x.get('anomalous', False) or x.get('basis') in INVALID_BASES
-                or (events and (x.get('date') or '') < max(events))) for x in same):
+                or stale_after_event(x, same)) for x in same):
             return False
         for source in sources:
             if (not isinstance(source, dict) or source.get('status') != 'verified'
@@ -47,13 +68,15 @@ def research_ready(r, same):
             try:
                 if date.fromisoformat(source['date']).isoformat() != source['date']:
                     return False
+                if 'verified_on' in source and (date.fromisoformat(source['verified_on']).isoformat() != source['verified_on']
+                        or source['verified_on'] < source['date']):
+                    return False
             except (ValueError, TypeError):
                 return False
-            if events and source['date'] < max(events):
+            if stale_after_event(source, same):
                 return False
         return True
     evidence = {x['id']:x for x in same if x['kind']=='evidence'}
-    events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
     ids = r.get('evidence_ids')
     if not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids) or len(ids) != len(set(ids)):
         return False
@@ -61,7 +84,7 @@ def research_ready(r, same):
         e = evidence.get(i, {})
         return (e.get('status')=='verified' and e.get('basis') not in INVALID_BASES
                 and not e.get('anomalous', False) and e.get('excerpt') and e.get('locator')
-                and (not events or (e.get('date') or '') >= max(events)))
+                and not stale_after_event(e, same))
     if not all(valid(i) for i in ids):
         return False
     checks = r.get('readiness')
@@ -89,6 +112,20 @@ def validate(db, r):
     for field in ('id', 'symbol', 'source', 'basis', 'metric', 'impact', 'next_action', 'text', 'confirmation_source', 'execution_source', 'excerpt', 'locator', 'owner', 'next_event', 'source_group', 'evidence_type', 'research_id'):
         if field in r and (not isinstance(r[field], str) or not r[field].strip()):
             raise ValueError('nonblank string required: '+field)
+    for item in [r] + (r.get('card', {}).get('sources', []) if isinstance(r.get('card'), dict) and isinstance(r.get('card', {}).get('sources'), list) else []):
+        if not isinstance(item, dict):
+            raise ValueError('source must be an object')
+        if 'evidence_id' in item and (not isinstance(item['evidence_id'], str) or not item['evidence_id'].strip()):
+            raise ValueError('evidence_id must be a nonblank string')
+        for field in ('affected_propositions', 'affected_evidence_ids', 'proposition_ids'):
+            if field in item and (not isinstance(item[field], list) or not item[field]
+                    or any(not isinstance(x, str) or not x.strip() for x in item[field])
+                    or len(set(item[field])) != len(item[field])):
+                raise ValueError('scope requires nonempty unique string IDs')
+        if 'verified_on' in item:
+            if (date.fromisoformat(item['verified_on']).isoformat() != item['verified_on']
+                    or not item.get('date') or item['verified_on'] < item['date']):
+                raise ValueError('verification date must follow publication date')
     for field in ('evidence_ids', 'closure_evidence_ids'):
         if field in r and (not isinstance(r[field], list) or any(not isinstance(x, str) or not x.strip() for x in r[field])):
             raise ValueError('list of evidence IDs required')
@@ -111,16 +148,21 @@ def validate(db, r):
     prev = db.execute('SELECT max(version) FROM records WHERE kind=? AND id=?',(kind,r['id'])).fetchone()[0]
     if r['version'] != (prev or 0)+1:
         raise ValueError('nonsequential version')
+    if kind == 'event' and prev:
+        previous = json.loads(db.execute('SELECT payload FROM records WHERE kind=? AND id=? AND version=?',
+            (kind, r['id'], prev)).fetchone()[0])
+        if any(previous.get(field) != r.get(field) for field in
+               ('date', 'event_type', 'affected_propositions', 'affected_evidence_ids')):
+            raise ValueError('event date/type/scope immutable; reverify affected evidence instead')
     records = latest(db)
     same = [x for x in records if x['symbol']==r['symbol']]
     def verified(ids):
         evidence = {x['id']:x for x in same if x['kind']=='evidence'}
-        events = [x['date'] for x in same if x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
         return bool(ids) and all(i in evidence and evidence[i].get('status')=='verified'
             and evidence[i].get('basis') not in {'earningsGrowth','price_position','52w_position'}
             and not evidence[i].get('anomalous',False)
             and evidence[i].get('excerpt') and evidence[i].get('locator')
-            and (not events or (evidence[i].get('date') or '')>=max(events)) for i in ids)
+            and not stale_after_event(evidence[i], same) for i in ids)
     if kind in {'evidence','quote','event'}:
         if not r.get('source') or not r.get('status',kind=='event'):
             raise ValueError('source/status required')
@@ -238,8 +280,7 @@ def audit(db):
         r['quote_refresh_is_research']=False
     for e in records:
         if e['kind']=='evidence':
-            dates=[x['date'] for x in records if x['symbol']==e['symbol'] and x['kind']=='event' and x.get('event_type') in {'financial_report','material_risk'}]
-            if dates and (e.get('date') or '')<max(dates):
+            if stale_after_event(e, [x for x in records if x['symbol']==e['symbol']]):
                 e['effective_status']='invalidated'
     return {'schema_version':1, 'coverage':len(rows), 'rows':rows, 'records':records, 'conditions':conditions,
             'integrity':db.execute('PRAGMA integrity_check').fetchone()[0]}
@@ -248,6 +289,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--db', default=str(Path.home()/'.hermes/memories/investment-decisions/ledger.sqlite3'))
     parser.add_argument('command', choices=['init','apply','audit','render'])
+    parser.add_argument('--details', action='store_true', help='render full audit records explicitly')
     inputs = parser.add_mutually_exclusive_group()
     inputs.add_argument('--json')
     inputs.add_argument('--file', help='UTF-8 JSON batch file; one research card is sufficient')
@@ -277,9 +319,24 @@ def main():
                 print('# 投资决策当前视图（生成文件，不手改）\n\n持仓/现金仅以 PORTFOLIO.md 为准；提醒不是下单。\n')
                 for r in result['rows']:
                     print('## '+r['symbol']+' — '+r['status'])
-                    for item in result['records']:
-                        if item['symbol']==r['symbol']:
-                            print('- '+json.dumps(item,ensure_ascii=False,sort_keys=True))
+                    card = r.get('card') or {}
+                    print('- 结论：'+str(card.get('conclusion') or r.get('conclusion')
+                        or ('历史摘要（未重新认证）：'+r['summary'] if r.get('summary') else '旧记录未提供简洁结论；见 --details')))
+                    unknowns = card.get('important_unknowns')
+                    print('- 重要未知：'+ ('；'.join(map(str, unknowns)) if isinstance(unknowns, list) and unknowns
+                        else '无已声明重要未知（非事实认证）' if unknowns == [] else '旧记录未声明'))
+                    print('- 关键变量：'+str(card.get('key_variables') or card.get('assumptions') or '旧记录未声明'))
+                    print('- 下一复核：'+str(card.get('review_conditions') or r.get('next_event') or '待明确'))
+                    for gap in r.get('gaps', []):
+                        print('- 未决 issue：'+json.dumps(gap, ensure_ascii=False, sort_keys=True))
+                    for condition in result['conditions']:
+                        if condition['symbol'] == r['symbol']:
+                            print('- 提醒：'+condition['metric']+' '+condition['line']+' — '+condition['status']
+                                +' / '+condition['evaluation']+'；'+condition.get('conflict', '提醒不是下单'))
+                    if args.details:
+                        for item in result['records']:
+                            if item['symbol']==r['symbol']:
+                                print('- '+json.dumps(item,ensure_ascii=False,sort_keys=True))
             else:
                 print(json.dumps(result,ensure_ascii=False,sort_keys=True))
         finally:

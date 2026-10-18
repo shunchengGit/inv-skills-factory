@@ -68,7 +68,7 @@ class QuoteDateContractTest(unittest.TestCase):
         report = q.build_report(calc, portfolio, constraints)
         self.assertIn('年内', report)
 
-    def test_write_mode_preserves_exchange_dates_in_data_gap(self):
+    def test_write_mode_only_lists_anomalies_in_data_gap(self):
         from test_report_format import _fixture
         portfolio, calc, constraints = _fixture()
         portfolio['holdings'] = calc['holdings']
@@ -98,7 +98,11 @@ class QuoteDateContractTest(unittest.TestCase):
             result = path.read_text(encoding='utf-8')
             self.assertIn('2026-08-29 美东收盘', result)
             self.assertNotIn('2026-08-30 盘中', result)
-            self.assertIn('价格位置非估值分位', result)
+            gap = result.split('## 数据缺口说明', 1)[1]
+            self.assertNotIn('PE=', gap)
+            self.assertNotIn('仓位', gap)
+            self.assertIn('无新增行情异常', gap)
+            self.assertIn('价格区间位', result)
 
 
 if __name__ == '__main__':

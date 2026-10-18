@@ -218,7 +218,7 @@ def parse_portfolio(filepath: Path) -> dict:
                         "risk": risk,
                         "notes": notes,
                     })
-                except (ValueError, IndexError) as e:
+                except (ValueError, IndexError):
                     pass
 
     return {
@@ -718,19 +718,25 @@ def main():
             gap_end = len(updated)
         if gap_start != -1:
             gap_lines = ["## 数据缺口说明\n"]
+            for name in missing:
+                gap_lines.append(f"- {name}：行情缺失，待核；未用旧价格认证最新市值")
             for r in calc["holdings"]:
-                pe_str = format_pe(r)
-                gap_lines.append(
-                    f"- **{r['name']} {r['code']}**：{r.get('quote_date', '报价日待核')} "
-                    f"{r.get('quote_session', '交易状态待核')} {r['price']}（{r['change_pct']:+.2f}%）；PE={pe_str}；"
-                    f"{r['source_note']}位{r['pos_52w']}%（{r['low_52w']}-{r['high_52w']}，价格位置非估值分位）；"
-                    f"仓位{r['position_pct']}%"
-                )
+                problems = []
+                if not r.get('quote_date') or '待核' in r.get('quote_date', ''):
+                    problems.append('源报价日待核')
+                if not r.get('quote_session') or '待核' in r.get('quote_session', ''):
+                    problems.append('交易状态待核')
+                if r.get('pos_52w') is None:
+                    problems.append('价格区间数据缺失（非估值缺口）')
+                if problems:
+                    gap_lines.append(f"- {r['name']} {r['code']}："+'；'.join(problems))
+            if len(gap_lines) == 1:
+                gap_lines.append('- 无新增行情异常；研究未知与未决 issue 以决策台账为准')
             updated = updated[:gap_start] + "\n".join(gap_lines) + "\n" + updated[gap_end:]
         
         # 更新时间戳
         updated = re.sub(r"\*\*(?:行情数据截至|估值生成时间|组合估值快照生成)\*\*：[^\n]+", f"**估值生成时间**：{calc['timestamp']}（QQ Finance；各市场交易日/状态见持仓行）", updated)
-        updated = re.sub(r"\*\*数据来源\*\*：[^\n]+", f"**数据来源**：QQ Finance API（qt.gtimg.cn）", updated)
+        updated = re.sub(r"\*\*数据来源\*\*：[^\n]+", "**数据来源**：QQ Finance API（qt.gtimg.cn）", updated)
         
         portfolio_path.write_text(updated, encoding="utf-8")
         print(f"✅ 已更新 {portfolio_path}", file=sys.stderr)

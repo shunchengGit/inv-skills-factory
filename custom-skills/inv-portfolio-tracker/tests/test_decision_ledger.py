@@ -39,6 +39,143 @@ class LedgerTest(unittest.TestCase):
         data.update(changes)
         return data
 
+    def test_render_preserves_legacy_summary_without_certifying_it(self):
+        self.cli('init')
+        self.put('legacy', self.record('research', status='partial', summary='受限结论：暂持有，现金假设待核'))
+        result = subprocess.run([sys.executable, '-B', str(CLI), '--db', str(self.db), 'render'], text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('受限结论：暂持有，现金假设待核', result.stdout)
+        self.assertIn('partial', result.stdout)
+        self.assertIn('历史摘要', result.stdout)
+
+    def test_scoped_event_preserves_unaffected_historical_source(self):
+        self.cli('init')
+        card = self.card()
+        card['card']['sources'][0]['proposition_ids'] = ['ownership']
+        self.put('ready', card)
+        self.put('event', self.record('event', source='filing', date='2026-09-26',
+            event_type='financial_report', affected_propositions=['earnings']))
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'needs_review')
+        reviewed = dict(card, version=2, reviewed_through='2026-09-26')
+        self.put('review', reviewed)
+        report = self.cli('audit')
+        self.assertEqual(report['rows'][0]['status'], 'decision_ready')
+        self.assertEqual(report['rows'][0]['card']['sources'][0]['date'], '2026-09-25')
+
+    def test_affected_source_reverification_keeps_publication_date(self):
+        self.cli('init')
+        card = self.card()
+        card['card']['sources'][0]['proposition_ids'] = ['earnings']
+        self.put('ready', card)
+        self.put('event', self.record('event', source='filing', date='2026-09-26',
+            event_type='financial_report', affected_propositions=['earnings']))
+        refreshed = dict(card, version=2, reviewed_through='2026-09-26')
+        self.put('stale', refreshed, ok=False)
+        refreshed['card']['sources'][0]['verified_on'] = '2026-09-26'
+        self.put('review', refreshed)
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'decision_ready')
+        bad = dict(refreshed, version=3)
+        bad['card']['sources'][0]['verified_on'] = 'tomorrow'
+        self.put('invalid-verification-date', bad, ok=False)
+
+    def test_scope_and_evidence_verification_dates_are_validated(self):
+        self.cli('init')
+        for index, fields in enumerate([
+            {'affected_propositions':'earnings'}, {'affected_evidence_ids':[None]},
+            {'affected_propositions':[' ']}, {'affected_propositions':[]},
+        ]):
+            self.put('bad-scope-'+str(index), self.record('event', source='filing',
+                date='2026-09-26', event_type='financial_report', **fields), ok=False)
+        self.put('bad-tags', self.record('evidence', source='filing', date='2026-09-25',
+            basis='original', status='verified', proposition_ids='earnings'), ok=False)
+        self.put('bad-date', self.record('evidence', source='filing', date='2026-09-25',
+            basis='original', status='verified', verified_on='tomorrow'), ok=False)
+        self.put('future-publication', self.record('evidence', source='filing', date='2026-09-25',
+            basis='original', status='verified', verified_on='2026-09-24'), ok=False)
+
+    def test_render_defaults_to_card_with_visible_suspended_conflicts(self):
+        self.cli('init')
+        self.put('ready', self.card())
+        self.put('conflicts', self.record('condition', id='a', status='active', purpose='reminder',
+            metric='price', source='fixture', line='10'), self.record('condition', id='b',
+            status='active', purpose='reminder', metric='price', source='fixture', line='20'))
+        before = self.db.read_bytes()
+        args = [sys.executable, '-B', str(CLI), '--db', str(self.db), 'render']
+        p = subprocess.run(args, text=True, capture_output=True)
+        self.assertEqual(p.returncode, 0, p.stdout+p.stderr)
+        for label in ('结论', '重要未知', '关键变量', '下一复核', 'suspended', 'multiple unresolved'):
+            self.assertIn(label, p.stdout)
+        self.assertNotIn('Revenue 100 million USD', p.stdout)
+        details = subprocess.run(args+['--details'], text=True, capture_output=True)
+        self.assertEqual(details.returncode, 0, details.stdout+details.stderr)
+        self.assertIn('Revenue 100 million USD', details.stdout)
+        self.assertEqual(before, self.db.read_bytes())
+
+    def test_scoped_evidence_only_invalidates_affected_id(self):
+        self.cli('init')
+        for ident in ('earnings', 'ownership'):
+            self.put(ident, self.record('evidence', id=ident, source='filing',
+                date='2026-09-25', basis='original', status='verified'))
+        self.put('event', self.record('event', source='filing', date='2026-09-26',
+            event_type='financial_report', affected_evidence_ids=['earnings']))
+        evidence = {r['id']:r for r in self.cli('audit')['records'] if r['kind']=='evidence'}
+        self.assertEqual(evidence['earnings']['effective_status'], 'invalidated')
+        self.assertNotIn('effective_status', evidence['ownership'])
+        self.put('bypass', self.card(reviewed_through='2026-09-26'), ok=False)
+        self.put('reverify', self.record('evidence', id='earnings', version=2, source='filing',
+            date='2026-09-25', verified_on='2026-09-26', basis='original', status='verified'))
+        card = self.card(reviewed_through='2026-09-26')
+        card['card']['sources'][0]['evidence_id'] = 'ownership'
+        self.put('ready', card)
+        self.assertEqual(self.cli('audit')['rows'][0]['status'], 'decision_ready')
+
+    def test_inline_source_id_cannot_bypass_evidence_scoped_event(self):
+        self.cli('init')
+        self.put('event', self.record('event', source='filing', date='2026-09-26',
+            event_type='material_risk', affected_evidence_ids=['earnings']))
+        card = self.card(reviewed_through='2026-09-26')
+        card['card']['sources'][0]['id'] = 'unrelated-source-label'
+        self.put('bypass', card, ok=False)
+
+    def test_inline_source_evidence_id_requires_nonblank_string(self):
+        self.cli('init')
+        for index, value in enumerate([[], {}, 12, ' ', None]):
+            card = self.card(status='partial')
+            card['card']['sources'][0]['evidence_id'] = value
+            self.put('bad-reference-'+str(index), card, ok=False)
+
+    def test_event_date_type_and_existing_scope_are_immutable(self):
+        self.cli('init')
+        event = self.record('event', source='filing', date='2026-09-26',
+            event_type='financial_report', affected_evidence_ids=['earnings'],
+            affected_propositions=['profit'])
+        self.put('event', event)
+        before = self.db.read_bytes()
+        for index, fields in enumerate([
+            {'date':'2026-09-25'}, {'event_type':'material_risk'},
+            {'affected_evidence_ids':['ownership']}, {'affected_propositions':['ownership']},
+        ]):
+            self.put('mutate-'+str(index), dict(event, version=2, **fields), ok=False)
+            self.assertEqual(before, self.db.read_bytes())
+        self.put('remove-scope', {k:v for k,v in dict(event, version=2).items()
+            if k != 'affected_evidence_ids'}, ok=False)
+        self.assertEqual(before, self.db.read_bytes())
+
+    def test_duplicate_and_malformed_scope_roll_back_batch(self):
+        self.cli('init')
+        before = self.db.read_bytes()
+        for index, scope in enumerate([['profit', 'profit'], [None], [{}], 'profit', [], [' ']]):
+            self.put('malformed-'+str(index), self.record('research', status='partial'),
+                self.record('event', source='filing', date='2026-09-26',
+                    event_type='financial_report', affected_propositions=scope), ok=False)
+            self.assertEqual(before, self.db.read_bytes())
+
+    def test_unknown_scope_cannot_be_retroactively_narrowed(self):
+        self.cli('init')
+        event = self.record('event', source='filing', date='2026-09-26', event_type='financial_report')
+        self.put('event', event)
+        self.put('narrow-old-event', dict(event, version=2, affected_propositions=['earnings']), ok=False)
+
     def test_v3_single_card_file_writes_reads_audits_renders_without_role_quota(self):
         self.cli('init')
         payload = Path(self.tmp.name) / 'card.json'
