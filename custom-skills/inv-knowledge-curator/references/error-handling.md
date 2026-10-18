@@ -17,7 +17,7 @@ for e in data.get('isolated_entries', []):
 ### 步骤 2：为每个孤立条目搜索相关条目
 - 读取所有条目的 frontmatter（title, tags）
 - 基于标签重叠和标题关键词计算相似度
-- 为每个孤立条目找出 top 3 最相关的已有条目
+- 找出确有经济或资料关系的已有条目；无合适关联或短 Note 不强凑
 
 ### 步骤 3：批量写入关联
 - 在孤立条目的 `## 关联` 段添加指向相关条目的 markdown 链接
@@ -29,7 +29,7 @@ for e in data.get('isolated_entries', []):
 - 若仍有死链，手动检查关联段中的 `[](path)` 路径是否对应真实文件名
 
 ### 步骤 5：验证修复
-- 再次运行 `km_lint --fix`，确认 `no_cross_refs: 0`
+- 再次运行 `km_lint --fix` 验证已修复项；无真实关联的孤立条目说明原因，不为 `no_cross_refs: 0` 造链
 - 检查 `summary` 中其他问题项是否归零
 
 ## 常见 lint 问题速查

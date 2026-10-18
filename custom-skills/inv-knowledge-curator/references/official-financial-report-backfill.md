@@ -17,7 +17,7 @@
 2. 同时检查 `res/index.md` 与 `entries/*.md`，核对官方文件、`Reference` 条目和报告期。
 3. 优先从公司投资者关系官网定位；港股可用港交所公告，美股用SEC 10-K/10-Q，外国发行人用SEC 6-K/20-F及Exhibit。
 4. 下载后验证文件类型、页数和可提取文本量，避免把Cloudflare HTML、错误页或不完整转换件当PDF。
-5. 用 `km_import.py res` 归档，生成25-50行 `Reference` 条目；description含核心数字，关键要点≥3，关联≥2。
+5. 用 `km_import.py res` 归档，生成25-50行 `Reference` 条目；description含核心数字，关键要点≥3，关联仅写真实存在且语义相关条目，不凑数量。
 6. 执行 `km_lint.py --fix --skip-url-check`，再无修复模式复验。
 7. 验证 `okf_errors=0`、`dead_links=0`、`pdf_no_entry=0`、`pdf_resource_missing=0`，Git工作区干净且本地HEAD等于远端分支。
 

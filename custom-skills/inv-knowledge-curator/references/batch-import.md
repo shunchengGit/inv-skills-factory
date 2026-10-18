@@ -117,7 +117,7 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 
 任一步未完成，状态必须准确表述为"已归档/已落盘/待索引刷新/待关联修复/待推送"，禁止笼统声称"已入库"。开始前先跑 `km_lint.py --check-duplicates` 确认无历史重复。
 
-`lint --fix` 删除不存在的关联链接时可能留下 `-  — 说明文字` 这类空列表项并令 `no_cross_refs>0`。首次 lint 后必须检查 `dead_links_fixed` 与 `no_cross_refs`，用库中真实存在的同主题文件补回 ≥2 条关联、清掉空列表项再次 lint；不得把首次 lint 的中间态当作完成。条目仍由后台 subagent 生成时出现 `pdf_no_entry` 属中间态，须列出对应 PDF，待落盘后再 lint，只有最终 `pdf_no_entry=0` 才闭环。
+`lint --fix` 删除不存在的关联链接时可能留下 `-  — 说明文字` 这类空列表项并令 `no_cross_refs>0`。首次 lint 后必须检查 `dead_links_fixed` 与 `no_cross_refs`，仅用库中真实存在且语义相关的文件补回关联，无法建立时说明缺口，不强凑数量；清掉空列表项再次 lint；不得把首次 lint 的中间态当作完成。条目仍由后台 subagent 生成时出现 `pdf_no_entry` 属中间态，须列出对应 PDF，待落盘后再 lint，只有最终 `pdf_no_entry=0` 才闭环。
 
 推送回执成功后，再比较本地 HEAD 与实际目标远程分支的提交值，并等待全部写入子任务结束才给最终完成结论。
 
@@ -177,7 +177,7 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 
 1. 同时搜索 `entries/` 与 `res/index.md`，以系列名、覆盖期和发布日期组合查重；英文资源可能已有中文条目。
 2. 找到上一期后沿用其资源归属、type 和核心标签，新增本期时间标签。
-3. 至少关联上一期，再关联一个同主题其他机构数据源和一个专题深挖条目；写入前核对真实文件名。
+3. 按实际关系关联上一期、同主题数据或专题条目；写入前核对真实文件名，不为数量造链。
 4. 摘要突出相对上期的加速、放缓、反转和份额迁移，严格区分 MAU/DAU/MTS/DTSD 及同比/环比口径。
 5. 单份可直接 `write_file` 写完整 OKF，再由主流程 `km_lint.py --fix --skip-url-check`。
 
