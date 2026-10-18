@@ -166,7 +166,7 @@ def cmd_store(
     if not KNOWLEDGE_DIR.exists():
         return {
             "success": False,
-            "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
+            "error": f"{KNOWLEDGE_DIR} 不存在，请按 inv-knowledge-curator 的 /km_init 流程初始化知识库",
         }
 
     # resource 校验

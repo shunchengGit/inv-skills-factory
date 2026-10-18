@@ -520,7 +520,7 @@ def cmd_lint(skip_url_check: bool = False, check_duplicates_flag: bool = False) 
         return {
             "total_entries": 0,
             "total_issues": 1,
-            "error": f"{KNOWLEDGE_DIR} 不存在，请先运行 km_init.py",
+            "error": f"{KNOWLEDGE_DIR} 不存在，请按 inv-knowledge-curator 的 /km_init 流程初始化知识库",
         }
 
     entries, indexed_paths = parse_index(KNOWLEDGE_DIR)

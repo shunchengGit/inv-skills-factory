@@ -1,6 +1,6 @@
 ---
 name: project-init
-description: 项目初始化：引导配置 .env 环境变量并拉取 git 仓库。用于新环境搭建、首次克隆项目后、env 配置不完整时。
+description: 项目初始化：引导配置 .env 环境变量并接入知识库。用于新环境搭建、首次克隆项目后、env 配置不完整时。
 trigger:
   - 项目初始化
   - 初始化环境
@@ -11,79 +11,56 @@ trigger:
   - git clone
   - init project
 commands:
-  - /init_project - 引导配置 .env 并拉取知识库/研报库 git 仓库
+  - /init_project - 引导配置 .env 并接入知识库
 ---
 
 # project-init：项目初始化
 
 ## 核心目标
 
-引导用户完成 Skills 工厂的首次配置：确认/填写 `.env` 变量 → 拉取知识库和研报库 git 仓库。
+引导用户完成 Skills 工厂的首次配置：确认/填写 `.env` → 接入外部知识库。以根目录 `AGENTS.md` 为准；研报属于同一知识库的 `res/`，不单独配置或拉取仓库。
+
+仅询问配置要求或要求检查时，只读核查，不自动初始化、拉取仓库或部署。
 
 ## 执行流程
 
 ### 1. 检查 .env
 
-读取项目根目录的 `.env`。如果不存在，引导用户从 `.env.example` 复制：
+检查项目根目录 `.env`；不存在时，从 `.env.example` 创建，不覆盖已有文件。只报告变量名和配置状态，不展示敏感值。
 
-```
-cp .env.example .env
-```
+| 变量 | 默认值或建议值 | 要求 |
+|------|----------------|------|
+| `INV_KNOWLEDGE_REPO_URL` | `git@github.com:shunchengGit/inv-knowledge.git` | 可选；使用知识库前确认远程地址和访问权限 |
+| `INV_KNOWLEDGE_ROOT` | `~/.inv-knowledge` | 可选；知识库本地根目录，研报位于其 `res/` |
+| `DEPLOY_SKILLS_DIR` | 建议 `inv-skills` | 部署必填，须显式配置，脚本无默认值 |
 
-然后逐项检查以下关键变量是否已配置（值为空或仍是注释状态视为未配置）：
+**交互规则**：已有非空配置不重复询问、不覆盖。缺失项逐个确认使用默认值或自定义值；知识库两项允许保留默认，不把未显式填写视为错误。部署目录经确认后写入 `.env`。
 
-| 变量 | 默认值 | 用途 |
-|------|--------|------|
-| `INV_KNOWLEDGE_REPO_URL` | `git@github.com:shunchengGit/inv-knowledge.git` | 知识库远程仓库 |
-| `INV_KNOWLEDGE_ROOT` | `~/.inv-knowledge` | 知识库本地目录 |
-| `DEPLOY_SKILLS_DIR` | `inv-skills` | 部署目标子目录名 |
+### 2. 检查知识库访问条件
 
-**交互规则**：对每个变量，如果用户已填写（非空、非注释），跳过。如果未填写，询问用户是否使用默认值或输入自定义值。不要一次性列出所有变量让用户填——逐个引导，逐个确认。
-
-### 2. 检查 SSH 连通性
+按实际配置的远程地址检查认证方式，不把所有 Git 远程都当作 GitHub SSH。使用默认 GitHub SSH 地址时，可检查：
 
 ```bash
 ssh -T git@github.com 2>&1
 ```
 
-如果返回 "Permission denied" 而不是 "successfully authenticated"：
-- 提示用户配置 SSH key：`ssh-keygen -t ed25519 -C "your_email@example.com"` → 添加到 GitHub
-- SSH 不通则后续 clone 会失败，必须先解决
+以认证输出判断结果；GitHub 认证成功也可能返回非零退出码。若提示 `Permission denied`，引导用户配置 SSH key 和仓库权限后再继续。SSH 认证成功不等于拥有目标仓库权限。
 
-### 3. 拉取知识库
+### 3. 接入知识库
 
-```bash
-python3 custom-skills/inv-knowledge-curator/scripts/km_init.py
-```
+先阅读 `custom-skills/inv-knowledge-curator/SKILL.md`，按其中的初始化流程执行，不在本技能维护第二套知识库初始化脚本。
 
-- 成功 → 显示条目统计
-- 失败 → 根据错误信息给出提示（SSH key、仓库不存在、网络等）
+- 知识库及研报资源只初始化一次，不单独拉取 `res/`。
+- 已存在目录先核对 Git 状态与远程地址，不覆盖、不强制重置；远程不符或有本地修改时先说明情况。
+- 初始化失败时报告实际原因，不宣称完成。
 
-### 4. 拉取研报库
+### 4. 汇总
 
-```bash
-python3 .claude/skills/project-init/scripts/init_report.py
-```
+按实际结果报告：
 
-- 逻辑与 km_init 相同：先 clone 再 pull，已存在则验证 remote 一致性
-- 成功 → 显示 Index.md 统计
-- 失败 → 给出提示
+- `.env`：部署必填项是否配置；知识库配置为显式值还是默认值。
+- 知识库：实际路径、初始化结果；只有实际统计过才报告条目数量。
+- 研报资源：同一知识库 `res/` 的状态，不作为独立仓库。
+- 认证：实际验证结果；未检查则明确标注。
 
-### 5. 汇总
-
-初始化完成后输出汇总：
-
-```
-✅ 初始化完成
-  .env:         已配置 (5/5 变量)
-  知识库:       ~/.inv-knowledge (XX 个条目)
-  研报库（res/）: ~/.inv-knowledge/res (XX 个文件夹)
-  SSH:          OK
-```
-
-## 注意事项
-
-- 不要重复配置已有的变量，只处理缺失的
-- SSH 不通时不跳过，必须解决后再拉仓库
-- 知识库和研报库独立——一个失败不影响另一个
-- 已存在的本地目录不会覆盖，只做 git pull
+本流程不自动部署；用户要求部署时使用 `skill-deployer`，仅部署到 Hermes。

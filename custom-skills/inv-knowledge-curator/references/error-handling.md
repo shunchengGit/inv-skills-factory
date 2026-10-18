@@ -53,7 +53,7 @@ for e in data.get('isolated_entries', []):
 
 | 场景 | 表现 | 处理 |
 |------|------|------|
-| 知识库不存在 | `请先运行 km_init.py` | LLM 用 bash：`git clone <INV_KNOWLEDGE_REPO_URL> ~/.inv-knowledge` + `mkdir -p entries res` |
+| 知识库不存在 | `请按 inv-knowledge-curator 的 /km_init 流程初始化知识库` | 按 SKILL.md 的 `/km_init` 流程，解析配置后的远程地址与本地根目录，再 clone 并确保根目录下有 `entries/` 和 `res/` |
 | km_import res: 文件不存在 | `# 文件不存在` | 确认路径 |
 | km_import res: 缺少 --target | `请指定 --target` | 先读 `res/` 确认已有文件夹 |
 | km_import res: PDF 损坏/扫描件 | `跳过无法打开` / 文本为空 | 跳过或告知用户 |
