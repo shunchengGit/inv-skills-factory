@@ -134,7 +134,7 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 
 ✅ 完成：`store` `success:true`；PDF 已归档到 `res/{target}/`，`res/index.md` 已更新，条目已入库
 
-> `res/` 不限于研报，可存放财报、公告等任何资源文件。pymupdf venv 首次自动安装。
+> `res/` 不限于研报，可存放财报、公告等任何资源文件。`km_import.py` 用 `uv run` 启动，pymupdf/PyYAML 由脚本头 PEP 723 声明并自动安装。
 
 ## /km_import note — 记笔记（折叠进 /km_import）
 
@@ -258,7 +258,7 @@ tags: [fuyao-glass, profit-trend, competitive-advantage, 2026-Q1]
 ## 依赖
 
 - `_shared/git.py` `_shared/dotenv.py` `_shared/proxy.py`
-- `pymupdf`（通过 `/tmp/research-pdf-venv`）
+- `pymupdf`（`km_import.py` PEP 723 声明，`uv run` 自动安装；不在运行时 pip 安装）
 - `PyYAML`（OKF frontmatter 安全解析）
 - `assets/cytoscape.min.js`（固定版本内嵌，图谱离线可用）
 - 远程仓库：`git@github.com:shunchengGit/inv-knowledge.git`

@@ -32,11 +32,11 @@ L1/L2/L3 可描述实际研究范围，不按固定数量认证投资就绪。�
 现有本地原文读取方式：
 
 ```bash
-python3 /Users/chengshun/.hermes/skills/inv-skills/inv-knowledge-curator/scripts/km_import.py read \
-  --file /Users/chengshun/.inv-knowledge/{resource} --pages edges
+uv run {researchDir}/scripts/km_import.py read \
+  --file $HOME/.inv-knowledge/{resource} --pages first-n --first-n 3
 ```
 
-`--file` 使用绝对路径或 `res/` 路径；resource 列表按相关问题逐项选择，不拼成一个参数。官方网页原文可记录 URL 与定位，不要求为原文配额另找 PDF。
+`{researchDir}` 见 `references/commands-quickref.md`；依赖由脚本头声明，不用系统 `python3` 直跑。`--file` 用绝对路径；`--pages edges` 只能识别报告，核验中段数字用 `first-n` 或 `all`。resource 列表按相关问题逐项选择，不拼成一个参数。官方网页原文可记录 URL 与定位，不要求为原文配额另找 PDF。
 
 每项关键证据记录数值/原话、真实日期、币种、单位、会计口径、已实现期间/预测期、原文路径/URL、可得页码或表格位置。对照摘要差异，检查相关风险及敏感性；不能仅读封面评级。具体数字影响估值、口径冲突、摘要省略条件或引用管理层原话时必须真实定位。
 

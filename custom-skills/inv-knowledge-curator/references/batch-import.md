@@ -32,7 +32,7 @@ delegate_task(
 3. 资源索引：若步骤1采用直接 `cp`，先调用 `km_import.py` 模块的 `_regenerate_res_index()` 重建 `res/index.md`，并补齐批次 `log.md`；当前 lint 不重建资源索引。
 4. 重建：主会话运行 `km_lint.py --fix --skip-url-check`（重建索引/标签/图谱/git push），验证远程分支与本地 HEAD 一致。
 
-PDF 提取若仅输出“缺少 pymupdf，正在安装...”并以0退出，不代表成功；改用 `uv run --with pymupdf --with pyyaml /绝对路径/km_import.py read ...`，确认实际页码和正文后继续。
+PDF 提取用 `uv run /绝对路径/km_import.py read ...`（依赖由脚本头声明）；读取全部失败时以非零退出，确认实际页码和正文后继续。
 
 ## Subagent 格式硬规则（必遵守）
 
@@ -183,9 +183,9 @@ grep -L "^type:" ~/.inv-knowledge/entries/*.md | grep -v index.md
 
 ## PDF 读取与提取
 
-`read --file` 必须传**绝对路径**（`$HOME/.inv-knowledge/res/...`）。`res/` 相对写法只在脚本按知识库根解析时成立，从技能部署目录调用会报"文件不存在"，且同样是 exit 0 的静默失败。
+`read --file` 必须传**绝对路径**（`$HOME/.inv-knowledge/res/...`）。`res/` 相对写法只在脚本按知识库根解析时成立，从技能部署目录调用会报"文件不存在"并以非零退出。
 
-`--pages` 仅支持 `edges|all|first-n`，不支持任意页码组合（如 `6,7,8,9,10`）；需要中段页码时用 `pymupdf`/`fitz` 按索引直读。`--pages edges` 只取首页末页，而投行报告末页往往是覆盖名单与免责声明，盈利预测表、目标价与估值假设通常在第 2-3 页——要取 EPS/目标价等进入结论的数字时用 `--pages first-n --first-n 3`，并对提取文本 grep 具体数字（如 `EPS|Price target|PO`）定位页码后引用。
+`--pages` 仅支持 `edges|all|first-n`，不支持任意页码组合（如 `6,7,8,9,10`）；需要中段页码时用 `pymupdf` 按索引直读。`--pages edges` 只取首页末页，而投行报告末页往往是覆盖名单与免责声明，盈利预测表、目标价与估值假设通常在第 2-3 页——要取 EPS/目标价等进入结论的数字时用 `--pages first-n --first-n 3`，并对提取文本 grep 具体数字（如 `EPS|Price target|PO`）定位页码后引用。
 
 首页短读仅用于识别报告，不足以完成事实核验。大段提取结果存临时文件，只回传证据摘要，不向主会话倾倒全文。未在已读页发现某说法只能标记"尚未核实"，不能断言整份报告不存在，也不能未经全文定位就删除历史条目中可能有效的信息。
 
@@ -252,7 +252,7 @@ uv run --with pyyaml --with pymupdf --with requests python3 \
   ~/.hermes/skills/inv-skills/inv-knowledge-curator/scripts/km_lint.py --fix --skip-url-check
 ```
 
-`km_import.py read` 缺 pymupdf 时会打印"缺少 pymupdf，正在安装…"后**以 exit 0 返回几十字节的空结果**，看起来像 PDF 无文本。每次 read 后先检查输出字节数（正常单页提取通常 >1KB），并始终用 `uv run --with pymupdf` 运行；不要因输出为空断言 PDF 损坏或条目不存在。
+`km_import.py` 已在脚本头声明 pymupdf 与 PyYAML，直接 `uv run <绝对路径>/km_import.py ...` 即可；不要用系统 `python3` 直跑。缺依赖或全部文件读取失败时 `read` 以非零退出并在 stderr 说明，不再静默返回空结果。退出码为 0 但正文很短时仍检查是否为扫描件，不要因输出为空断言 PDF 损坏或条目不存在。
 
 ## 其他已知坑
 

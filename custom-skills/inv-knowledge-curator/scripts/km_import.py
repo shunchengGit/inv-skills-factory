@@ -3,7 +3,7 @@ from __future__ import annotations
 
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["pyyaml>=6.0"]
+# dependencies = ["pyyaml>=6.0", "pymupdf>=1.24.0"]
 # ///
 """知识导入：资源文件导入 + 知识条目存储 + 只读 PDF 提取。
 
@@ -26,7 +26,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -315,30 +314,14 @@ def _md5_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def _ensure_pymupdf_venv():
-    venv_dir = Path("/tmp/research-pdf-venv")
-    if not venv_dir.exists():
-        subprocess.run([sys.executable, "-m", "venv", "--clear", str(venv_dir)], check=True, capture_output=True)
-        subprocess.run([str(venv_dir / "bin" / "pip"), "install", "-q", "pymupdf"], check=True, capture_output=True)
-
-
 def _need_fitz():
+    """pymupdf 由 PEP 723 声明；不在运行时安装，缺失时明确报错。"""
     try:
-        import fitz
-        return fitz
+        import pymupdf
+        return pymupdf
     except ImportError:
-        print("缺少 pymupdf，正在安装...", file=sys.stderr)
-        _ensure_pymupdf_venv()
-        # 将 venv 的 site-packages 加入 sys.path 以便导入
-        import glob as _glob
-        venv_site = list(Path("/tmp/research-pdf-venv/lib").glob("python*/site-packages"))
-        if venv_site:
-            sys.path.insert(0, str(venv_site[0]))
-        try:
-            import fitz
-            return fitz
-        except ImportError:
-            return None
+        print("# 缺少 pymupdf：请用 `uv run <km_import.py 绝对路径> ...` 运行（依赖已在脚本头声明）", file=sys.stderr)
+        return None
 
 
 def _page_indices(page_count: int, mode: str, first_n: int, max_pages: int) -> list[int]:
@@ -502,7 +485,9 @@ def cmd_read(args: argparse.Namespace) -> int:
             texts.append(text)
 
     if not texts:
-        return 0
+        # 全部文件不存在、无法打开或缺依赖：非零退出，避免下游把失败当作“PDF 无文本”。
+        print("# 未提取到任何 PDF 文本", file=sys.stderr)
+        return 1
 
     sys.stdout.write("\n".join(texts))
     return 0

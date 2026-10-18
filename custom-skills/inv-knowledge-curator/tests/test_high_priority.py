@@ -106,6 +106,39 @@ class TempKnowledgeTest(unittest.TestCase):
         args = argparse.Namespace(file=[str(self.root / "missing.pdf")], target="Acme", pages="edges", first_n=3, max_chars=1000, max_pages=10)
         self.assertNotEqual(self.imp.cmd_res(args), 0)
 
+    def test_read_returns_failure_when_nothing_extracted(self):
+        args = argparse.Namespace(file=[str(self.root / "missing.pdf")], pages="edges", first_n=3, max_chars=1000, max_pages=10)
+        self.assertNotEqual(self.imp.cmd_read(args), 0)
+
+    def test_missing_pymupdf_is_reported_without_runtime_install(self):
+        import builtins
+        real_import = builtins.__import__
+
+        def no_fitz(name, *args, **kwargs):
+            if name == "pymupdf":
+                raise ImportError("no pymupdf")
+            return real_import(name, *args, **kwargs)
+
+        with mock_patch("builtins.__import__", side_effect=no_fitz):
+            self.assertIsNone(self.imp._need_fitz())
+        self.assertFalse(hasattr(self.imp, "_ensure_pymupdf_venv"))
+        self.assertNotIn("research-pdf-venv", (SCRIPTS / "km_import.py").read_text(encoding="utf-8"))
+
+    def test_read_extracts_real_pdf_text(self):
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            self.skipTest("pymupdf not installed")
+        pdf = self.root / "res" / "Acme" / "2026-01-01-report.pdf"
+        doc = fitz.open()
+        doc.new_page().insert_text((72, 72), "Revenue 123")
+        doc.save(pdf)
+        args = argparse.Namespace(file=[str(pdf)], pages="all", first_n=3, max_chars=10000, max_pages=10)
+        from io import StringIO
+        with mock_patch("sys.stdout", new=StringIO()) as out:
+            self.assertEqual(self.imp.cmd_read(args), 0)
+        self.assertIn("Revenue 123", out.getvalue())
+
     def test_target_path_traversal_is_rejected(self):
         src = self.root / "report.pdf"
         src.write_bytes(b"pdf")
