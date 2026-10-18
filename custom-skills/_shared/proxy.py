@@ -57,5 +57,5 @@ def setup_proxy_env(override: str | None = None) -> bool:
         return True
     print("⚠️ 未检测到代理（HTTPS_PROXY/HTTP_PROXY 未设置，且本地 Clash 端口 7890/7891/7897 均未监听）", file=sys.stderr)
     print("   美股/港股通过 Yahoo Finance 获取数据，国内网络直连大概率被限流。", file=sys.stderr)
-    print("   请先启动 Clash 或手动设置: export HTTPS_PROXY=http://127.0.0.1:7890", file=sys.stderr)
+    print("   请先启动本机代理，或设置 export HTTPS_PROXY=<地址>，或给入口加 --proxy <地址>", file=sys.stderr)
     return False

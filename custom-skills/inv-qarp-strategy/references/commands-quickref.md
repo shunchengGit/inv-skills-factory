@@ -3,9 +3,7 @@
 估值脚本统一走 `inv-valuation-engine`，路径中 `{valuationDir}` = `{baseDir}/../inv-valuation-engine`，`{researchDir}` = `{baseDir}/../inv-knowledge-curator`。
 
 ```bash
-# 代理设置（美股/港股需要）
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
+# 代理：美股/港股由 inv-stock-data 自动探测，失败再加 --proxy <地址>；A 股/ETF 先 unset。规则见 inv-stock-data/SKILL.md
 
 # 1) 抓取估值快照（文本）
 uv run {valuationDir}/scripts/valuation_snapshot.py AAPL

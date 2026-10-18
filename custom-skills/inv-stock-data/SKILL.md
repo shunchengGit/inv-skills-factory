@@ -52,7 +52,7 @@ commands:
 #   1. 优先读 HTTPS_PROXY / HTTP_PROXY 环境变量
 #   2. 其次检测本地 Clash 端口（7890 → 7891 → 7897）
 #   3. 都未检测到 → envelope 的 notes/gaps 提示代理缺失
-#   4. 可手动指定：--proxy http://127.0.0.1:7890
+#   4. 仍失败时手动指定：--proxy <地址>（以本机代理实际端口为准）
 #   5. Yahoo 全空时给出代理/限流排查提示，不保证已查明失败原因
 # A 股 / ETF **必须清除代理**，每次调用前先执行 unset：
 #   unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy
@@ -62,9 +62,8 @@ commands:
 # ⚠️ 分市场批次调用，避免代理配置切换导致错误。
 #   先跑完一种市场，确认清除/设置代理，再跑另一种。
 
-# 手动设置代理（推荐，确保可用）：
-export HTTPS_PROXY=http://127.0.0.1:7890
-export HTTP_PROXY=http://127.0.0.1:7890
+# 自动探测失败时才手动设置（端口以本机代理为准；export 与命令须在同一次 shell 调用）：
+#   export HTTPS_PROXY=<地址> HTTP_PROXY=<地址>
 
 # —— A 股 / 北交所 ——
 uv run {baseDir}/scripts/cs_stock_info.py snapshot 600519
@@ -84,10 +83,10 @@ uv run {baseDir}/scripts/cs_stock_info.py snapshot 159915 --output json
 uv run {baseDir}/scripts/cs_stock_info.py daily 513010 --output json
 uv run {baseDir}/scripts/cs_stock_info.py profile 513010 --output json
 
-# —— 美股 / 港股（必须设置代理后再执行）——
+# —— 美股 / 港股（需代理，入口自动探测）——
 uv run {baseDir}/scripts/cs_stock_info.py snapshot AAPL
 uv run {baseDir}/scripts/cs_stock_info.py snapshot 0700.HK
-uv run {baseDir}/scripts/cs_stock_info.py snapshot 9992.HK --proxy http://127.0.0.1:7890  # 手动指定代理
+uv run {baseDir}/scripts/cs_stock_info.py snapshot 9992.HK --proxy <地址>  # 自动探测失败时手动指定
 uv run {baseDir}/scripts/cs_stock_info.py daily MSFT --output json
 uv run {baseDir}/scripts/cs_stock_info.py profile NVDA --output json
 uv run {baseDir}/scripts/cs_stock_info.py financial AAPL --output json

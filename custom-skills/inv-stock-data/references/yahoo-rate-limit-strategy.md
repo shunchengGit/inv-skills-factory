@@ -35,8 +35,10 @@
 ## 代码示例
 
 ```python
-import yfinance as yf, os
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
+import sys, yfinance as yf
+sys.path.insert(0, '../_shared')  # 从 inv-stock-data 目录运行
+from proxy import setup_proxy_env
+setup_proxy_env()  # 读环境变量或探测本地代理端口
 
 # 方法1（推荐）：yf.download
 tnx_data = yf.download('^TNX', period='1y', interval='1d')

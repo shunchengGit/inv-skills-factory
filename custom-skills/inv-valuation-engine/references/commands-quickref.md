@@ -3,11 +3,9 @@
 路径中 `{baseDir}` = 本技能目录，`{stockDir}` = `{baseDir}/../inv-stock-data`，`{researchDir}` = `{baseDir}/../inv-knowledge-curator`。
 
 ```bash
-# ===== 代理设置说明 =====
-# 美股/港股数据依赖 Yahoo Finance，国内网络需要代理
-# 通过环境变量设置代理（inv-stock-data CLI 自动读取）
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
+# ===== 代理 =====
+# 美股/港股走 Yahoo 需代理：inv-stock-data 先读 HTTPS_PROXY/HTTP_PROXY，再探测本地 Clash 端口；
+# 仍失败时加 --proxy <地址>。A 股/ETF 先 unset 代理。规则以 inv-stock-data/SKILL.md 为准。
 
 # ===== 首选：获取三个核心组件 =====
 # v1 all.data.components 固定为 snapshot + financial + financials，不含日线/公告/关联

@@ -11,7 +11,7 @@
 对多只股票做相对估值比较。
 
 示例:
-  python3 valuation_compare.py 002475 601138 002241 --company-type tech --proxy http://127.0.0.1:7890
+  uv run valuation_compare.py 002475 601138 002241 --company-type tech
 """
 
 from __future__ import annotations

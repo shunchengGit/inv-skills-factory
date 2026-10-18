@@ -11,8 +11,8 @@
 基于估值快照生成五档价值投资估值报告。
 
 示例:
-  python3 valuation_report.py 600660 --proxy http://127.0.0.1:7890
-  python3 valuation_report.py AAPL --output json --proxy http://127.0.0.1:7890
+  uv run valuation_report.py 600660
+  uv run valuation_report.py AAPL --output json   # 代理自动探测；失败时加 --proxy <地址>
 """
 
 from __future__ import annotations

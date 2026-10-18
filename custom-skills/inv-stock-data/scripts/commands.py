@@ -299,7 +299,7 @@ def _raw_snapshot_yahoo(code: str, market: str) -> dict:
 
     err_notes = ["所有数据源均不可用"]
     if not _has_proxy:
-        err_notes.append("代理缺失：未设置 HTTPS_PROXY，国内直连 Yahoo 被限流。请 export HTTPS_PROXY=http://127.0.0.1:7890 后重试")
+        err_notes.append("代理缺失：未设置 HTTPS_PROXY，国内直连 Yahoo 被限流。请启动本机代理或 export HTTPS_PROXY=<地址>，或加 --proxy <地址> 后重试")
     else:
         err_notes.append("代理已设置但 Yahoo + AkShare 均失败。可能 Clash 节点被限流或系统代理未开。尝试切换节点/检查代理设置后重试")
     return {

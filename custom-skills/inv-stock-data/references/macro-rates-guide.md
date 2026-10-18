@@ -5,8 +5,10 @@
 ```bash
 # yfinance ^TNX（需代理）
 cd {baseDir} && uv run python3 -c "
-import yfinance as yf, os
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
+import sys, yfinance as yf
+sys.path.insert(0, '../_shared')
+from proxy import setup_proxy_env
+setup_proxy_env()  # 读环境变量或探测本地代理端口
 tnx = yf.Ticker('^TNX')
 hist = tnx.history(period='1mo')
 print(hist.tail(10).to_string())

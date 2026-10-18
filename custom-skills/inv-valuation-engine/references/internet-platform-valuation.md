@@ -74,12 +74,8 @@
 ## 数据获取路径
 
 ```
-# 年度/季度财报数据（yfinance 直接拉取，需代理）
-# 注意：inv-stock-data 技能目录下没有 .venv，用 uv run --with yfinance；
-# export 与命令必须放在同一次 shell 调用里（每次调用都是新解释器，跨调用不保留环境变量）
-cd {inv-stock-data skillDir}
-export HTTP_PROXY=http://127.0.0.1:7890 HTTPS_PROXY=http://127.0.0.1:7890
-uv run --with yfinance python3 baba_fin.py
+# 年度/季度财报三表：经 inv-stock-data，不在上层直调 yfinance；代理自动探测，失败再加 --proxy <地址>
+uv run {stockDir}/scripts/cs_stock_info.py financials BABA --output json
 ```
 
 脚本注意（实测踩坑）：

@@ -5,9 +5,8 @@
 ## 1. 环境准备
 
 ```bash
-# 港股/美股必须设置代理
-export HTTPS_PROXY=http://127.0.0.1:7890
-export HTTP_PROXY=http://127.0.0.1:7890
+# 港股/美股需代理：本技能入口自动探测；本文件的直接 yfinance 片段仅供 inv-stock-data 自身开发排障，
+# 运行前设置本机实际代理：export HTTPS_PROXY=<地址> HTTP_PROXY=<地址>
 
 python3 -c "import yfinance as yf; ..."
 ```

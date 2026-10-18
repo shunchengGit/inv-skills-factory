@@ -94,7 +94,7 @@
 
 ### uv run 首次超时
 
-首次运行或网络慢时 `uv run` 可能因依赖下载超时（实测 300 秒+）。降级：直接用 `python` + `yfinance`（港股/美股需设 `HTTPS_PROXY=http://127.0.0.1:7890`）抓取 snapshot 数据，再传递给上游技能。
+首次运行或网络慢时 `uv run` 可能因依赖下载超时（实测 300 秒+）。降级：拉长超时重试一次（依赖缓存后通常秒级），或先单独 `uv run {baseDir}/scripts/cs_stock_info.py --help` 预热依赖；不要绕过入口直调 yfinance。
 
 ### venv python 直接调用失败
 
@@ -137,7 +137,7 @@ uv run scripts/cs_stock_info.py financial <code> --output json > /tmp/stock_fin.
 2. 行情用 Yahoo chart API 直取（美股/港股/韩股均需代理）：
 
 ```bash
-export https_proxy=http://127.0.0.1:7890 http_proxy=http://127.0.0.1:7890
+export https_proxy=<地址> http_proxy=<地址>   # 本机实际代理
 curl -s -m 30 "https://query1.finance.yahoo.com/v8/finance/chart/000660.KS?range=1y&interval=1d" \
   -H "User-Agent: Mozilla/5.0" -o /tmp/q.json
 # 再用 python3 读 /tmp/q.json 解析（不要 curl | python3，会触发安全扫描拦截）
