@@ -326,10 +326,10 @@ def _render_announcements(p: dict) -> str:
 
 
 def _render_relations(p: dict) -> str:
-    lines = [f"# {p.get('code', '')} 关联个股", ""]
+    lines = [f"# {p.get('code', '')} 同行业板块成分股", ""]
     rels = p.get("relations", [])
     if not rels:
-        lines.append("暂无关联数据")
+        lines.append("暂无同行业成分股数据")
     for r in rels:
         code_val = r.get("代码") or r.get("code", "")
         name = r.get("名称") or r.get("name", "")

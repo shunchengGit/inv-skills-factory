@@ -75,10 +75,20 @@ def fetch_etf_snapshot(code: str) -> dict | None:
 
 
 def fetch_etf_daily(code: str, n: int | None = None) -> pd.DataFrame | None:
-    """获取 ETF 日K线（新浪源，前复权）。"""
+    """获取 ETF 日K线（新浪基金专用源，不复权）。
+
+    股票接口依赖流通股本历史，ETF 返回 null 时会在价格可用的情况下失败。
+    基金专用接口不请求股票股本；价格不是复权/总回报序列。
+    """
     import akshare as ak
     sina_code = prefixed_sina(code, "etf")
-    df = safe_call(ak.stock_zh_a_daily, symbol=sina_code, adjust="qfq")
+    try:
+        df = ak.fund_etf_hist_sina(symbol=sina_code)
+    except Exception as exc:
+        # Preserve diagnostics without changing the DataFrame/None contract.
+        df = pd.DataFrame()
+        df.attrs["fetch_error"] = f"{type(exc).__name__}: {exc}"
+        return df
     if df is None or df.empty:
         return None
     if "date" in df.columns:
@@ -87,28 +97,9 @@ def fetch_etf_daily(code: str, n: int | None = None) -> pd.DataFrame | None:
 
 
 def fetch_etf_nav(code: str) -> dict | None:
-    """获取 ETF 净值数据（单位净值、累计净值、折溢价率）。"""
-    import akshare as ak
-    df = safe_call(ak.fund_etf_hist_em, symbol=code, period="daily", adjust="qfq")
-    if df is None or df.empty:
-        return None
-    latest = df.iloc[-1]
-    nav = _float_or_none(latest.get("单位净值") or latest.get("净值"))
-    acc_nav = _float_or_none(latest.get("累计净值"))
-    date_str = str(latest.get("净值日期") or latest.get("日期", ""))
-    price = _float_or_none(latest.get("收盘价") or latest.get("收盘"))
-    premium_pct = None
-    premium_label = "平价"
-    if nav and price:
-        premium_pct = (price - nav) / nav
-        if premium_pct > 0.02:
-            premium_label = "溢价"
-        elif premium_pct < -0.02:
-            premium_label = "折价"
-    return {
-        "latest": nav,
-        "acc_nav": acc_nav,
-        "date": date_str,
-        "premium_pct": premium_pct,
-        "premium_label": premium_label,
-    }
+    """净值来源尚未验证，明确返回缺失；行情 OHLC 不是基金净值。
+
+    保留函数接口，待独立净值来源及日期/单位契约验证后再启用。
+    不从 fund_etf_hist_em 的猜测字段推导净值或折溢价。
+    """
+    return None

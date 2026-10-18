@@ -135,6 +135,7 @@ def _raw_snapshot_etf(code: str) -> dict:
 
     result = {
         "_command": "snapshot_etf",
+        "_daily_error": daily_df.attrs.get("fetch_error") if daily_df is not None else None,
         "code": code,
         "name": name,
         "category": category,
@@ -243,6 +244,8 @@ def _raw_snapshot_yahoo(code: str, market: str) -> dict:
             "net_margin_pct": _ratio_to_pct(info.get("profitMargins")),
             "revenue_growth_pct": _ratio_to_pct(info.get("revenueGrowth")),
             "earnings_growth_pct": _ratio_to_pct(info.get("earningsGrowth")),
+            "debt_to_asset_pct": None,
+            "debt_to_equity_ratio": (parse_number(info.get("debtToEquity")) / 100 if parse_number(info.get("debtToEquity")) is not None else None),
         }
         return {
             "_command": "snapshot_yahoo",
@@ -362,7 +365,8 @@ def _raw_daily(
             if name:
                 _name_code_cache[name] = code
         else:
-            sources.append(make_source(provider, "failed", reason="empty response"))
+            reason = df.attrs.get("fetch_error", "empty response") if df is not None else "empty response"
+            sources.append(make_source(provider, "failed", reason=reason))
     else:
         yahoo_symbol = to_yahoo_symbol(code, market)
         df = fetch_yahoo_history(yahoo_symbol, period=period)
@@ -532,7 +536,9 @@ def _raw_financial(code: str, market: str = "a") -> dict:
                     "operating_margin_pct": _ratio_to_pct(info.get("operatingMargins")),
                     "revenue_growth_pct": _ratio_to_pct(info.get("revenueGrowth")),
                     "earnings_growth_pct": _ratio_to_pct(info.get("earningsGrowth")),
-                    "debt_to_equity": info.get("debtToEquity"),
+                    "debt_to_asset_pct": None,
+                    "debt_to_equity_ratio": (parse_number(info.get("debtToEquity")) / 100 if parse_number(info.get("debtToEquity")) is not None else None),
+                    "debt_to_equity": info.get("debtToEquity"),  # legacy Yahoo percentage, not a ratio
                     "free_cash_flow": info.get("freeCashflow"),
                     "total_revenue": info.get("totalRevenue"),
                     "total_cash": info.get("totalCash"),
@@ -666,6 +672,7 @@ def cmd_snapshot_a(code: str, *, raw_symbol: str | None = None) -> dict:
         "gross_margin_pct": gross_margin,
         "net_margin_pct": net_margin,
         "debt_to_asset_pct": local_number(financial.get("资产负债率")),
+        "debt_to_equity_ratio": None,
         "revenue_growth_pct": local_number(financial.get("营业总收入同比增长率")),
         "earnings_growth_pct": local_number(financial.get("净利润同比增长率")),
     }
@@ -711,13 +718,14 @@ def cmd_snapshot_etf(code: str, *, raw_symbol: str | None = None) -> dict:
         "daily": daily,
         "nav": nav,
     }
-    sources = [make_source("sina", "ok" if daily else "failed", reason=None if daily else "daily unavailable")]
+    sources = [make_source("sina", "ok" if daily else "failed", reason=None if daily else raw.get("_daily_error") or "daily unavailable")]
     sources.append(make_source("eastmoney-nav", "ok" if nav else "failed", reason=None if nav else "nav unavailable"))
     return make_envelope(
         "snapshot", status, _symbol(code, "etf", raw_symbol), data,
         data_as_of=(nav or {}).get("date") or _last_date(daily, "date", "日期"),
         sources=sources,
         gaps=gaps,
+        notes=["ETF 日线为新浪基金专用接口不复权价格，非含分红总回报序列；除息可能影响趋势判断。"],
     )
 
 
@@ -780,6 +788,7 @@ def cmd_daily(
     return make_envelope(
         "daily", status, _symbol(code, market, raw_symbol), data,
         data_as_of=last, sources=sources, gaps=gaps, window=window,
+        notes=["ETF 日线为新浪基金专用接口不复权价格，非含分红总回报序列；除息可能影响趋势判断。"] if market == "etf" else [],
     )
 
 
@@ -816,6 +825,11 @@ def cmd_financial(code: str, market: str = "a", *, raw_symbol: str | None = None
     raw = _raw_financial(code, market)
     data = {key: raw.get(key) for key in ("fundamentals", "next_earnings_date", "last_surprise_pct", "ths_financial", "sina_financial") if key in raw}
     has_data = any(value for value in data.values())
+    if market == "a" and has_data:
+        data["fundamentals"] = {
+            "debt_to_asset_pct": parse_number((raw.get("ths_financial") or {}).get("资产负债率")),
+            "debt_to_equity_ratio": None,
+        }
     return _wrap_raw("financial", code, market, raw, data, provider="yahoo" if market in ("hk", "us") else "akshare", raw_symbol=raw_symbol, has_data=has_data)
 
 
@@ -838,7 +852,13 @@ def cmd_announcements(code: str, *, raw_symbol: str | None = None) -> dict:
 
 def cmd_relations(code: str, *, raw_symbol: str | None = None) -> dict:
     raw = _raw_relations(code)
-    return _wrap_raw("relations", code, "a", raw, {"relations": raw["relations"]}, provider="akshare", raw_symbol=raw_symbol, has_data=bool(raw["relations"]))
+    raw["_notes"] = ["relations 是同行业板块成分股兼容接口，不是调研记录；无30日调研覆盖语义。"]
+    data = {
+        "relation_type": "industry_constituents",
+        "industry_members": raw["relations"],
+        "relations": raw["relations"],  # legacy alias, not research events
+    }
+    return _wrap_raw("relations", code, "a", raw, data, provider="eastmoney-industry", raw_symbol=raw_symbol, has_data=bool(raw["relations"]))
 
 
 def cmd_index_daily(symbol: str, *, period: str = "1y", limit: int | None = None) -> dict:

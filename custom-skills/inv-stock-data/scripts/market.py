@@ -28,7 +28,7 @@ def parse_symbol(raw: str) -> tuple[str, str]:
         first = s[0]
         if first in _BSE_PREFIXES and s[1] == "8":
             return s, "a"  # 北交所 4xxxxx / 8xxxxx
-        if first in {"5", "2"}:
+        if first in {"5", "2"} or s.startswith("15"):
             return s, "etf"
         return s, "a"
     # 兜底：尝试当 A 股

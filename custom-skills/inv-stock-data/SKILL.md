@@ -13,14 +13,14 @@ trigger:
   - cs_stock
 commands:
   - /cs_stock - 综合信息快照（默认；自动识别 A 股 / ETF / 美港股）
-  - /cs_stock_profile - A 股交易所列表全量键值；美港股 Yahoo info 全量键值；ETF 同花顺分类信息
-  - /cs_stock_daily - 最近日线（A 股新浪 / ETF 东财 / 美港股 Yahoo）
+  - /cs_stock_profile - A 股交易所列表全量键值；美港股 Yahoo info 全量键值；ETF 新浪分类信息
+  - /cs_stock_daily - 最近日线（A 股新浪 / ETF 新浪 / 美港股 Yahoo）
   - /cs_stock_financial - A 股同花顺财务摘要 + 新浪财务指标；美港股 Yahoo fundamentals
   - /cs_stock_financials - 财务三表（利润表/资产负债表/现金流量表），美港股走 yfinance，A 股走 akshare
-  - /cs_stock_all - 一次调用获取 snapshot + financial + financials，避免多次跨进程调用触发限流
+  - /cs_stock_all - 一次调用获取 snapshot + financial + financials，减少跨进程调用（不保证避免限流）
   - /cs_stock_description - 公司简介（A 股巨潮 / 美港股 Yahoo description）
-  - /cs_stock_announcements - 近期巨潮公告（仅 A 股）
-  - /cs_stock_relations - 近期巨潮调研记录（仅 A 股）
+  - /cs_stock_announcements - 近期公告（stock_notice_report，仅 A 股）
+  - /cs_stock_relations - 同行业板块成分股（旧命令名，仅 A 股；不是调研）
   - /cs_stock_index-daily - A 股指数日线
 ---
 
@@ -28,13 +28,17 @@ commands:
 
 ## 核心目标
 
-在用户询问 **个股基础信息、行情、财务摘要、公告、调研或行业数据** 时，优先用本技能内置脚本拉取结构化数据，再回答或整理；不做估值结论与买卖建议（估值请用 `inv-valuation-engine`）。
+在用户询问 **个股基础信息、行情、财务摘要、公告或行业数据** 时，优先用本技能内置脚本拉取结构化数据，再回答或整理；不做估值结论与买卖建议（估值请用 `inv-valuation-engine`）。
 
 **本技能是所有投资相关技能的唯一数据层**，其他技能只能通过本技能的公共契约获取数据，不直接调用 AkShare / yfinance。脚本优先级、代理规则、重试/降级语义以本技能为权威，其他技能只保留与自身分析逻辑强相关的补充说明。
 
 ### v1 公共契约（破坏性变更）
 
 所有 JSON 命令统一返回 `schema_version: "1.0"` envelope：`status`（`ok|partial|failed`）、`symbol`、`data_as_of`、`sources`、结构化 `gaps`、`notes`、`data`，日线另含实际 `window`。调用方必须先检查 `status`，不得读取供应商原始字段；`failed` 的 CLI 退出码非零。
+
+标准杠杆字段位于 `data.fundamentals`：`debt_to_asset_pct` 是资产负债率百分数（38.5 表示38.5%）；`debt_to_equity_ratio` 是负债/权益无量纲比值（1.25 表示125%）。A 股不以资产负债率冒充负债权益比；Yahoo `debtToEquity` 除以100后进入 ratio。旧 financial 字段 `debt_to_equity` 仅为 Yahoo 原始百分数兼容，弃用且不得跨市场混读。缺失为 null，不互相回填。
+
+`relations` 返回 `data.relation_type: "industry_constituents"`、`data.industry_members`；旧 `data.relations` 是同一列表兼容别名。最多10条、可能含自身、无事件日期/30日覆盖，来源 `eastmoney-industry`；失败保留 failed envelope。
 
 `all` 固定只聚合 `snapshot + financial + financials`，位于 `data.components` 且各有独立状态；**不包含** `daily`、`announcements`、`relations`。需要历史或事件数据时显式调用对应命令。
 
@@ -44,18 +48,18 @@ commands:
 
 ```bash
 # ===== 代理规则（硬约束） =====
-# 美股 / 港股 **必须走代理**，脚本自动检测并强制要求：
+# 美股 / 港股建议配置代理，入口自动检测并提示缺口：
 #   1. 优先读 HTTPS_PROXY / HTTP_PROXY 环境变量
 #   2. 其次检测本地 Clash 端口（7890 → 7891 → 7897）
-#   3. 都未检测到 → stderr 输出明确警告，payload._proxy_ok=false，notes 注入修复提示
+#   3. 都未检测到 → envelope 的 notes/gaps 提示代理缺失
 #   4. 可手动指定：--proxy http://127.0.0.1:7890
-#   5. Yahoo 全空时自动诊断：代理缺失 vs 代理已设但节点限流，分别提示
+#   5. Yahoo 全空时给出代理/限流排查提示，不保证已查明失败原因
 # A 股 / ETF **必须清除代理**，每次调用前先执行 unset：
 #   unset HTTPS_PROXY HTTP_PROXY https_proxy http_proxy
-#   脚本虽内置自动清除，但跨 subprocess 调用时代理可能从上一轮泄漏，
-#   导致 eastmoney.com ProxyError。手工 unset 比依赖自动检测更可靠。
+#   当前 safe_call 不自动清除代理；调用方应显式 unset，
+#   避免代理配置导致国内接口 ProxyError。
 #
-# ⚠️ 不要在同一批调用中混用 A 股和美股——代理状态反复切换必然出错。
+# ⚠️ 分市场批次调用，避免代理配置切换导致错误。
 #   先跑完一种市场，确认清除/设置代理，再跑另一种。
 
 # 手动设置代理（推荐，确保可用）：
@@ -97,18 +101,18 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
    - ETF snapshot data：name, category, price, currency, daily, nav
    - 美港股 snapshot data：name, sector, industry, price, currency, daily, fundamentals
    - snapshot 内的 daily 仅用于短期概览；52 周/250 日/5 年指标必须显式调用 `daily --period 5y` 并检查 window 门槛
-2. 用户要 **完整原始字段表**（雪球 item 或 Yahoo `info`）：运行 `profile --output json`。
+2. 用户要 **完整字段表**（股票代码名称列表或 Yahoo `info`，位于 v1 data）：运行 `profile --output json`。
 3. 用户要 **K 线序列**：运行 `daily --output json`。
 4. 用户要 **财务摘要**：运行 `financial --output json`（A 股同花顺+新浪；美港股 Yahoo fundamentals）。
 5. 用户要 **公司简介**：运行 `description --output json`。
 6. 用户要 **A 股公告标题** 做事件排查：运行 `announcements`（**仅 A 股**）。
-7. 用户要 **A 股调研记录**：运行 `relations`（**仅 A 股**）。
+7. 用户要 **A 股同行业成分股**：运行 `relations`（旧接口名，仅 A 股）。它不是巨潮调研记录，不提供30日调研覆盖；需要调研证据时另行核对官方披露，不能用此列表替代。
 8. 用户要 **A 股指数日线**：运行 `index-daily <指数代码>`。
 9. 美港股遇 `YFRateLimitError` / `Too Many Requests`：设置 **`HTTPS_PROXY`** 环境变量后再执行。
-10. **命中率**：脚本对 AkShare 与 Yahoo 请求均带**有限次退避重试**；美港股 `snapshot` **先拉日线再拉 info**，并在报价缺失时用日线收盘回填；同花顺财务在「按报告期」失败时会尝试 **「按单季度」**。
+10. **实际失败语义**：本层未实现自动退避重试、缺价日线回填或同花顺单季度重试。美港股 snapshot 并行请求 info/history；失败时尝试已有市场降级。AkShare 的 `safe_call` 失败返回缺失值；调用方按 `status/gaps/notes` 处理，不得把 `retryable` 当成已执行重试。
 11. 脚本返回的 `notes` / `gaps` 必须原样关注；缺数据时说明缺口，不要编造。
 12. **禁止管道执行**：**绝不**使用 `uv run ... --output json | python3 -c "..."` 模式。管道传递的 JSON 可能因截断、换行或转义导致解析错误，且触发安全审批。正确做法：`uv run ... --output json > /tmp/stock_data.json`，再 `python3 -c "import json; d=json.load(open('/tmp/stock_data.json')); ..."`。
-13. **Yahoo 限流**：连续 Yahoo 请求（snapshot + financials + daily）必须间隔 ≥3 秒。脚本内置退避重试，但连续快速调用仍会触发 `YFRateLimitError`。优先用 `cs_stock_all` 合并调用。
+13. **Yahoo 限流**：连续 Yahoo 请求（snapshot + financials + daily）必须间隔 ≥3 秒。Yahoo fetch 函数另有进程内3秒节流，不保证跨进程或每个底层请求间隔，不保证避免限流，也不是自动重试。优先用 `cs_stock_all` 合并调用。
 14. **批处理边界**：数据层允许 `cs_stock_all` 合并抓取单标的；组合层批量刷新只允许走受控脚本（如 `qq_update_portfolio.py`），不要自行写批量跨市场抓取脚本。
 
 ## 代码与市场识别
@@ -122,7 +126,7 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 | 美股 | `AAPL`、`MSFT`、`BRK.B` | Yahoo ticker；含字母即按美股等处理 |
 | 韩股/日股等 | `000660.KS`、`7203.T` | ⚠️ **不支持**：yfinance 实测返回空数据；请用 Brave Search 搜索英文关键词获取行情 |
 
-`announcements` 和 `relations` 仅接受 **A 股 6 位代码**。
+`announcements` 和 `relations` 仅用于 **A 股 6 位代码**；当前 CLI 分派未强制校验这两个命令的市场，调用方须遵守该使用边界，不把其他市场返回结果当有效数据。
 
 ## 数据校验（必须）
 
@@ -146,30 +150,18 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 
 详见 `references/data-policy.md`。
 
-- **A 股**：交易所列表、新浪日线、同花顺财务摘要、百度估值（PE/PB/总市值等）、巨潮公告与调研、行业板块与指数、指数日线；**不调用** `*_em`（公告降级除外）。
-- **ETF**：东财日线（`fund_etf_hist_em`）、东财净值（`fund_etf_fund_info_em`）、同花顺分类列表（`fund_etf_category_ths`，含名称/基金类型/净值/涨跌幅）；不支持财务摘要、估值、公告、调研。
+- **A 股**：交易所列表、新浪日线、同花顺财务摘要、百度 PE/PB、巨潮公司概况（东财降级）、公告接口、东财行业板块成分股、指数日线。`relations` 不调用巨潮调研接口。
+- **ETF**：新浪基金专用不复权日线（`fund_etf_hist_sina`；非总回报序列，除息可能影响趋势判断）、新浪分类列表（天天基金名称列表降级）。独立净值来源尚未验证，`fetch_etf_nav` 返回 `None`，snapshot 输出 `nav: null` 和 `data.nav` 缺口；不能从行情 OHLC 猜净值或折溢价。不支持财务摘要、估值、公告、调研。
 - **美港股**：**yfinance（Yahoo Finance）**；非实时盘口。
-- **代理**：脚本内置自动代理管理——美港股自动检测并设置 `HTTPS_PROXY`（环境变量 > 本地 Clash 端口探测），A 股/ETF 自动临时清除代理；无需手动传参。
+- **代理**：美港股入口自动检测代理；A 股/ETF 调用前由调用方清除代理，当前 `safe_call` 不自动清除。
 - **估值指标**：A 股 snapshot 含 `valuation`（百度 PE TTM/PE 静态/PB/市现率/总市值）和 `sina_financial_supplement`（新浪 EPS/每股净资产/股息发放率）；百度缺失时用新浪数据 + 收盘价自行计算。
 - **yfinance 高级 API**：当 CLI 子命令返回不全或需完整年度财报时，可直接用 Python `yfinance` 调用 `ticker.income_stmt` / `balance_sheet` / `cash_flow` 和 `ticker.history(period='5y', interval='1mo')`。详见 `references/yfinance-advanced-usage.md`。
 
 ## 持仓数据刷新流程
 
-当用户要求"刷新持仓数据"时，按以下流程执行：
+当用户要求"刷新持仓数据"时，加载 `inv-portfolio-tracker`，使用其 `scripts/qq_update_portfolio.py` 受控入口：默认预览，`--check` 检查可用性，`--report` 或 `--json` 输出；仅用户授权更新时使用 `--write`。入口读取持仓主数据，不自行重建持仓列表。
 
-1. **读取持仓主文件**：`cat ~/.hermes/memories/PORTFOLIO.md` 获取持仓列表和成本
-2. **优先使用脚本**：`uv run scripts/cs_stock_info.py snapshot <code>` 逐个拉取
-   - A股/ETF 先执行 `unset HTTPS_PROXY HTTP_PROXY`
-   - 美港股先执行 `export HTTPS_PROXY=http://127.0.0.1:7890`
-3. **脚本超时/失败时降级**：
-   - **A股/ETF**：用 QQ Finance API (`qt.gtimg.cn`) 获取实时价格，详见 `references/qq-finance-realtime-api.md`
-   - **美港股**：用 `web_search` 搜索 "<股票名> <代码> 最新股价 <日期>" 获取价格
-   - **港股特殊**：07709/06809 等 Yahoo 404 标的，搜索富途牛牛/moomoo 页面获取价格
-4. **交叉验证**：同一标的至少用 2 个独立数据源验证价格
-5. **整理输出**：表格形式呈现 标的|代码|最新价|涨跌|数据来源
-6. **更新 PORTFOLIO.md**：将最新价格写入持仓文件（如用户要求）
-
-**禁止**：同一对话中重复执行相同 `web_search` 查询超过 3 次——如果搜索结果已包含所需数据，直接使用，不要陷入循环。
+保留报价来源、市场、币种与报价时点；缺失或过期价格明确列出，不猜测回填。异常价格、影响重要决策的价格及重大疑点按需独立验证，不强制每个报价双源。禁止逐个 snapshot 后手工汇总写主文件或另写批量抓取脚本。
 
 ## 与其他技能配合
 
@@ -179,8 +171,8 @@ uv run {baseDir}/scripts/cs_stock_info.py description AAPL --output json
 - **Yahoo Finance Web 降级方案**：当所有 yfinance API 端点均失败时，用 Agent WebFetch 抓取 Yahoo Finance 网页获取价格/PE/52周范围等数据，详见 `references/yahoo-browser-fallback.md`。
 - **QQ Finance 实时行情降级方案**：当 AkShare 东财源因代理失败、新浪返回空时，用 QQ Finance API（`qt.gtimg.cn`）获取 A 股/港股盘中实时价格，详见 `references/qq-finance-realtime-api.md`。
 - **技能与数据组织约定**：投资技能目录结构、持仓文件位置、迁移记录见 `references/skill-organization.md`。
-- **持仓快照更新**：逐个调用 `uv run scripts/cs_stock_info.py snapshot <code>` 拉取，手动汇总更新 PORTFOLIO.md。
-- **⚠️ 不要写批量持仓更新脚本**：实测证明不可行——(1) A股/ETF 的 AkShare 需清除代理，美港股需设置代理，频繁切换导致连接失败；(2) Yahoo 连续请求触发限流，3-5s间隔仍不够稳定；(3) 07709/06809 等港股降级新浪后无52周数据；(4) uv run 单进程 import inv-stock-data 函数时代理管理混乱（ThreadPoolExecutor 内子线程继承代理状态不一致）。逐个 snapshot 调用虽慢（8标的~50s），但稳定可靠。
+- **持仓快照更新**：只走 `inv-portfolio-tracker` 的 `qq_update_portfolio.py` 受控入口；不逐个 snapshot 手工汇总或直接改主文件。
+- **批处理边界**：使用现有受控入口，不新增跨市场批量抓取脚本。
 
 ## 首次运行依赖安装
 
@@ -203,7 +195,7 @@ uv pip install --python .venv/bin/python akshare pandas yfinance
 - **Yahoo 浏览器降级**：`references/yahoo-browser-fallback.md`（Agent WebFetch 用法、JS 提取技巧）
 - **已知问题与降级**：`references/known-issues.md`（分端点限流、SSL 失败、A 股数据源问题等）
 - **yfinance 高级用法**：`references/yfinance-advanced-usage.md`（期权、评级、search 等）
-- **持仓刷新流程**：`references/portfolio-refresh-workflow.md`（"刷新持仓数据"指令的标准执行流程与降级策略）
+- **持仓刷新流程**：加载 `inv-portfolio-tracker`，以其受控刷新入口及文档为准。
 
 ## 使用原则
 
@@ -213,5 +205,5 @@ uv pip install --python .venv/bin/python akshare pandas yfinance
 4. 网络失败时根据 `notes`/`gaps` 重试、切换代理或检查本机网络。
 5. 韩股/日股不支持，用搜索替代。
 6. 遇数据异常或脚本失败（PE 缺失、日线空、Yahoo 限流、同花顺远古数据等），查阅 `references/known-issues.md` 中的降级策略。
-7. **不要在同一对话中混用 A 股和美股调用**：代理状态反复切换必然出错。同一批次只处理一种市场。
+7. **分市场批次调用**：避免代理配置切换导致错误，同一批次只处理一种市场。
 8. **禁用 `uv run | python3 -c`**：管道传递 JSON 易出错且触发审批。用 `--output json > /tmp/xxx.json` 再读取。

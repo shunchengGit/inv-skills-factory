@@ -144,7 +144,12 @@ def fetch_announcements(code: str) -> list[dict] | None:
 
 
 def fetch_relations(code: str) -> list[dict] | None:
-    """获取关联个股（同行业/同概念）。"""
+    """兼容旧接口：返回行业成分股，不是巨潮调研记录。"""
+    return fetch_industry_members(code)
+
+
+def fetch_industry_members(code: str) -> list[dict] | None:
+    """获取首个匹配东财行业板块的最多10只成分股（可能含自身）。"""
     import akshare as ak
     df = safe_call(ak.stock_board_industry_name_em)
     if df is None or df.empty:
