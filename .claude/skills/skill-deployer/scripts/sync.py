@@ -10,10 +10,11 @@ Skills 同步脚本（软链接模式）。
 软链接指向源目录，修改源文件即刻生效，无需重新同步。
 
 用法:
-  python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes
-  python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes workbuddy
-  python3 .claude/skills/skill-deployer/scripts/sync.py --agent all --dry-run
-  python3 .claude/skills/skill-deployer/scripts/sync.py --list
+  uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes
+  uv run .claude/skills/skill-deployer/scripts/sync.py --agent all --dry-run
+  uv run .claude/skills/skill-deployer/scripts/sync.py --list
+
+部署目标只来自 deploy.json（当前仅 hermes）。
 
 --agent 必填，未指定直接退出。
 """

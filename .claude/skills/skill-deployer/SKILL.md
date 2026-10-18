@@ -1,7 +1,7 @@
 ---
 name: skill-deployer
-description: 软链接方式部署技能到 Agent 目录，同步 _shared/ 模块。Use when 部署/同步技能时
-version: 1.0.0
+description: 软链接方式部署技能到 Hermes 目录，同步 _shared/ 模块。Use when 部署/同步技能时
+version: 1.1.0
 trigger:
   - 部署技能
   - 同步技能
@@ -11,40 +11,29 @@ trigger:
 
 # 技能部署
 
-修改技能后、push 前执行，确保 Agent 目录同步最新。
+部署目标只有 Hermes（`deploy.json` 中的 `hermes`）。不部署到 WorkBuddy，也不要恢复该目标。
 
 ## ⚡ 先行判断
 
 | 场景 | 操作 |
 |------|------|
-| 修改了技能内容（SKILL.md/脚本/references） | 部署到对应 agent |
-| 新增/删除技能 | 部署 + lint |
+| 修改了技能内容（SKILL.md/脚本/references） | 无需部署，软链接即时生效；只需 lint |
+| 新增/删除技能、修复链接 | 部署 + lint |
 | 修改 deploy.json | 部署受影响 agent |
 
 ## 执行流程
 
-### ① 确定 agent（必填）
-
-`--agent` 强制必填，未指定直接退出。可多选，或用 `all` 部署全部。
+`--agent` 必填，未指定直接退出。`sync.py` 带 PEP 723 依赖（python-dotenv），用 `uv run` 启动，不要用 `python3` 直跑。
 
 ```bash
-python3 .claude/skills/skill-deployer/scripts/sync.py --list
-```
-
-### ② 执行部署
-
-```bash
-# 单个 agent
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes
-
-# 多个 agent
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes workbuddy
-
-# 全部 agent
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent all
+# 列出可用 agent
+uv run .claude/skills/skill-deployer/scripts/sync.py --list
 
 # 预览
-python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
+uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
+
+# 部署
+uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes
 ```
 
 可选参数：
@@ -55,20 +44,14 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 | `--force` | 强制替换非空目录（慎用） |
 | `--list` | 列出可用 agent |
 
-### ③ 验证
-
-部署后检查目标目录结构：
-
-- `~/.hermes/skills/inv-skills/` — 应包含所有技能的软链接
-- `~/.workbuddy/skills/inv-skills/` — 应包含所有技能的软链接
-- 软链接指向源目录，`ls -la` 可确认
+部署后检查 `~/.hermes/skills/inv-skills/` 包含所有技能的软链接，`ls -la` 可确认指向源目录。
 
 ## 目录结构
 
 ```
 ~/.hermes/
   skills/
-    inv-skills/            ← 部署目标（软链接）
+    inv-skills/            ← 部署目标（软链接，子目录名来自 .env 的 DEPLOY_SKILLS_DIR）
       inv-stock-data → ~/.inv-skills-factory/custom-skills/inv-stock-data
       inv-valuation-engine → ~/.inv-skills-factory/custom-skills/inv-valuation-engine
       ...
@@ -80,27 +63,19 @@ python3 .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 ```json
 {
   "agents": {
-    "hermes":    { "skills_dir": "~/.hermes/skills/inv-skills" },
-    "workbuddy": { "skills_dir": "~/.workbuddy/skills/inv-skills" }
+    "hermes": { "skills_dir": "~/.hermes/skills" }
   }
 }
 ```
 
-- 每个 agent 的技能部署到 `skills/inv-skills/` 子目录，不影响其他来源的技能
+实际部署目录 = `skills_dir` + `/` + `.env` 中的 `DEPLOY_SKILLS_DIR`（如 `inv-skills`），不影响其他来源的技能。
 
 ## sync.py 核心逻辑
-
-脚本路径：`.claude/skills/skill-deployer/scripts/sync.py`
-
-### 输入
-
-1. `.claude/skills/skill-deployer/scripts/deploy.json` — agents 配置
-2. `custom-skills/` — 技能源码目录（扁平结构）
 
 ### 同步流程
 
 ```
-1. 加载 deploy.json
+1. 加载 deploy.json 与 .env（DEPLOY_SKILLS_DIR 缺失时交互询问并写入 .env）
 2. 扫描 custom-skills/ 顶层 → 收集所有技能目录
 3. 对 --agent 指定的每个 agent：
    a. 确保目标目录存在

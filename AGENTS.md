@@ -4,7 +4,7 @@ This file provides guidance to coding agents working with code in this repositor
 
 ## 仓库定位
 
-这是 Skills 的源码与部署仓库，不是单体应用。`custom-skills/` 是业务技能的事实来源；部署脚本将技能软链接到 Hermes / WorkBuddy，因此已部署技能的源文件修改会立即生效。
+这是 Skills 的源码与部署仓库，不是单体应用。`custom-skills/` 是业务技能的事实来源；部署脚本将技能软链接到 Hermes，因此已部署技能的源文件修改会立即生效。
 
 仓库没有根级 `pyproject.toml`、锁文件、统一安装流程或 build 命令。大多数可执行脚本使用 PEP 723 内联依赖并通过 `uv run` 启动，不要假设可以运行 `uv sync`。
 
@@ -58,7 +58,7 @@ uv run custom-skills/inv-valuation-engine/scripts/valuation_snapshot.py AAPL --o
 
 ## 部署
 
-部署目标由 `.claude/skills/skill-deployer/scripts/deploy.json` 定义，目前为 Hermes 与 WorkBuddy。部署前须在 `.env` 显式设置部署子目录；脚本没有代码层默认值：
+部署目标由 `.claude/skills/skill-deployer/scripts/deploy.json` 定义，目前仅 Hermes；不部署到 WorkBuddy，不要恢复该目标。部署前须在 `.env` 显式设置部署子目录；脚本没有代码层默认值：
 
 ```dotenv
 DEPLOY_SKILLS_DIR=inv-skills
@@ -70,9 +70,8 @@ sync.py 带 PEP 723 内联依赖（python-dotenv），用 `uv run` 启动；不�
 # 预览完整的创建/删除计划，不修改部署目录
 uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes --dry-run
 
-# 部署一个或全部目标
+# 部署到 Hermes
 uv run .claude/skills/skill-deployer/scripts/sync.py --agent hermes
-uv run .claude/skills/skill-deployer/scripts/sync.py --agent all
 ```
 
 修改既有技能内容后通常无需重新部署，只需 lint。首次部署、新增/删除技能、修复链接或变更目标配置后才需 sync。sync 会增删目标目录中的链接；`--force` 还可能替换非空真实目录，使用前先检查目标。目标目录中不在源码里的真实目录（非软链接）只会被警告，不会自动删除。即使是 `--list`，缺少 `DEPLOY_SKILLS_DIR` 时也会交互询问并写入 `.env`。

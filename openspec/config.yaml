@@ -3,7 +3,7 @@ schema: spec-driven
 context: |
   ## 项目概述
   这是一个投资 Skills 的源码与部署仓库。`custom-skills/` 是业务技能的事实来源；
-  部署器将技能目录软链接到 Hermes / WorkBuddy，仓库本身不是单体应用。
+  部署器将技能目录软链接到 Hermes（不部署 WorkBuddy），仓库本身不是单体应用。
 
   ## 目录与元数据
   - 可部署技能位于 `custom-skills/<skill-name>/`，保持扁平一级结构。
