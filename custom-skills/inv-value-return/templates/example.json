@@ -1,0 +1,45 @@
+{
+  "illustrative": true,
+  "symbol": "TSM",
+  "description": "Illustrative sensitivity only, not market data or a verified forecast. No fabricated market sources. as_of is an illustrative assumption date.",
+  "as_of": "2026-10-18",
+  "currency": "USD",
+  "years": 3,
+  "current_price": 412.61,
+  "buy_fee_rate": 0,
+  "exit_fee_rate": 0,
+  "dividend_tax_rate": 0,
+  "pessimistic_floor_rate": null,
+  "pessimistic_floor_basis": null,
+  "target_cagr_range": [0.15, 0.20],
+  "scenarios": [
+    {
+      "name": "pessimistic",
+      "terminal_price": 370.588,
+      "dividends": [3, 3, 3],
+      "terminal_bridge": {
+        "method": "explicit terminal price sensitivity",
+        "source": "User-provided illustrative sensitivity, not verified market data",
+        "unit_conversion": "All cash flows already USD per TSM ADR; no FX transformation in calculator"
+      }
+    },
+    {
+      "name": "base",
+      "terminal_price": 625,
+      "dividends": [4, 4, 4],
+      "terminal_bridge": {
+        "method": "explicit terminal price sensitivity",
+        "source": "User-provided illustrative sensitivity, not verified market data"
+      }
+    },
+    {
+      "name": "optimistic",
+      "terminal_price": 916.667,
+      "dividends": [5, 5, 5],
+      "terminal_bridge": {
+        "method": "explicit terminal price sensitivity",
+        "source": "User-provided illustrative sensitivity, not verified market data"
+      }
+    }
+  ]
+}

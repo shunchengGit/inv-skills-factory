@@ -24,6 +24,7 @@ linter 检查 frontmatter、目录命名、文档长度、引用深度、路径�
 - `inv-stock-data`
 - `inv-valuation-engine`
 - `inv-portfolio-tracker`
+- `inv-value-return`（纯标准库，可直接 `python3 -B -m unittest discover -s custom-skills/inv-value-return/tests`）
 
 仓库没有统一测试环境；测试会直接导入各技能脚本。运行全部测试时显式补齐当前所需依赖（尤其是 curator 源码使用但 `requirements.txt` 未声明的 PyYAML）：
 
@@ -103,6 +104,7 @@ inv-knowledge-curator（知识库唯一写入边界，下游只读）
 决策与专题层（QARP 资本配置的薄入口，不自行取数、不另立规则）
   ├─ inv-position-addition（加仓测算）
   ├─ inv-position-reduction（减仓/换仓测算）
+  ├─ inv-value-return（安全边际、三情景逐年现金流IRR与目标回报反推价）
   └─ inv-etf-comparison（主题 ETF 与持仓对比）
 ```
 
@@ -113,6 +115,7 @@ inv-knowledge-curator（知识库唯一写入边界，下游只读）
 - `inv-portfolio-tracker` 持有组合流程和持仓主数据（`PORTFOLIO.md` 是持仓/现金/成交权威），但价格仍来自 `inv-stock-data`。
 - 个人组合约束（仓位上限、行业约束、分批节奏）的唯一来源是 `~/.hermes/memories/USER.md`；各技能直接读取，不复制限额。
 - `inv-position-addition` 与 `inv-position-reduction` 是 QARP 资本配置的薄入口，只补交易数量与执行测算；不维护独立的加减仓哲学、现金闸门或估值规则。
+- `inv-value-return` 是 QARP 的回报计算入口：今天价值取估值引擎主估值，自身只做逐年现金流 IRR、目标回报最高买价与悲观底线比较；收益目标和底线每次从本次指示或 `USER.md` 动态解析，脚本不硬编码、不联网、不写台账。
 - `inv-trade-reconciliation` 是事实核验工具：从券商截图/流水重建真实成交并核算盈亏，不输出买卖建议、不独立记账；成交归 `inv-portfolio-tracker`，行情归 `inv-stock-data`。
 - 当前判断唯一源为 `~/.hermes/memories/investment-decisions/ledger.sqlite3`；新判断用v3简洁研究卡，通过 `decision_ledger.py apply --file <批次JSON绝对路径>` 单次追加，字段与门禁见 `inv-portfolio-tracker/references/decision-ledger.md`。不直接改数据库，不拆段凑证据分类。JUDGMENTS仅历史只读，不手工双写；CURRENT由render生成。旧v1/v2保留兼容，不自动认证旧研究。
 - 研究以可能改变决策的重要未知为完成标准，不设检索、标签、原文或机构数量配额。官方事实核原文与口径，预测/因果检验反证，重大疑点按需独立核验。重要未知、异常、失效及暂停仍阻止就绪；程序通过不证明经济判断正确。知识库及图谱维护规则不受影响。

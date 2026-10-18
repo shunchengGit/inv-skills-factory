@@ -18,7 +18,7 @@ context: |
   - 可执行脚本优先使用 PEP 723 内联依赖，通过 `uv run` 启动。
   - 修改业务技能后运行 `python3 .claude/skills/skill-linter/scripts/lint_skills.py`。
   - unittest 分布在 inv-knowledge-curator、inv-stock-data、inv-valuation-engine、
-    inv-portfolio-tracker；按测试导入显式补齐依赖。
+    inv-portfolio-tracker、inv-value-return；按测试导入显式补齐依赖。
 
   ## 投资技能边界
   - inv-stock-data：A 股 / ETF / 港股 / 美股行情与财务数据的唯一入口。
@@ -28,6 +28,7 @@ context: |
   - inv-portfolio-tracker：持仓/现金/真实成交权威与决策台账，价格来自 inv-stock-data。
   - inv-position-addition、inv-position-reduction：QARP薄入口，只补执行测算。
   - inv-etf-comparison：按需比较ETF工具与组合适配。
+  - inv-value-return：安全边际与三情景逐年IRR、目标回报反推价；目标动态读取，不另立估值政策。
   - inv-trade-reconciliation：真实成交截图/流水及盈亏核验，不独立记账。
   - 新判断通过台账v3简洁卡一次写入；JUDGMENTS历史只读，CURRENT生成，不双写。
   - 原SQLite schema和v1/v2兼容；不迁移或自动认证旧研究。
